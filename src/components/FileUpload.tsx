@@ -52,12 +52,13 @@ export function FileUpload({ open, onOpenChange, currentPath }: FileUploadProps)
     for (const file of files) {
       const reader = new FileReader()
       reader.onload = async (e) => {
-        const content = e.target?.result as string
+        const content = e.target?.result as ArrayBuffer
         const filePath = `${currentPath}/${file.name}`.replace('//', '/')
 
         await uploadMutation.mutateAsync({ path: filePath, content })
       }
-      reader.readAsText(file)
+      // Read as ArrayBuffer to preserve binary data (works for both text and binary files)
+      reader.readAsArrayBuffer(file)
     }
 
     setFiles([])

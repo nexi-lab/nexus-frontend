@@ -6,14 +6,24 @@ import { Button } from '../components/ui/button'
 import { useFileContent, useDeleteFile } from '../hooks/useFiles'
 import { filesAPI } from '../api/files'
 
+// Helper to convert Uint8Array to string
+function bytesToString(bytes: Uint8Array | undefined): string {
+  if (!bytes) return ''
+  const decoder = new TextDecoder('utf-8')
+  return decoder.decode(bytes)
+}
+
 export function FileViewerPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const filePath = searchParams.get('path') || '/'
   const fileName = filePath.split('/').pop() || 'Unknown'
 
-  const { data: content, isLoading, error } = useFileContent(filePath, true)
+  const { data: contentBytes, isLoading, error } = useFileContent(filePath, true)
   const deleteMutation = useDeleteFile()
+
+  // Convert bytes to string for text display
+  const content = bytesToString(contentBytes)
 
   const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'unknown'>('unknown')
 
@@ -47,7 +57,7 @@ export function FileViewerPage() {
   const handleDownload = async () => {
     try {
       const fileContent = await filesAPI.read(filePath)
-      const blob = new Blob([fileContent], { type: 'application/octet-stream' })
+      const blob = new Blob([fileContent as unknown as BlobPart], { type: 'application/octet-stream' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -117,15 +127,9 @@ export function FileViewerPage() {
         return (
           <div className="flex items-center justify-center p-8 bg-muted/20 rounded-lg">
             <img
-              src={`data:image/*;base64,${btoa(content || '')}`}
+              src={contentBytes ? URL.createObjectURL(new Blob([contentBytes as unknown as BlobPart], { type: 'image/*' })) : ''}
               alt={fileName}
               className="max-w-full max-h-[70vh] object-contain"
-              onError={(e) => {
-                // If base64 doesn't work, try direct blob URL
-                const blob = new Blob([content || ''], { type: 'image/*' })
-                const url = URL.createObjectURL(blob)
-                e.currentTarget.src = url
-              }}
             />
           </div>
         )

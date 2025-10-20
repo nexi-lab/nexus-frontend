@@ -36,10 +36,11 @@ export interface GlobResult {
 }
 
 export interface GrepMatch {
-  path: string
-  line_number: number
-  line: string
+  file: string        // Backend returns "file" not "path"
+  line: number        // Backend returns "line" not "line_number"
+  content: string     // Backend returns "content" not "line"
   match: string
+  source?: string     // Backend includes "source" field
 }
 
 export interface GrepResult {

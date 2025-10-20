@@ -69,14 +69,31 @@ export const filesAPI = {
     return result.files.map(transformFileInfo)
   },
 
-  // Read file contents
-  async read(path: string): Promise<string> {
-    return await nexusAPI.call<string>('read', { path })
+  // Read file contents (returns Uint8Array for binary files)
+  async read(path: string): Promise<Uint8Array> {
+    return await nexusAPI.call<Uint8Array>('read', { path })
   },
 
   // Write file contents
-  async write(path: string, content: string): Promise<void> {
-    await nexusAPI.call('write', { path, content })
+  async write(path: string, content: string | ArrayBuffer): Promise<void> {
+    // Convert content to base64-encoded bytes format expected by server
+    let base64Content: string
+
+    if (typeof content === 'string') {
+      // Text content - encode as UTF-8 then base64
+      base64Content = btoa(unescape(encodeURIComponent(content)))
+    } else {
+      // Binary content (ArrayBuffer) - convert to base64
+      const bytes = new Uint8Array(content)
+      const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '')
+      base64Content = btoa(binary)
+    }
+
+    // Send in the format expected by RPC server: {"__type__": "bytes", "data": "base64..."}
+    await nexusAPI.call('write', {
+      path,
+      content: { __type__: 'bytes', data: base64Content }
+    })
   },
 
   // Delete file or directory
@@ -152,7 +169,8 @@ export const filesAPI = {
   async rename(oldPath: string, newPath: string): Promise<void> {
     // Implement using read + write + delete
     const content = await this.read(oldPath)
-    await this.write(newPath, content)
+    // Convert Uint8Array to ArrayBuffer for write
+    await this.write(newPath, content.buffer as ArrayBuffer)
     await this.delete(oldPath)
   },
 }

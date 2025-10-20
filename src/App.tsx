@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { FileBrowser } from './components/FileBrowser'
-import { FileViewerPage } from './pages/FileViewerPage'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -20,7 +19,6 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<FileBrowser />} />
-          <Route path="/view" element={<FileViewerPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

@@ -74,7 +74,7 @@ export function FilePreview({
           {fileType === 'image' && (
             <div className="flex items-center justify-center p-4">
               <img
-                src={`data:image/*;base64,${btoa(content || '')}`}
+                src={content ? URL.createObjectURL(new Blob([content as unknown as BlobPart], { type: 'image/*' })) : ''}
                 alt={file.name}
                 className="max-w-full h-auto"
               />

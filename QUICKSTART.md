@@ -41,14 +41,21 @@ npm install
 
 ## Step 3: Configure Environment
 
-The `.env` file is already created with defaults:
+The `.env` file is already created with defaults. You can connect to either:
 
+### Option A: Local Server (Default)
 ```env
 VITE_API_URL=http://localhost:8080
 VITE_API_KEY=
 ```
 
-If your Nexus server is on a different port or host, edit the `.env` file.
+### Option B: Deployed GCP Server
+```env
+VITE_API_URL=http://35.230.4.67:8080
+VITE_API_KEY=
+```
+
+Edit the `.env` file to choose your backend server.
 
 ## Step 4: Start the Frontend
 

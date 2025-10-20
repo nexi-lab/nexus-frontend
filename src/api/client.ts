@@ -24,8 +24,13 @@ class NexusAPIClient {
     // Handle bytes type with base64 data
     if (result && typeof result === 'object' && result.__type__ === 'bytes' && result.data) {
       try {
-        // Decode base64 to string
-        return atob(result.data)
+        // Decode base64 to Uint8Array (preserves binary data)
+        const binaryString = atob(result.data)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+        return bytes
       } catch (e) {
         console.warn('Failed to decode base64 bytes:', e)
         return result.data
