@@ -7,6 +7,17 @@ export const fileKeys = {
   lists: () => [...fileKeys.all, 'list'] as const,
   list: (path: string) => [...fileKeys.lists(), path] as const,
   file: (path: string) => [...fileKeys.all, 'file', path] as const,
+  namespaces: () => [...fileKeys.all, 'namespaces'] as const,
+}
+
+// Get available namespaces
+export function useNamespaces(enabled = true) {
+  return useQuery({
+    queryKey: fileKeys.namespaces(),
+    queryFn: () => filesAPI.getAvailableNamespaces(),
+    enabled,
+    staleTime: 5 * 60 * 1000, // 5 minutes - namespaces don't change often
+  })
 }
 
 // List files in a directory

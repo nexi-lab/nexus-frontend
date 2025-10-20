@@ -173,4 +173,13 @@ export const filesAPI = {
     await this.write(newPath, content.buffer as ArrayBuffer)
     await this.delete(oldPath)
   },
+
+  // Get available namespaces
+  async getAvailableNamespaces(): Promise<string[]> {
+    const result = await nexusAPI.call<{ namespaces: string[] }>(
+      'get_available_namespaces',
+      {}
+    )
+    return result.namespaces
+  },
 }

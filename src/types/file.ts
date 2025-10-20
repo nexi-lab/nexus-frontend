@@ -53,3 +53,7 @@ export interface SearchResult {
   type: 'file' | 'directory'
   matches?: GrepMatch[]
 }
+
+export interface NamespacesResult {
+  namespaces: string[]
+}
