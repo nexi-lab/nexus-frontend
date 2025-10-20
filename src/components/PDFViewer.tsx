@@ -74,6 +74,8 @@ export function PDFViewer({ fileData, onDownload }: PDFViewerProps) {
       return
     }
 
+    let renderTask: any = null
+
     const renderPage = async () => {
       try {
         console.log(`Rendering page ${currentPage} of ${totalPages} at scale ${scale}`)
@@ -104,15 +106,29 @@ export function PDFViewer({ fileData, onDownload }: PDFViewerProps) {
         }
 
         console.log('Starting render...')
-        await page.render(renderContext as any).promise
+        renderTask = page.render(renderContext as any)
+        await renderTask.promise
         console.log('Render complete')
       } catch (err) {
+        // Ignore cancellation errors
+        if (err instanceof Error && err.message.includes('cancel')) {
+          console.log('Render cancelled')
+          return
+        }
         console.error('Error rendering page:', err)
         setError(`Failed to render PDF page: ${err instanceof Error ? err.message : 'Unknown error'}`)
       }
     }
 
     renderPage()
+
+    // Cleanup: cancel any ongoing render operation
+    return () => {
+      if (renderTask) {
+        console.log('Cancelling previous render task')
+        renderTask.cancel()
+      }
+    }
   }, [pdf, currentPage, scale, totalPages])
 
   const handlePrevPage = () => {
