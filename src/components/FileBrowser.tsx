@@ -155,6 +155,7 @@ export function FileBrowser() {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4 flex-1">
+            <img src="/nexus-logo.png" alt="Nexus Logo" className="h-10 w-10" />
             <h1 className="text-2xl font-bold">NexusFS</h1>
           </div>
           <div className="flex gap-2">
