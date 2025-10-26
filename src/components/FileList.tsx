@@ -87,6 +87,12 @@ function formatDate(dateString?: string): string {
   return date.toLocaleDateString()
 }
 
+// Helper function to check if a file is a parsed markdown file
+function isParsedFile(fileName: string): boolean {
+  // Pattern: *_parsed.{ext}.md (e.g., document_parsed.pdf.md, sheet_parsed.xlsx.md)
+  return /_parsed\.(pdf|xlsx|xls|xlsm|xlsb|docx|doc|pptx|ppt)\.md$/i.test(fileName)
+}
+
 export function FileList({
   files,
   onFileClick,
@@ -94,6 +100,9 @@ export function FileList({
   onFileDelete,
   onFileRename,
 }: FileListProps) {
+  // Filter out parsed markdown files
+  const visibleFiles = files.filter(file => !isParsedFile(file.name))
+
   return (
     <div className="flex-1 overflow-auto">
       <table className="w-full">
@@ -107,14 +116,14 @@ export function FileList({
           </tr>
         </thead>
         <tbody>
-          {files.length === 0 ? (
+          {visibleFiles.length === 0 ? (
             <tr>
               <td colSpan={5} className="text-center p-8 text-muted-foreground">
                 No files found
               </td>
             </tr>
           ) : (
-            files.map((file) => (
+            visibleFiles.map((file) => (
               <tr
                 key={file.path}
                 className="border-b hover:bg-muted/50 cursor-pointer transition-colors"

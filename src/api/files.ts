@@ -56,14 +56,24 @@ export const filesAPI = {
       recursive?: boolean
       details?: boolean
       prefix?: string
+      show_parsed?: boolean
     }
   ): Promise<FileInfo[]> {
-    const result = await nexusAPI.call<ListResult>('list', {
+    const params: any = {
       path,
       recursive: options?.recursive ?? false,
       details: options?.details ?? true,
-      prefix: options?.prefix,
-    })
+    }
+
+    // Only add optional params if they are defined
+    if (options?.prefix !== undefined) {
+      params.prefix = options.prefix
+    }
+    if (options?.show_parsed !== undefined) {
+      params.show_parsed = options.show_parsed
+    }
+
+    const result = await nexusAPI.call<ListResult>('list', params)
 
     // Transform backend response to frontend FileInfo format
     return result.files.map(transformFileInfo)

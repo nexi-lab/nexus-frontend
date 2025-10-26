@@ -6,6 +6,12 @@ import { FileContextMenu, type ContextMenuAction } from './FileContextMenu'
 import { InlineFileInput } from './InlineFileInput'
 import type { FileInfo } from '../types/file'
 
+// Helper function to check if a file is a parsed markdown file
+function isParsedFile(fileName: string): boolean {
+  // Pattern: *_parsed.{ext}.md (e.g., document_parsed.pdf.md, sheet_parsed.xlsx.md)
+  return /_parsed\.(pdf|xlsx|xls|xlsm|xlsb|docx|doc|pptx|ppt)\.md$/i.test(fileName)
+}
+
 interface FileTreeProps {
   currentPath: string
   onPathChange: (path: string) => void
@@ -71,7 +77,7 @@ function TreeNode({ path, name, currentPath, onPathChange, onFileClick, onContex
   }, [isRootPath, namespaces, files, searchResults, relevantPaths])
 
   const fileItems = useMemo(() => {
-    return files?.filter((f) => !f.isDirectory) || []
+    return files?.filter((f) => !f.isDirectory && !isParsedFile(f.name)) || []
   }, [files])
 
   const dirFileInfo: FileInfo = {
