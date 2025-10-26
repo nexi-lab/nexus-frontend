@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Download, Trash2, FileText, Image as ImageIcon, Code, FileJson, Film, FileIcon, Edit, Save, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
@@ -47,24 +48,41 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
   const deleteMutation = useDeleteFile()
   const updateMutation = useUpdateFile()
 
-  // Debug: log the type of contentBytes for PDFs
+  // For binary files (PDF, XLSX, etc.), try to load the parsed markdown file
+  // Pattern: {filename without ext}_parsed.{ext}.md
+  // Example: AR_Subledger_05.2025.xlsx -> AR_Subledger_05.2025_parsed.xlsx.md
+  const fileExt = fileName.toLowerCase().split('.').pop() || ''
+  const binaryFileTypes = ['pdf', 'xlsx', 'xls', 'docx', 'doc', 'pptx', 'ppt']
+  const hasParsedMarkdown = binaryFileTypes.includes(fileExt)
+
+  // Construct parsed markdown path by removing extension and adding _parsed.{ext}.md
+  let parsedMdPath = ''
+  if (hasParsedMarkdown && filePath) {
+    const pathWithoutExt = filePath.substring(0, filePath.lastIndexOf('.'))
+    parsedMdPath = `${pathWithoutExt}_parsed.${fileExt}.md`
+  }
+
+  const { data: parsedMdBytes, isLoading: parsedMdLoading, error: parsedMdError } = useFileContent(parsedMdPath, hasParsedMarkdown)
+
+  // Debug: log parsed markdown path construction
   useEffect(() => {
-    if (file && !file.isDirectory && fileName.toLowerCase().endsWith('.pdf')) {
-      console.log('PDF contentBytes:', {
-        type: typeof contentBytes,
-        isUint8Array: contentBytes instanceof Uint8Array,
-        isArrayBuffer: contentBytes instanceof ArrayBuffer,
-        constructor: contentBytes?.constructor?.name,
-        length: contentBytes?.length,
-        byteLength: (contentBytes as any)?.byteLength,
+    if (hasParsedMarkdown && filePath) {
+      console.log('Parsed markdown lookup:', {
+        originalFile: filePath,
+        parsedMdPath,
+        hasContent: !!parsedMdBytes,
+        isLoading: parsedMdLoading,
+        hasError: !!parsedMdError,
+        errorMessage: parsedMdError instanceof Error ? parsedMdError.message : parsedMdError,
       })
     }
-  }, [contentBytes, file, fileName])
+  }, [hasParsedMarkdown, filePath, parsedMdPath, parsedMdBytes, parsedMdLoading, parsedMdError])
 
   // Convert bytes to string for text display
   const content = bytesToString(contentBytes)
+  const parsedMdContent = bytesToString(parsedMdBytes)
 
-  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'unknown'>('unknown')
+  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'excel' | 'unknown'>('unknown')
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
 
@@ -101,6 +119,8 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
       setFileType('image')
     } else if (ext === 'pdf') {
       setFileType('pdf')
+    } else if (['xlsx', 'xls', 'xlsm', 'xlsb'].includes(ext)) {
+      setFileType('excel')
     } else if (['md', 'markdown'].includes(ext)) {
       setFileType('markdown')
     } else if (['json', 'jsonl'].includes(ext)) {
@@ -277,7 +297,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
               <div className="flex flex-col h-full">
                 <div className="text-sm font-medium mb-2 text-muted-foreground">Preview</div>
                 <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none p-4 bg-white dark:bg-muted rounded-lg overflow-auto flex-1">
-                  <ReactMarkdown>{editContent || ''}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{editContent || ''}</ReactMarkdown>
                 </div>
               </div>
             </div>
@@ -285,7 +305,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         }
         return (
           <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
-            <ReactMarkdown>{content || ''}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || ''}</ReactMarkdown>
           </div>
         )
 
@@ -297,6 +317,52 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         )
 
       case 'pdf':
+        // If we have parsed markdown content, show that instead of PDF viewer
+        if (parsedMdContent && !parsedMdError) {
+          return (
+            <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  table: ({ node, ...props }) => (
+                    <div
+                      style={{
+                        overflowX: 'auto',
+                        overflowY: 'auto',
+                        maxHeight: '70vh',
+                        border: '2px solid #3b82f6',
+                        borderRadius: '8px',
+                        padding: '1rem',
+                        background: 'white',
+                        marginBottom: '1rem',
+                      }}
+                    >
+                      <table {...props} style={{ width: 'max-content', minWidth: '100%' }} />
+                    </div>
+                  ),
+                  th: ({ node, ...props }) => (
+                    <th {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem', background: '#f9fafb', fontWeight: 600 }} />
+                  ),
+                  td: ({ node, ...props }) => (
+                    <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />
+                  ),
+                }}
+              >
+                {parsedMdContent}
+              </ReactMarkdown>
+            </div>
+          )
+        }
+
+        // Otherwise, fall back to PDF viewer
+        if (parsedMdLoading) {
+          return (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">Loading PDF content...</p>
+            </div>
+          )
+        }
+
         if (!contentBytes || !(contentBytes instanceof Uint8Array)) {
           return (
             <div className="p-8 text-center bg-muted/20 rounded-lg h-full flex flex-col items-center justify-center">
@@ -312,6 +378,68 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
             fileData={contentBytes}
             onDownload={handleDownload}
           />
+        )
+
+      case 'excel':
+        // If we have parsed markdown content, show that instead
+        if (parsedMdContent && !parsedMdError) {
+          return (
+            <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  table: ({ node, ...props }) => (
+                    <div
+                      style={{
+                        overflowX: 'auto',
+                        overflowY: 'auto',
+                        maxHeight: '70vh',
+                        border: '2px solid #3b82f6',
+                        borderRadius: '8px',
+                        padding: '1rem',
+                        background: 'white',
+                        marginBottom: '1rem',
+                      }}
+                    >
+                      <table {...props} style={{ width: 'max-content', minWidth: '100%' }} />
+                    </div>
+                  ),
+                  th: ({ node, ...props }) => (
+                    <th {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem', background: '#f9fafb', fontWeight: 600 }} />
+                  ),
+                  td: ({ node, ...props }) => (
+                    <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />
+                  ),
+                }}
+              >
+                {parsedMdContent}
+              </ReactMarkdown>
+            </div>
+          )
+        }
+
+        // Loading state
+        if (parsedMdLoading) {
+          return (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">Loading Excel content...</p>
+            </div>
+          )
+        }
+
+        // No parsed content available - show download message
+        return (
+          <div className="p-8 text-center bg-muted/20 rounded-lg h-full flex flex-col items-center justify-center">
+            <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-lg font-medium mb-2">Excel File</p>
+            <p className="text-muted-foreground mb-4">
+              {parsedMdError ? 'No parsed content available.' : 'Preview not available.'}
+            </p>
+            <Button onClick={handleDownload}>
+              <Download className="h-4 w-4 mr-2" />
+              Download File
+            </Button>
+          </div>
         )
 
       case 'video':
@@ -346,7 +474,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
 
   if (!file) {
     return (
-      <div className="flex-1 flex flex-col h-full">
+      <div className="flex-1 flex flex-col h-full min-w-0">
         <div className="flex-1 overflow-auto p-6">
           {renderContent()}
         </div>
@@ -355,7 +483,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col h-full min-w-0">
       {/* File Header */}
       <div className="border-b bg-background/95 backdrop-blur p-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -406,6 +534,9 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
             </div>
             <div>
               <span className="font-medium">Type:</span> <span className="capitalize">{fileType}</span>
+              {hasParsedMarkdown && parsedMdContent && !parsedMdError && (
+                <span className="ml-2 text-green-600 dark:text-green-400">(showing parsed content)</span>
+              )}
             </div>
             {file.size && (
               <div>
@@ -417,7 +548,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
       )}
 
       {/* File Content */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className={`flex-1 overflow-auto ${hasParsedMarkdown && parsedMdContent && !parsedMdError ? '' : 'p-6'}`}>
         {renderContent()}
       </div>
     </div>
