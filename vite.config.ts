@@ -7,13 +7,14 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'https://nexus.nexilab.co',
         changeOrigin: true,
-        secure: false,
+        secure: true,
       },
       '/health': {
-        target: 'http://localhost:8080',
+        target: 'https://nexus.nexilab.co',
         changeOrigin: true,
+        secure: true,
       }
     }
   },
