@@ -10,6 +10,7 @@ import {
   File,
   Download,
   Shield,
+  History,
 } from 'lucide-react'
 import {
   ContextMenu,
@@ -28,6 +29,7 @@ export type ContextMenuAction =
   | 'upload'
   | 'open'
   | 'download'
+  | 'version-history'
   | 'rename'
   | 'delete'
   | 'copy-path'
@@ -101,6 +103,10 @@ export function FileContextMenu({ children, file, onAction }: FileContextMenuPro
             <ContextMenuItem onClick={() => handleAction('download')}>
               <Download className="mr-2 h-4 w-4" />
               Download
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleAction('version-history')}>
+              <History className="mr-2 h-4 w-4" />
+              Version History
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => handleAction('rename')}>

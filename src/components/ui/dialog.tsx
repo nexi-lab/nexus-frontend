@@ -95,6 +95,16 @@ const DialogFooter = ({
 )
 DialogFooter.displayName = 'DialogFooter'
 
+const DialogTrigger = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ children, ...props }, ref) => (
+  <div ref={ref} {...props}>
+    {children}
+  </div>
+))
+DialogTrigger.displayName = 'DialogTrigger'
+
 export {
   Dialog,
   DialogContent,
@@ -102,4 +112,5 @@ export {
   DialogFooter,
   DialogTitle,
   DialogDescription,
+  DialogTrigger,
 }
