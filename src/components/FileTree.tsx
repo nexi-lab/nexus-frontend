@@ -192,7 +192,7 @@ export function FileTree({ currentPath, onPathChange, onFileClick, onContextMenu
     <div className="h-full overflow-auto">
       <TreeNode
         path="/"
-        name="Root"
+        name="/"
         currentPath={currentPath}
         onPathChange={onPathChange}
         onFileClick={onFileClick}

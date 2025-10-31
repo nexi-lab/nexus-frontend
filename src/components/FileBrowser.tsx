@@ -1,19 +1,21 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, FolderPlus } from 'lucide-react'
+import { Settings, FolderPlus, Bot } from 'lucide-react'
 import { Button } from './ui/button'
 import { Breadcrumb } from './Breadcrumb'
 import { LeftPanel } from './LeftPanel'
 import { FileContentViewer } from './FileContentViewer'
 import { FileUpload } from './FileUpload'
 import { CreateFolderDialog } from './CreateFolderDialog'
-import { CreateWorkspaceDialog } from './CreateWorkspaceDialog'
+import { WorkspaceManagementDialog } from './WorkspaceManagementDialog'
+import { AgentManagementDialog } from './AgentManagementDialog'
 import { RenameDialog } from './RenameDialog'
 import { LoginDialog } from './LoginDialog'
 import { ManagePermissionsDialog } from './ManagePermissionsDialog'
+import { FileVersionHistoryDialog } from './FileVersionHistoryDialog'
 import { type ContextMenuAction } from './FileContextMenu'
 import { createFilesAPI } from '../api/files'
-import { useDeleteFile, useUploadFile, useCreateDirectory, useCreateWorkspace } from '../hooks/useFiles'
+import { useDeleteFile, useUploadFile, useCreateDirectory, useCreateWorkspace, useRegisterAgent } from '../hooks/useFiles'
 import { useAuth } from '../contexts/AuthContext'
 import type { FileInfo } from '../types/file'
 
@@ -27,8 +29,10 @@ export function FileBrowser() {
   const [uploadTargetPath, setUploadTargetPath] = useState<string>('/')
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false)
   const [createWorkspaceDialogOpen, setCreateWorkspaceDialogOpen] = useState(false)
+  const [registerAgentDialogOpen, setRegisterAgentDialogOpen] = useState(false)
   const [renameFile, setRenameFile] = useState<FileInfo | null>(null)
   const [managePermissionsFile, setManagePermissionsFile] = useState<FileInfo | null>(null)
+  const [versionHistoryFile, setVersionHistoryFile] = useState<FileInfo | null>(null)
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null)
   const [loginDialogOpen, setLoginDialogOpen] = useState(!isAuthenticated)
 
@@ -36,6 +40,7 @@ export function FileBrowser() {
   const uploadMutation = useUploadFile()
   const createDirMutation = useCreateDirectory()
   const createWorkspaceMutation = useCreateWorkspace()
+  const registerAgentMutation = useRegisterAgent()
 
   const handleFileSelect = (file: FileInfo) => {
     setSelectedFile(file)
@@ -81,6 +86,16 @@ export function FileBrowser() {
       name: name || undefined,
       description: description || undefined,
     })
+  }
+
+  const handleRegisterAgent = async (agentId: string, name: string, description: string, generateApiKey: boolean) => {
+    const result = await registerAgentMutation.mutateAsync({
+      agentId,
+      name,
+      description: description || undefined,
+      generateApiKey,
+    })
+    return result
   }
 
   const handleContextMenuAction = async (action: ContextMenuAction, file: FileInfo) => {
@@ -165,6 +180,12 @@ export function FileBrowser() {
         // This is handled by LeftPanel
         break
 
+      case 'version-history':
+        if (!file.isDirectory) {
+          setVersionHistoryFile(file)
+        }
+        break
+
       case 'manage-permissions':
         setManagePermissionsFile(file)
         break
@@ -197,7 +218,15 @@ export function FileBrowser() {
                   onClick={() => setCreateWorkspaceDialogOpen(true)}
                 >
                   <FolderPlus className="h-4 w-4 mr-2" />
-                  New Workspace
+                  Workspaces
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRegisterAgentDialogOpen(true)}
+                >
+                  <Bot className="h-4 w-4 mr-2" />
+                  Agents
                 </Button>
                 {userInfo?.is_admin && (
                   <Button
@@ -295,10 +324,16 @@ export function FileBrowser() {
         currentPath={currentPath}
       />
 
-      <CreateWorkspaceDialog
+      <WorkspaceManagementDialog
         open={createWorkspaceDialogOpen}
         onOpenChange={setCreateWorkspaceDialogOpen}
         onCreateWorkspace={handleCreateWorkspace}
+      />
+
+      <AgentManagementDialog
+        open={registerAgentDialogOpen}
+        onOpenChange={setRegisterAgentDialogOpen}
+        onRegisterAgent={handleRegisterAgent}
       />
 
       <RenameDialog
@@ -311,6 +346,12 @@ export function FileBrowser() {
         open={!!managePermissionsFile}
         onOpenChange={(open) => !open && setManagePermissionsFile(null)}
         filePath={managePermissionsFile?.path || ''}
+      />
+
+      <FileVersionHistoryDialog
+        open={!!versionHistoryFile}
+        onOpenChange={(open) => !open && setVersionHistoryFile(null)}
+        filePath={versionHistoryFile?.path || ''}
       />
     </div>
   )

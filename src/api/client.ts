@@ -19,7 +19,7 @@ class NexusAPIClient {
     return ++this.requestId
   }
 
-  // Helper to decode base64-encoded bytes from backend
+  // Helper to decode base64-encoded bytes and datetime from backend
   private decodeResult(result: any): any {
     // Handle bytes type with base64 data
     if (result && typeof result === 'object' && result.__type__ === 'bytes' && result.data) {
@@ -33,6 +33,17 @@ class NexusAPIClient {
         return bytes
       } catch (e) {
         console.warn('Failed to decode base64 bytes:', e)
+        return result.data
+      }
+    }
+
+    // Handle datetime type with ISO format string
+    if (result && typeof result === 'object' && result.__type__ === 'datetime' && result.data) {
+      try {
+        // Return ISO string directly (JavaScript Date can parse it)
+        return result.data
+      } catch (e) {
+        console.warn('Failed to decode datetime:', e)
         return result.data
       }
     }
@@ -179,6 +190,77 @@ class NexusAPIClient {
     return await this.call('register_workspace', params)
   }
 
+  // Workspace API - List all workspaces
+  async listWorkspaces(): Promise<Array<{
+    path: string
+    name: string | null
+    description: string
+    created_at: string
+    created_by: string | null
+    metadata: Record<string, any>
+  }>> {
+    return await this.call('list_workspaces', {})
+  }
+
+  // Workspace API - Unregister a workspace
+  async unregisterWorkspace(path: string): Promise<boolean> {
+    return await this.call('unregister_workspace', { path })
+  }
+
+  // Workspace API - Get workspace info
+  async getWorkspaceInfo(path: string): Promise<{
+    path: string
+    name: string | null
+    description: string
+    created_at: string
+    created_by: string | null
+    metadata: Record<string, any>
+  } | null> {
+    return await this.call('get_workspace_info', { path })
+  }
+
+  // Agent API - Register a new agent
+  async registerAgent(params: {
+    agent_id: string
+    name: string
+    description?: string
+    generate_api_key?: boolean
+  }): Promise<{
+    agent_id: string
+    user_id: string
+    name: string
+    description?: string
+    api_key?: string
+    created_at: string
+  }> {
+    return await this.call('register_agent', params)
+  }
+
+  // Agent API - List all agents
+  async listAgents(): Promise<Array<{
+    agent_id: string
+    user_id: string
+    name: string
+    created_at: string
+  }>> {
+    return await this.call('list_agents', {})
+  }
+
+  // Agent API - Get agent details
+  async getAgent(agentId: string): Promise<{
+    agent_id: string
+    user_id: string
+    name: string
+    created_at: string
+  }> {
+    return await this.call('get_agent', { agent_id: agentId })
+  }
+
+  // Agent API - Delete agent
+  async deleteAgent(agentId: string): Promise<boolean> {
+    return await this.call('delete_agent', { agent_id: agentId })
+  }
+
   // ReBAC API - Create a relationship tuple
   async rebacCreate(params: {
     subject: [string, string]
@@ -212,6 +294,31 @@ class NexusAPIClient {
     tuple_id: string
   }): Promise<boolean> {
     return await this.call('rebac_delete', params)
+  }
+
+  // Version History API - List all versions of a file
+  async listVersions(path: string): Promise<Array<{
+    version: number
+    content_hash: string
+    size: number
+    mime_type: string
+    created_at: string
+    created_by: string | null
+    change_reason: string | null
+    source_type: string | null
+    parent_version_id: number | null
+  }>> {
+    return await this.call('list_versions', { path })
+  }
+
+  // Version History API - Get a specific version of a file
+  async getVersion(path: string, version: number): Promise<Uint8Array> {
+    return await this.call('get_version', { path, version })
+  }
+
+  // Version History API - Rollback file to a previous version
+  async rollback(path: string, version: number): Promise<void> {
+    return await this.call('rollback', { path, version })
   }
 }
 

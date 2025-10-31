@@ -203,3 +203,31 @@ export function useCreateWorkspace() {
     },
   })
 }
+
+// Register agent
+export function useRegisterAgent() {
+  const { apiClient } = useAuth()
+
+  return useMutation({
+    mutationFn: async ({
+      agentId,
+      name,
+      description,
+      generateApiKey,
+    }: {
+      agentId: string
+      name: string
+      description?: string
+      generateApiKey?: boolean
+    }) => {
+      const agent = await apiClient.registerAgent({
+        agent_id: agentId,
+        name,
+        description,
+        generate_api_key: generateApiKey,
+      })
+
+      return agent
+    },
+  })
+}

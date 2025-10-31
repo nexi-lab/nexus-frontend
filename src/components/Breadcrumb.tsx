@@ -15,7 +15,6 @@ export function Breadcrumb({ path, onPathChange }: BreadcrumbProps) {
         onClick={() => onPathChange('/')}
       >
         <Home className="h-4 w-4" />
-        <span>Root</span>
       </button>
 
       {parts.map((part, index) => {
