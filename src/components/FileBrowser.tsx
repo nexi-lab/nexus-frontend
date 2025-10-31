@@ -10,6 +10,7 @@ import { CreateFolderDialog } from './CreateFolderDialog'
 import { CreateWorkspaceDialog } from './CreateWorkspaceDialog'
 import { RenameDialog } from './RenameDialog'
 import { LoginDialog } from './LoginDialog'
+import { ManagePermissionsDialog } from './ManagePermissionsDialog'
 import { type ContextMenuAction } from './FileContextMenu'
 import { createFilesAPI } from '../api/files'
 import { useDeleteFile, useUploadFile, useCreateDirectory, useCreateWorkspace } from '../hooks/useFiles'
@@ -27,6 +28,7 @@ export function FileBrowser() {
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false)
   const [createWorkspaceDialogOpen, setCreateWorkspaceDialogOpen] = useState(false)
   const [renameFile, setRenameFile] = useState<FileInfo | null>(null)
+  const [managePermissionsFile, setManagePermissionsFile] = useState<FileInfo | null>(null)
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null)
   const [loginDialogOpen, setLoginDialogOpen] = useState(!isAuthenticated)
 
@@ -161,6 +163,10 @@ export function FileBrowser() {
 
       case 'find-in-folder':
         // This is handled by LeftPanel
+        break
+
+      case 'manage-permissions':
+        setManagePermissionsFile(file)
         break
 
       default:
@@ -299,6 +305,12 @@ export function FileBrowser() {
         open={!!renameFile}
         onOpenChange={(open) => !open && setRenameFile(null)}
         file={renameFile}
+      />
+
+      <ManagePermissionsDialog
+        open={!!managePermissionsFile}
+        onOpenChange={(open) => !open && setManagePermissionsFile(null)}
+        filePath={managePermissionsFile?.path || ''}
       />
     </div>
   )

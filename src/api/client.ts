@@ -178,6 +178,41 @@ class NexusAPIClient {
   }> {
     return await this.call('register_workspace', params)
   }
+
+  // ReBAC API - Create a relationship tuple
+  async rebacCreate(params: {
+    subject: [string, string]
+    relation: string
+    object: [string, string]
+    expires_at?: string
+    tenant_id?: string
+  }): Promise<string> {
+    return await this.call('rebac_create', params)
+  }
+
+  // ReBAC API - List relationship tuples
+  async rebacListTuples(params?: {
+    subject?: [string, string]
+    relation?: string
+    object?: [string, string]
+  }): Promise<Array<{
+    tuple_id: string
+    subject_type: string
+    subject_id: string
+    relation: string
+    object_type: string
+    object_id: string
+    created_at: string | null
+  }>> {
+    return await this.call('rebac_list_tuples', params || {})
+  }
+
+  // ReBAC API - Delete a relationship tuple
+  async rebacDelete(params: {
+    tuple_id: string
+  }): Promise<boolean> {
+    return await this.call('rebac_delete', params)
+  }
 }
 
 // Default client instance

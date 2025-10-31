@@ -9,6 +9,7 @@ import {
   Trash2,
   File,
   Download,
+  Shield,
 } from 'lucide-react'
 import {
   ContextMenu,
@@ -31,6 +32,7 @@ export type ContextMenuAction =
   | 'delete'
   | 'copy-path'
   | 'copy-relative-path'
+  | 'manage-permissions'
 
 interface FileContextMenuProps {
   children: ReactNode
@@ -77,6 +79,12 @@ export function FileContextMenu({ children, file, onAction }: FileContextMenuPro
               <Copy className="mr-2 h-4 w-4" />
               Copy Path
             </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={() => handleAction('manage-permissions')}>
+              <Shield className="mr-2 h-4 w-4" />
+              Manage Permissions
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuItem onClick={() => handleAction('delete')}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
@@ -104,6 +112,12 @@ export function FileContextMenu({ children, file, onAction }: FileContextMenuPro
               <Copy className="mr-2 h-4 w-4" />
               Copy Path
             </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={() => handleAction('manage-permissions')}>
+              <Shield className="mr-2 h-4 w-4" />
+              Manage Permissions
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuItem onClick={() => handleAction('delete')}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete

@@ -189,7 +189,7 @@ export function useCreateWorkspace() {
         path,
         name,
         description,
-        created_by: userInfo?.user_id || userInfo?.subject_id,
+        created_by: userInfo?.subject_id || userInfo?.user,
       })
 
       return workspace
