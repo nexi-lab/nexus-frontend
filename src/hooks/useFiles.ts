@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { filesAPI } from '../api/files'
+import { useMemo } from 'react'
+import { createFilesAPI } from '../api/files'
+import { useAuth } from '../contexts/AuthContext'
 
 // Query keys
 export const fileKeys = {
@@ -10,8 +12,15 @@ export const fileKeys = {
   namespaces: () => [...fileKeys.all, 'namespaces'] as const,
 }
 
+// Hook to get the filesAPI with the authenticated client
+function useFilesAPI() {
+  const { apiClient } = useAuth()
+  return useMemo(() => createFilesAPI(apiClient), [apiClient])
+}
+
 // Get available namespaces
 export function useNamespaces(enabled = true) {
+  const filesAPI = useFilesAPI()
   return useQuery({
     queryKey: fileKeys.namespaces(),
     queryFn: () => filesAPI.getAvailableNamespaces(),
@@ -22,6 +31,7 @@ export function useNamespaces(enabled = true) {
 
 // List files in a directory
 export function useFileList(path: string, enabled = true) {
+  const filesAPI = useFilesAPI()
   return useQuery({
     queryKey: fileKeys.list(path),
     queryFn: () => filesAPI.list(path, { details: true }),
@@ -31,6 +41,7 @@ export function useFileList(path: string, enabled = true) {
 
 // Read file contents
 export function useFileContent(path: string, enabled = true) {
+  const filesAPI = useFilesAPI()
   return useQuery({
     queryKey: fileKeys.file(path),
     queryFn: () => filesAPI.read(path),
@@ -40,6 +51,7 @@ export function useFileContent(path: string, enabled = true) {
 
 // Create directory
 export function useCreateDirectory() {
+  const filesAPI = useFilesAPI()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -55,6 +67,7 @@ export function useCreateDirectory() {
 
 // Upload file
 export function useUploadFile() {
+  const filesAPI = useFilesAPI()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -72,6 +85,7 @@ export function useUploadFile() {
 
 // Update file (similar to upload but specifically for updates)
 export function useUpdateFile() {
+  const filesAPI = useFilesAPI()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -86,6 +100,7 @@ export function useUpdateFile() {
 
 // Delete file or directory
 export function useDeleteFile() {
+  const filesAPI = useFilesAPI()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -108,6 +123,7 @@ export function useDeleteFile() {
 
 // Rename file
 export function useRenameFile() {
+  const filesAPI = useFilesAPI()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -129,6 +145,7 @@ export function useRenameFile() {
 
 // Search files
 export function useSearchFiles() {
+  const filesAPI = useFilesAPI()
   return useMutation({
     mutationFn: async ({
       query,
@@ -144,6 +161,45 @@ export function useSearchFiles() {
       } else {
         return await filesAPI.grep(query, { path })
       }
+    },
+  })
+}
+
+// Create workspace (mkdir + register)
+export function useCreateWorkspace() {
+  const filesAPI = useFilesAPI()
+  const { apiClient, userInfo } = useAuth()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      path,
+      name,
+      description,
+    }: {
+      path: string
+      name?: string
+      description?: string
+    }) => {
+      // Step 1: Create directory
+      await filesAPI.mkdir(path, { parents: true, exist_ok: false })
+
+      // Step 2: Register workspace (auto-grants ReBAC permissions)
+      const workspace = await apiClient.registerWorkspace({
+        path,
+        name,
+        description,
+        created_by: userInfo?.user_id || userInfo?.subject_id,
+      })
+
+      return workspace
+    },
+    onSuccess: (_, { path }) => {
+      // Invalidate parent directory to show new workspace
+      const parentPath = path.substring(0, path.lastIndexOf('/')) || '/'
+      queryClient.invalidateQueries({ queryKey: fileKeys.list(parentPath) })
+      // Invalidate root to refresh tree
+      queryClient.invalidateQueries({ queryKey: fileKeys.list('/') })
     },
   })
 }

@@ -1,28 +1,39 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Settings, FolderPlus } from 'lucide-react'
 import { Button } from './ui/button'
 import { Breadcrumb } from './Breadcrumb'
 import { LeftPanel } from './LeftPanel'
 import { FileContentViewer } from './FileContentViewer'
 import { FileUpload } from './FileUpload'
 import { CreateFolderDialog } from './CreateFolderDialog'
+import { CreateWorkspaceDialog } from './CreateWorkspaceDialog'
 import { RenameDialog } from './RenameDialog'
+import { LoginDialog } from './LoginDialog'
 import { type ContextMenuAction } from './FileContextMenu'
-import { filesAPI } from '../api/files'
-import { useDeleteFile, useUploadFile, useCreateDirectory } from '../hooks/useFiles'
+import { createFilesAPI } from '../api/files'
+import { useDeleteFile, useUploadFile, useCreateDirectory, useCreateWorkspace } from '../hooks/useFiles'
+import { useAuth } from '../contexts/AuthContext'
 import type { FileInfo } from '../types/file'
 
 export function FileBrowser() {
+  const navigate = useNavigate()
+  const { isAuthenticated, logout, apiClient, userInfo } = useAuth()
+  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient])
   const [currentPath, setCurrentPath] = useState('/')
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [uploadTargetPath, setUploadTargetPath] = useState<string>('/')
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false)
+  const [createWorkspaceDialogOpen, setCreateWorkspaceDialogOpen] = useState(false)
   const [renameFile, setRenameFile] = useState<FileInfo | null>(null)
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null)
+  const [loginDialogOpen, setLoginDialogOpen] = useState(!isAuthenticated)
 
   const deleteMutation = useDeleteFile()
   const uploadMutation = useUploadFile()
   const createDirMutation = useCreateDirectory()
+  const createWorkspaceMutation = useCreateWorkspace()
 
   const handleFileSelect = (file: FileInfo) => {
     setSelectedFile(file)
@@ -60,6 +71,14 @@ export function FileBrowser() {
 
   const handleCancelCreate = () => {
     setCreatingNewItem(null)
+  }
+
+  const handleCreateWorkspace = async (path: string, name: string, description: string) => {
+    await createWorkspaceMutation.mutateAsync({
+      path,
+      name: name || undefined,
+      description: description || undefined,
+    })
   }
 
   const handleContextMenuAction = async (action: ContextMenuAction, file: FileInfo) => {
@@ -158,7 +177,49 @@ export function FileBrowser() {
             <img src="/nexus-logo.png" alt="Nexus Logo" className="h-10 w-10" />
             <h1 className="text-2xl font-bold">NexusFS</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {isAuthenticated ? (
+              <>
+                {userInfo?.user && (
+                  <span className="text-sm text-muted-foreground mr-2">
+                    {userInfo.user}
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCreateWorkspaceDialogOpen(true)}
+                >
+                  <FolderPlus className="h-4 w-4 mr-2" />
+                  New Workspace
+                </Button>
+                {userInfo?.is_admin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate('/admin')}
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Admin
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    logout()
+                    setLoginDialogOpen(true)
+                  }}
+                >
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => setLoginDialogOpen(true)}
+              >
+                Login
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -211,6 +272,11 @@ export function FileBrowser() {
       </div>
 
       {/* Dialogs */}
+      <LoginDialog
+        open={loginDialogOpen}
+        onOpenChange={setLoginDialogOpen}
+      />
+
       <FileUpload
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
@@ -221,6 +287,12 @@ export function FileBrowser() {
         open={createFolderDialogOpen}
         onOpenChange={setCreateFolderDialogOpen}
         currentPath={currentPath}
+      />
+
+      <CreateWorkspaceDialog
+        open={createWorkspaceDialogOpen}
+        onOpenChange={setCreateWorkspaceDialogOpen}
+        onCreateWorkspace={handleCreateWorkspace}
       />
 
       <RenameDialog

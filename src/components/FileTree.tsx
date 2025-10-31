@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText } from 'lucide-react'
-import { useFileList, useNamespaces } from '../hooks/useFiles'
+import { useFileList } from '../hooks/useFiles'
 import { cn } from '../lib/utils'
 import { FileContextMenu, type ContextMenuAction } from './FileContextMenu'
 import { InlineFileInput } from './InlineFileInput'
@@ -43,29 +43,14 @@ function TreeNode({ path, name, currentPath, onPathChange, onFileClick, onContex
     currentPath.startsWith(path) || path === '/'
   )
 
-  // For root path, use namespaces API instead of list API
-  const isRootPath = path === '/'
-  const { data: namespaces, isLoading: namespacesLoading } = useNamespaces(isRootPath && isExpanded)
-  const { data: files, isLoading: filesLoading } = useFileList(path, !isRootPath && isExpanded)
-
-  const isLoading = isRootPath ? namespacesLoading : filesLoading
+  // Use regular file listing for all paths
+  const { data: files, isLoading } = useFileList(path, isExpanded)
 
   const isActive = currentPath === path
 
   // Filter directories and files based on search results
   const directories = useMemo(() => {
-    let allDirs: FileInfo[] = []
-
-    // For root path, transform namespaces into FileInfo objects
-    if (isRootPath && namespaces) {
-      allDirs = namespaces.map((ns) => ({
-        path: `/${ns}`,
-        name: ns,
-        isDirectory: true,
-      }))
-    } else {
-      allDirs = files?.filter((f) => f.isDirectory) || []
-    }
+    const allDirs = files?.filter((f) => f.isDirectory) || []
 
     // If no search is active, show all directories
     if (!searchResults || !relevantPaths) {
@@ -74,7 +59,7 @@ function TreeNode({ path, name, currentPath, onPathChange, onFileClick, onContex
 
     // Only show directories that are in the relevant paths
     return allDirs.filter((dir) => relevantPaths.has(dir.path))
-  }, [isRootPath, namespaces, files, searchResults, relevantPaths])
+  }, [files, searchResults, relevantPaths])
 
   const fileItems = useMemo(() => {
     return files?.filter((f) => !f.isDirectory && !isParsedFile(f.name)) || []

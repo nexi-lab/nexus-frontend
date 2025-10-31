@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import { ArrowLeft, Download, Edit, Trash2, FileText, Image as ImageIcon, Code, FileJson, Film } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { useFileContent, useDeleteFile } from '../hooks/useFiles'
-import { filesAPI } from '../api/files'
+import { createFilesAPI } from '../api/files'
+import { useAuth } from '../contexts/AuthContext'
 
 // Helper to convert Uint8Array to string
 function bytesToString(bytes: Uint8Array | undefined): string {
@@ -14,6 +15,9 @@ function bytesToString(bytes: Uint8Array | undefined): string {
 }
 
 export function FileViewerPage() {
+  const { apiClient } = useAuth()
+  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient])
+
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const filePath = searchParams.get('path') || '/'
