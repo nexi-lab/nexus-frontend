@@ -63,7 +63,7 @@ export function FileVersionHistoryDialog({
   const handleDownloadVersion = async (version: number) => {
     try {
       const content = await apiClient.getVersion(filePath, version)
-      const blob = new Blob([content], { type: 'application/octet-stream' })
+      const blob = new Blob([content as unknown as BlobPart], { type: 'application/octet-stream' })
       const url = URL.createObjectURL(blob)
       const fileName = filePath.split('/').pop() || 'file'
       const a = document.createElement('a')
