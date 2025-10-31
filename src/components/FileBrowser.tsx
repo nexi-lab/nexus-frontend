@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, FolderPlus, Bot } from 'lucide-react'
+import { Settings, FolderPlus, Bot, MessageSquare } from 'lucide-react'
 import { Button } from './ui/button'
 import { Breadcrumb } from './Breadcrumb'
 import { LeftPanel } from './LeftPanel'
 import { FileContentViewer } from './FileContentViewer'
 import { FileUpload } from './FileUpload'
+import { ChatPanel } from './ChatPanel'
 import { CreateFolderDialog } from './CreateFolderDialog'
 import { WorkspaceManagementDialog } from './WorkspaceManagementDialog'
 import { AgentManagementDialog } from './AgentManagementDialog'
@@ -35,6 +36,7 @@ export function FileBrowser() {
   const [versionHistoryFile, setVersionHistoryFile] = useState<FileInfo | null>(null)
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null)
   const [loginDialogOpen, setLoginDialogOpen] = useState(!isAuthenticated)
+  const [chatPanelOpen, setChatPanelOpen] = useState(false)
 
   const deleteMutation = useDeleteFile()
   const uploadMutation = useUploadFile()
@@ -215,6 +217,15 @@ export function FileBrowser() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  type="button"
+                  onClick={() => setChatPanelOpen(!chatPanelOpen)}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Chat
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setCreateWorkspaceDialogOpen(true)}
                 >
                   <FolderPlus className="h-4 w-4 mr-2" />
@@ -302,8 +313,15 @@ export function FileBrowser() {
           onCancelCreate={handleCancelCreate}
         />
 
-        {/* Right Panel - File Content Viewer */}
+        {/* Middle Panel - File Content Viewer */}
         <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
+
+        {/* Right Panel - Chat */}
+        {chatPanelOpen && (
+          <div className="w-96">
+            <ChatPanel isOpen={chatPanelOpen} onClose={() => setChatPanelOpen(false)} />
+          </div>
+        )}
       </div>
 
       {/* Dialogs */}
