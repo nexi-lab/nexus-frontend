@@ -1,4 +1,4 @@
-import { nexusAPI } from './client'
+import type NexusAPIClient from './client'
 import type { ListResult, GlobResult, GrepResult, FileInfo } from '../types/file'
 
 // Helper function to transform backend file data to frontend FileInfo
@@ -48,148 +48,151 @@ function transformFileInfo(file: any): FileInfo {
   }
 }
 
-export const filesAPI = {
-  // List files in a directory
-  async list(
-    path: string,
-    options?: {
-      recursive?: boolean
-      details?: boolean
-      prefix?: string
-      show_parsed?: boolean
-    }
-  ): Promise<FileInfo[]> {
-    const params: any = {
-      path,
-      recursive: options?.recursive ?? false,
-      details: options?.details ?? true,
-    }
+// Factory function to create filesAPI with a specific client
+export function createFilesAPI(client: NexusAPIClient) {
+  return {
+    // List files in a directory
+    async list(
+      path: string,
+      options?: {
+        recursive?: boolean
+        details?: boolean
+        prefix?: string
+        show_parsed?: boolean
+      }
+    ): Promise<FileInfo[]> {
+      const params: any = {
+        path,
+        recursive: options?.recursive ?? false,
+        details: options?.details ?? true,
+      }
 
-    // Only add optional params if they are defined
-    if (options?.prefix !== undefined) {
-      params.prefix = options.prefix
-    }
-    if (options?.show_parsed !== undefined) {
-      params.show_parsed = options.show_parsed
-    }
+      // Only add optional params if they are defined
+      if (options?.prefix !== undefined) {
+        params.prefix = options.prefix
+      }
+      if (options?.show_parsed !== undefined) {
+        params.show_parsed = options.show_parsed
+      }
 
-    const result = await nexusAPI.call<ListResult>('list', params)
+      const result = await client.call<ListResult>('list', params)
 
-    // Transform backend response to frontend FileInfo format
-    return result.files.map(transformFileInfo)
-  },
+      // Transform backend response to frontend FileInfo format
+      return result.files.map(transformFileInfo)
+    },
 
-  // Read file contents (returns Uint8Array for binary files)
-  async read(path: string): Promise<Uint8Array> {
-    return await nexusAPI.call<Uint8Array>('read', { path })
-  },
+    // Read file contents (returns Uint8Array for binary files)
+    async read(path: string): Promise<Uint8Array> {
+      return await client.call<Uint8Array>('read', { path })
+    },
 
-  // Write file contents
-  async write(path: string, content: string | ArrayBuffer): Promise<void> {
-    // Convert content to base64-encoded bytes format expected by server
-    let base64Content: string
+    // Write file contents
+    async write(path: string, content: string | ArrayBuffer): Promise<void> {
+      // Convert content to base64-encoded bytes format expected by server
+      let base64Content: string
 
-    if (typeof content === 'string') {
-      // Text content - encode as UTF-8 then base64
-      base64Content = btoa(unescape(encodeURIComponent(content)))
-    } else {
-      // Binary content (ArrayBuffer) - convert to base64
-      const bytes = new Uint8Array(content)
-      const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '')
-      base64Content = btoa(binary)
-    }
+      if (typeof content === 'string') {
+        // Text content - encode as UTF-8 then base64
+        base64Content = btoa(unescape(encodeURIComponent(content)))
+      } else {
+        // Binary content (ArrayBuffer) - convert to base64
+        const bytes = new Uint8Array(content)
+        const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '')
+        base64Content = btoa(binary)
+      }
 
-    // Send in the format expected by RPC server: {"__type__": "bytes", "data": "base64..."}
-    await nexusAPI.call('write', {
-      path,
-      content: { __type__: 'bytes', data: base64Content }
-    })
-  },
+      // Send in the format expected by RPC server: {"__type__": "bytes", "data": "base64..."}
+      await client.call('write', {
+        path,
+        content: { __type__: 'bytes', data: base64Content }
+      })
+    },
 
-  // Delete file or directory
-  async delete(path: string): Promise<void> {
-    await nexusAPI.call('delete', { path })
-  },
+    // Delete file or directory
+    async delete(path: string): Promise<void> {
+      await client.call('delete', { path })
+    },
 
-  // Check if file exists
-  async exists(path: string): Promise<boolean> {
-    const result = await nexusAPI.call<{ exists: boolean }>('exists', { path })
-    return result.exists
-  },
+    // Check if file exists
+    async exists(path: string): Promise<boolean> {
+      const result = await client.call<{ exists: boolean }>('exists', { path })
+      return result.exists
+    },
 
-  // Create directory
-  async mkdir(
-    path: string,
-    options?: { parents?: boolean; exist_ok?: boolean }
-  ): Promise<void> {
-    await nexusAPI.call('mkdir', {
-      path,
-      parents: options?.parents ?? true,
-      exist_ok: options?.exist_ok ?? false,
-    })
-  },
+    // Create directory
+    async mkdir(
+      path: string,
+      options?: { parents?: boolean; exist_ok?: boolean }
+    ): Promise<void> {
+      await client.call('mkdir', {
+        path,
+        parents: options?.parents ?? true,
+        exist_ok: options?.exist_ok ?? false,
+      })
+    },
 
-  // Remove directory
-  async rmdir(path: string, recursive?: boolean): Promise<void> {
-    await nexusAPI.call('rmdir', {
-      path,
-      recursive: recursive ?? false,
-    })
-  },
+    // Remove directory
+    async rmdir(path: string, recursive?: boolean): Promise<void> {
+      await client.call('rmdir', {
+        path,
+        recursive: recursive ?? false,
+      })
+    },
 
-  // Check if path is a directory
-  async isDirectory(path: string): Promise<boolean> {
-    const result = await nexusAPI.call<{ is_directory: boolean }>(
-      'is_directory',
-      { path }
-    )
-    return result.is_directory
-  },
+    // Check if path is a directory
+    async isDirectory(path: string): Promise<boolean> {
+      const result = await client.call<{ is_directory: boolean }>(
+        'is_directory',
+        { path }
+      )
+      return result.is_directory
+    },
 
-  // Search files by pattern (glob)
-  async glob(pattern: string, path?: string): Promise<string[]> {
-    const result = await nexusAPI.call<GlobResult>('glob', {
-      pattern,
-      path: path ?? '/',
-    })
-    return result.matches
-  },
+    // Search files by pattern (glob)
+    async glob(pattern: string, path?: string): Promise<string[]> {
+      const result = await client.call<GlobResult>('glob', {
+        pattern,
+        path: path ?? '/',
+      })
+      return result.matches
+    },
 
-  // Search file contents (grep)
-  async grep(
-    pattern: string,
-    options?: {
-      path?: string
-      file_pattern?: string
-      ignore_case?: boolean
-      max_results?: number
-    }
-  ): Promise<GrepResult['results']> {
-    const result = await nexusAPI.call<GrepResult>('grep', {
-      pattern,
-      path: options?.path ?? '/',
-      file_pattern: options?.file_pattern,
-      ignore_case: options?.ignore_case ?? false,
-      max_results: options?.max_results ?? 100,
-    })
-    return result.results
-  },
+    // Search file contents (grep)
+    async grep(
+      pattern: string,
+      options?: {
+        path?: string
+        file_pattern?: string
+        ignore_case?: boolean
+        max_results?: number
+      }
+    ): Promise<GrepResult['results']> {
+      const result = await client.call<GrepResult>('grep', {
+        pattern,
+        path: options?.path ?? '/',
+        file_pattern: options?.file_pattern,
+        ignore_case: options?.ignore_case ?? false,
+        max_results: options?.max_results ?? 100,
+      })
+      return result.results
+    },
 
-  // Rename/move file
-  async rename(oldPath: string, newPath: string): Promise<void> {
-    // Implement using read + write + delete
-    const content = await this.read(oldPath)
-    // Convert Uint8Array to ArrayBuffer for write
-    await this.write(newPath, content.buffer as ArrayBuffer)
-    await this.delete(oldPath)
-  },
+    // Rename/move file
+    async rename(oldPath: string, newPath: string): Promise<void> {
+      // Implement using read + write + delete
+      const content = await this.read(oldPath)
+      // Convert Uint8Array to ArrayBuffer for write
+      await this.write(newPath, content.buffer as ArrayBuffer)
+      await this.delete(oldPath)
+    },
 
-  // Get available namespaces
-  async getAvailableNamespaces(): Promise<string[]> {
-    const result = await nexusAPI.call<{ namespaces: string[] }>(
-      'get_available_namespaces',
-      {}
-    )
-    return result.namespaces
-  },
+    // Get available namespaces
+    async getAvailableNamespaces(): Promise<string[]> {
+      const result = await client.call<{ namespaces: string[] }>(
+        'get_available_namespaces',
+        {}
+      )
+      return result.namespaces
+    },
+  }
 }

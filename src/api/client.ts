@@ -88,6 +88,131 @@ class NexusAPIClient {
       throw error
     }
   }
+
+  // Whoami endpoint - validates authentication and returns user info
+  async whoami(): Promise<{
+    authenticated: boolean
+    subject_type?: string
+    subject_id?: string
+    tenant_id?: string
+    is_admin?: boolean
+    user?: string
+  }> {
+    try {
+      const response = await this.client.get('/api/auth/whoami')
+      return response.data
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          throw new Error('Invalid or missing API key')
+        }
+        throw new Error(
+          `Authentication error: ${error.message}${
+            error.response?.data?.message ? ` - ${error.response.data.message}` : ''
+          }`
+        )
+      }
+      throw error
+    }
+  }
+
+  // Admin API - Create a new API key for a user
+  async adminCreateKey(params: {
+    user_id: string
+    name: string
+    is_admin?: boolean
+    expires_days?: number | null
+    tenant_id?: string
+    subject_type?: string
+    subject_id?: string
+  }): Promise<{ api_key: string; key_id: string; user_id: string; name: string }> {
+    return await this.call('admin_create_key', params)
+  }
+
+  // Admin API - List API keys
+  async adminListKeys(params?: {
+    user_id?: string
+    tenant_id?: string
+    is_admin?: boolean
+    include_revoked?: boolean
+    include_expired?: boolean
+    limit?: number
+    offset?: number
+  }): Promise<{ keys: Array<any>; total: number; limit: number; offset: number }> {
+    return await this.call('admin_list_keys', params || {})
+  }
+
+  // Admin API - Get API key details
+  async adminGetKey(keyId: string): Promise<any> {
+    return await this.call('admin_get_key', { key_id: keyId })
+  }
+
+  // Admin API - Revoke an API key
+  async adminRevokeKey(keyId: string): Promise<{ success: boolean; key_id: string }> {
+    return await this.call('admin_revoke_key', { key_id: keyId })
+  }
+
+  // Admin API - Update API key properties
+  async adminUpdateKey(params: {
+    key_id: string
+    expires_days?: number
+    is_admin?: boolean
+    name?: string
+  }): Promise<any> {
+    return await this.call('admin_update_key', params)
+  }
+
+  // Workspace API - Register a new workspace
+  async registerWorkspace(params: {
+    path: string
+    name?: string
+    description?: string
+    created_by?: string
+  }): Promise<{
+    path: string
+    name: string | null
+    description: string
+    created_at: string
+    created_by: string | null
+    metadata: Record<string, any>
+  }> {
+    return await this.call('register_workspace', params)
+  }
+
+  // ReBAC API - Create a relationship tuple
+  async rebacCreate(params: {
+    subject: [string, string]
+    relation: string
+    object: [string, string]
+    expires_at?: string
+    tenant_id?: string
+  }): Promise<string> {
+    return await this.call('rebac_create', params)
+  }
+
+  // ReBAC API - List relationship tuples
+  async rebacListTuples(params?: {
+    subject?: [string, string]
+    relation?: string
+    object?: [string, string]
+  }): Promise<Array<{
+    tuple_id: string
+    subject_type: string
+    subject_id: string
+    relation: string
+    object_type: string
+    object_id: string
+    created_at: string | null
+  }>> {
+    return await this.call('rebac_list_tuples', params || {})
+  }
+
+  // ReBAC API - Delete a relationship tuple
+  async rebacDelete(params: {
+    tuple_id: string
+  }): Promise<boolean> {
+    return await this.call('rebac_delete', params)
+  }
 }
 
 // Default client instance

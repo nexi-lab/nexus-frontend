@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Download, Trash2, FileText, Image as ImageIcon, Code, FileJson, Film, FileIcon, Edit, Save, X } from 'lucide-react'
@@ -6,7 +6,8 @@ import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
 import { PDFViewer } from './PDFViewer'
 import { useFileContent, useDeleteFile, useUpdateFile } from '../hooks/useFiles'
-import { filesAPI } from '../api/files'
+import { createFilesAPI } from '../api/files'
+import { useAuth } from '../contexts/AuthContext'
 import type { FileInfo } from '../types/file'
 
 // Helper to convert Uint8Array to string
@@ -41,6 +42,9 @@ interface FileContentViewerProps {
 }
 
 export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProps) {
+  const { apiClient } = useAuth()
+  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient])
+
   const filePath = file?.path || ''
   const fileName = file?.name || 'Unknown'
 
