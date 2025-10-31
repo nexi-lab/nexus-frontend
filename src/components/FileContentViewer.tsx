@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Download, Trash2, FileText, Image as ImageIcon, Code, FileJson, Film, FileIcon, Edit, Save, X, History } from 'lucide-react'
+import { Download, Trash2, FileText, Image as ImageIcon, Code, FileJson, Film, FileIcon, Edit, Save, X, History, Loader2 } from 'lucide-react'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
 import { PDFViewer } from './PDFViewer'
@@ -238,8 +238,12 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
 
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-muted-foreground">Loading file...</p>
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <Loader2 className="h-12 w-12 text-primary animate-spin" />
+          <div className="text-center">
+            <p className="text-lg font-medium mb-1">Loading file...</p>
+            <p className="text-sm text-muted-foreground">{fileName}</p>
+          </div>
         </div>
       )
     }
@@ -363,8 +367,9 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         // Otherwise, fall back to PDF viewer
         if (parsedMdLoading) {
           return (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">Loading PDF content...</p>
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+              <p className="text-lg font-medium">Loading PDF content...</p>
             </div>
           )
         }
@@ -427,8 +432,9 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         // Loading state
         if (parsedMdLoading) {
           return (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">Loading Excel content...</p>
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+              <p className="text-lg font-medium">Loading Excel content...</p>
             </div>
           )
         }

@@ -5,6 +5,7 @@ interface UseLangGraphOptions {
   apiUrl?: string
   assistantId?: string
   apiKey?: string
+  threadId?: string
   key?: number // Add key to force recreation
 }
 
@@ -17,8 +18,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     apiUrl: options.apiUrl || '',
     apiKey: options.apiKey || undefined,
     assistantId: options.assistantId || '',
-    // Don't set threadId - let SDK manage it automatically
-    // It will create a new thread on first submit and reuse it
+    threadId: options.threadId, // Use provided thread ID
     fetchStateHistory: false, // Don't fetch history to avoid errors
   })
 
@@ -26,5 +26,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     messages: stream.messages,
     isLoading: stream.isLoading,
     submit: stream.submit,
+    threadId: options.threadId || null, // Return what we passed in
+    client: (stream as any).client, // Expose client for thread creation
   }
 }

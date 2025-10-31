@@ -10,4 +10,5 @@ export interface ChatConfig {
   apiUrl?: string
   assistantId?: string
   apiKey?: string
+  threadId?: string
 }

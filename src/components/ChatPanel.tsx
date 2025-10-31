@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Settings, X, Loader2, Plus } from 'lucide-react'
+import { Send, Settings, X, Loader2, Plus, Info, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from './ui/button'
 import type { ChatConfig } from '../types/chat'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
@@ -87,9 +87,10 @@ function MessageBubble({ message, allMessages }: { message: Message; allMessages
   )
 }
 
-function ChatPanelContent({ config }: { config: ChatConfig }) {
+function ChatPanelContent({ config, onThreadCreated }: { config: ChatConfig; onThreadCreated: (threadId: string) => void }) {
   const [inputValue, setInputValue] = useState('')
   const [firstTokenReceived, setFirstTokenReceived] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const prevMessageLength = useRef(0)
@@ -97,6 +98,24 @@ function ChatPanelContent({ config }: { config: ChatConfig }) {
   const stream = useLangGraph(config)
   const messages = stream.messages || []
   const isLoading = stream.isLoading
+  const threadId = stream.threadId
+  const chatStarted = messages.length > 0
+
+  // Create thread when component mounts (if no thread ID exists)
+  useEffect(() => {
+    async function createThread() {
+      if (!config.threadId && stream.client) {
+        try {
+          const thread = await stream.client.threads.create()
+          console.log('Created thread:', thread)
+          onThreadCreated(thread.thread_id)
+        } catch (error) {
+          console.error('Failed to create thread:', error)
+        }
+      }
+    }
+    createThread()
+  }, [config.threadId, stream.client, onThreadCreated])
 
   // Track when first token is received
   useEffect(() => {
@@ -154,10 +173,45 @@ function ChatPanelContent({ config }: { config: ChatConfig }) {
     }
   }
 
-  const chatStarted = messages.length > 0
-
   return (
     <>
+      {/* Connection Info Panel */}
+      {chatStarted && (
+        <div className="border-b bg-muted/30">
+          <button
+            onClick={() => setShowInfo(!showInfo)}
+            className="w-full px-4 py-2 flex items-center justify-between hover:bg-muted/50 transition-colors"
+            type="button"
+          >
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Info className="h-3.5 w-3.5" />
+              <span>Connection Info</span>
+            </div>
+            {showInfo ? (
+              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+          </button>
+          {showInfo && (
+            <div className="px-4 pb-3 space-y-2 text-xs font-mono">
+              <div className="flex items-start gap-2">
+                <span className="text-muted-foreground min-w-[80px]">LangGraph:</span>
+                <span className="text-foreground break-all">{config.apiUrl || 'null'}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-muted-foreground min-w-[80px]">Agent ID:</span>
+                <span className="text-foreground">{config.assistantId || 'null'}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-muted-foreground min-w-[80px]">Thread ID:</span>
+                <span className="text-foreground break-all">{threadId || 'null'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4">
         {!chatStarted && (
@@ -216,19 +270,22 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const [config, setConfig] = useState<ChatConfig>({
     apiUrl: 'http://localhost:2024',
     assistantId: 'agent',
-    apiKey: ''
+    apiKey: '',
+    threadId: undefined, // Start with no thread
   })
   const [showConfig, setShowConfig] = useState(false)
   const [chatKey, setChatKey] = useState(0) // Key to force recreation
 
+  const handleThreadCreated = (threadId: string) => {
+    console.log('Thread created with ID:', threadId)
+    setConfig(prev => ({ ...prev, threadId }))
+  }
+
   const handleNewChat = () => {
     console.log('New Chat clicked - current key:', chatKey)
-    // Increment key to force complete remount of ChatPanelContent
-    setChatKey(prev => {
-      const newKey = prev + 1
-      console.log('New chat key:', newKey)
-      return newKey
-    })
+    // Clear thread ID and increment key to force complete remount
+    setConfig(prev => ({ ...prev, threadId: undefined }))
+    setChatKey(prev => prev + 1)
   }
 
   if (!isOpen) return null
@@ -305,7 +362,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       </div>
 
       {/* Chat Content - key forces complete remount */}
-      <ChatPanelContent key={chatKey} config={config} />
+      <ChatPanelContent key={chatKey} config={config} onThreadCreated={handleThreadCreated} />
     </div>
   )
 }
