@@ -1,9 +1,19 @@
-import { useState } from 'react'
-import { Search, FolderTree } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Search, FolderTree, Brain, ChevronDown, ChevronRight, Building2, User, Bot } from 'lucide-react'
 import { SearchBar } from './SearchBar'
 import { FileTree } from './FileTree'
 import { type ContextMenuAction } from './FileContextMenu'
 import type { FileInfo } from '../types/file'
+import { useAuth } from '../contexts/AuthContext'
+
+interface RegisteredMemory {
+  path: string
+  name: string | null
+  description: string
+  created_at: string
+  created_by: string | null
+  metadata: Record<string, any>
+}
 
 interface LeftPanelProps {
   currentPath: string
@@ -13,11 +23,22 @@ interface LeftPanelProps {
   creatingNewItem?: { type: 'file' | 'folder'; parentPath: string } | null
   onCreateItem?: (path: string, type: 'file' | 'folder') => void
   onCancelCreate?: () => void
+  onOpenMemoryDialog?: () => void
 }
 
-export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMenuAction, creatingNewItem, onCreateItem, onCancelCreate }: LeftPanelProps) {
+export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMenuAction, creatingNewItem, onCreateItem, onCancelCreate, onOpenMemoryDialog }: LeftPanelProps) {
+  const { apiClient, userInfo } = useAuth()
   const [activeTab, setActiveTab] = useState<'explorer' | 'search'>('explorer')
   const [searchFolderPath, setSearchFolderPath] = useState<string | null>(null)
+
+  // Memory state
+  const [memories, setMemories] = useState<RegisteredMemory[]>([])
+  const [loadingMemories, setLoadingMemories] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    org: true,
+    user: true,
+    agent: true,
+  })
 
   const handleContextMenuAction = (action: ContextMenuAction, file: FileInfo) => {
     if (action === 'find-in-folder' && file.isDirectory) {
@@ -27,6 +48,40 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
     }
     // Pass all actions to parent
     onContextMenuAction?.(action, file)
+  }
+
+  // Load memories on mount
+  useEffect(() => {
+    loadMemories()
+  }, [])
+
+  const loadMemories = async () => {
+    setLoadingMemories(true)
+    try {
+      const memoryList = await apiClient.listRegisteredMemories()
+      setMemories(memoryList)
+    } catch (err) {
+      console.error('Failed to load memories:', err)
+      setMemories([])
+    } finally {
+      setLoadingMemories(false)
+    }
+  }
+
+  // Group memories by scope
+  const groupedMemories = {
+    org: memories.filter(m => m.metadata?.scope === 'tenant'),
+    user: memories.filter(m => m.metadata?.scope === 'user'),
+    agent: memories.filter(m => {
+      if (m.metadata?.scope !== 'agent') return false
+      // Only show agent-scoped memories for current user's agents
+      const userId = userInfo?.user || userInfo?.subject_id
+      return m.metadata?.user_id === userId
+    }),
+  }
+
+  const toggleGroup = (group: string) => {
+    setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }))
   }
 
   return (
@@ -58,7 +113,7 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === 'explorer' ? (
           <div className="h-full overflow-auto p-2">
             <FileTree
@@ -82,6 +137,167 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
             onContextMenuAction={handleContextMenuAction}
           />
         )}
+      </div>
+
+      {/* Memory Section */}
+      <div className="border-t bg-background/95 max-h-[300px] flex flex-col">
+        <div className="px-4 py-2 flex items-center gap-2 border-b">
+          <Brain className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Memories</span>
+          {loadingMemories && <span className="text-xs text-muted-foreground">(loading...)</span>}
+          <button
+            onClick={onOpenMemoryDialog}
+            className="ml-auto p-1 hover:bg-muted rounded transition-colors"
+            title="Add Memory"
+          >
+            <Brain className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto">
+          {/* Org (Tenant) Group */}
+          <div className="border-b">
+            <button
+              onClick={() => toggleGroup('org')}
+              className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors"
+            >
+              {expandedGroups.org ? (
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+              )}
+              <Building2 className="h-3 w-3 text-blue-500" />
+              <span className="text-xs font-medium">Organization</span>
+              <span className="text-xs text-muted-foreground ml-auto">
+                ({groupedMemories.org.length})
+              </span>
+            </button>
+            {expandedGroups.org && (
+              <div className="bg-muted/20">
+                {groupedMemories.org.length === 0 ? (
+                  <div className="px-4 py-2 text-xs text-muted-foreground italic">
+                    No organization memories
+                  </div>
+                ) : (
+                  groupedMemories.org.map((memory) => (
+                    <div
+                      key={memory.path}
+                      className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer"
+                      title={memory.description || memory.path}
+                    >
+                      <div className="text-xs font-medium truncate">
+                        {memory.name || memory.path.split('/').pop()}
+                      </div>
+                      {memory.description && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {memory.description}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* User Group */}
+          <div className="border-b">
+            <button
+              onClick={() => toggleGroup('user')}
+              className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors"
+            >
+              {expandedGroups.user ? (
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+              )}
+              <User className="h-3 w-3 text-green-500" />
+              <span className="text-xs font-medium">User</span>
+              <span className="text-xs text-muted-foreground ml-auto">
+                ({groupedMemories.user.length})
+              </span>
+            </button>
+            {expandedGroups.user && (
+              <div className="bg-muted/20">
+                {groupedMemories.user.length === 0 ? (
+                  <div className="px-4 py-2 text-xs text-muted-foreground italic">
+                    No user memories
+                  </div>
+                ) : (
+                  groupedMemories.user.map((memory) => (
+                    <div
+                      key={memory.path}
+                      className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer"
+                      title={memory.description || memory.path}
+                    >
+                      <div className="text-xs font-medium truncate">
+                        {memory.name || memory.path.split('/').pop()}
+                      </div>
+                      {memory.description && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {memory.description}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Agent Group */}
+          <div>
+            <button
+              onClick={() => toggleGroup('agent')}
+              className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors"
+            >
+              {expandedGroups.agent ? (
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+              )}
+              <Bot className="h-3 w-3 text-purple-500" />
+              <span className="text-xs font-medium">Agent</span>
+              <span className="text-xs text-muted-foreground ml-auto">
+                ({groupedMemories.agent.length})
+              </span>
+            </button>
+            {expandedGroups.agent && (
+              <div className="bg-muted/20">
+                {groupedMemories.agent.length === 0 ? (
+                  <div className="px-4 py-2 text-xs text-muted-foreground italic">
+                    No agent memories
+                  </div>
+                ) : (
+                  groupedMemories.agent.map((memory) => (
+                    <div
+                      key={memory.path}
+                      className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer"
+                      title={memory.description || memory.path}
+                    >
+                      <div className="text-xs font-medium truncate">
+                        {memory.name || memory.path.split('/').pop()}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {memory.description && (
+                          <div className="text-xs text-muted-foreground truncate flex-1">
+                            {memory.description}
+                          </div>
+                        )}
+                        {memory.metadata?.agent_id && (
+                          <div className="text-xs text-purple-500 font-mono">
+                            {memory.metadata.agent_id.includes(',')
+                              ? memory.metadata.agent_id.split(',')[1]
+                              : memory.metadata.agent_id}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, FolderPlus, Bot, MessageSquare } from 'lucide-react'
+import { Settings, FolderPlus, Bot, MessageSquare, Brain } from 'lucide-react'
 import { Button } from './ui/button'
 import { Breadcrumb } from './Breadcrumb'
 import { LeftPanel } from './LeftPanel'
@@ -9,6 +9,8 @@ import { FileUpload } from './FileUpload'
 import { ChatPanel } from './ChatPanel'
 import { CreateFolderDialog } from './CreateFolderDialog'
 import { WorkspaceManagementDialog } from './WorkspaceManagementDialog'
+import { MemoryManagementDialog } from './MemoryManagementDialog'
+import { StoreMemoryDialog } from './StoreMemoryDialog'
 import { AgentManagementDialog } from './AgentManagementDialog'
 import { RenameDialog } from './RenameDialog'
 import { LoginDialog } from './LoginDialog'
@@ -30,6 +32,8 @@ export function FileBrowser() {
   const [uploadTargetPath, setUploadTargetPath] = useState<string>('/')
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false)
   const [createWorkspaceDialogOpen, setCreateWorkspaceDialogOpen] = useState(false)
+  const [memoryManagementDialogOpen, setMemoryManagementDialogOpen] = useState(false)
+  const [storeMemoryDialogOpen, setStoreMemoryDialogOpen] = useState(false)
   const [registerAgentDialogOpen, setRegisterAgentDialogOpen] = useState(false)
   const [renameFile, setRenameFile] = useState<FileInfo | null>(null)
   const [managePermissionsFile, setManagePermissionsFile] = useState<FileInfo | null>(null)
@@ -234,6 +238,14 @@ export function FileBrowser() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  onClick={() => setMemoryManagementDialogOpen(true)}
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  Memory
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setRegisterAgentDialogOpen(true)}
                 >
                   <Bot className="h-4 w-4 mr-2" />
@@ -311,6 +323,7 @@ export function FileBrowser() {
           creatingNewItem={creatingNewItem}
           onCreateItem={handleCreateItem}
           onCancelCreate={handleCancelCreate}
+          onOpenMemoryDialog={() => setStoreMemoryDialogOpen(true)}
         />
 
         {/* Middle Panel - File Content Viewer */}
@@ -323,6 +336,41 @@ export function FileBrowser() {
           </div>
         )}
       </div>
+
+      {/* Footer */}
+      <footer className="border-t bg-muted/20 px-4 py-2">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="font-medium">Nexus Hub</div>
+          <div className="flex gap-3">
+            <a
+              href="https://github.com/nexi-lab/nexus"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition-colors"
+            >
+              Docs
+            </a>
+            <span>|</span>
+            <a
+              href="https://nexus.nexilab.co/health"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition-colors"
+            >
+              API
+            </a>
+            <span>|</span>
+            <a
+              href="https://github.com/nexi-lab/nexus/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition-colors"
+            >
+              Help
+            </a>
+          </div>
+        </div>
+      </footer>
 
       {/* Dialogs */}
       <LoginDialog
@@ -346,6 +394,16 @@ export function FileBrowser() {
         open={createWorkspaceDialogOpen}
         onOpenChange={setCreateWorkspaceDialogOpen}
         onCreateWorkspace={handleCreateWorkspace}
+      />
+
+      <MemoryManagementDialog
+        open={memoryManagementDialogOpen}
+        onOpenChange={setMemoryManagementDialogOpen}
+      />
+
+      <StoreMemoryDialog
+        open={storeMemoryDialogOpen}
+        onOpenChange={setStoreMemoryDialogOpen}
       />
 
       <AgentManagementDialog

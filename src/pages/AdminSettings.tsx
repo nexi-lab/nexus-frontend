@@ -467,6 +467,41 @@ export function AdminSettings() {
         </div>
       </main>
 
+      {/* Footer */}
+      <footer className="border-t bg-muted/20 px-4 py-2">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="font-medium">Nexus Hub</div>
+          <div className="flex gap-3">
+            <a
+              href="https://github.com/nexi-lab/nexus"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition-colors"
+            >
+              Docs
+            </a>
+            <span>|</span>
+            <a
+              href="https://nexus.nexilab.co/health"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition-colors"
+            >
+              API
+            </a>
+            <span>|</span>
+            <a
+              href="https://github.com/nexi-lab/nexus/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition-colors"
+            >
+              Help
+            </a>
+          </div>
+        </div>
+      </footer>
+
       {/* Create User Dialog */}
       <Dialog
         open={createDialogOpen}

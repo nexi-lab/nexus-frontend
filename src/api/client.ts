@@ -320,6 +320,106 @@ class NexusAPIClient {
   async rollback(path: string, version: number): Promise<void> {
     return await this.call('rollback', { path, version })
   }
+
+  // Memory Path Registration API - Register a memory path
+  async registerMemory(params: {
+    path: string
+    name?: string
+    description?: string
+    created_by?: string
+    metadata?: Record<string, any>
+  }): Promise<{
+    path: string
+    name: string | null
+    description: string
+    created_at: string
+    created_by: string | null
+    metadata: Record<string, any>
+  }> {
+    return await this.call('register_memory', params)
+  }
+
+  // Memory Path Registration API - List registered memory paths
+  async listRegisteredMemories(): Promise<Array<{
+    path: string
+    name: string | null
+    description: string
+    created_at: string
+    created_by: string | null
+    metadata: Record<string, any>
+  }>> {
+    return await this.call('list_registered_memories', {})
+  }
+
+  // Memory Path Registration API - Unregister a memory path
+  async unregisterMemory(path: string): Promise<boolean> {
+    return await this.call('unregister_memory', { path })
+  }
+
+  // Memory Path Registration API - Get memory path info
+  async getMemoryInfo(path: string): Promise<{
+    path: string
+    name: string | null
+    description: string
+    created_at: string
+    created_by: string | null
+    metadata: Record<string, any>
+  } | null> {
+    return await this.call('get_memory_info', { path })
+  }
+
+  // Memory API - Store a memory record
+  async storeMemory(params: {
+    content: string
+    scope?: string
+    memory_type?: string
+    importance?: number
+  }): Promise<{ memory_id: string }> {
+    return await this.call('store_memory', params)
+  }
+
+  // Memory API - List memory records
+  async listMemoryRecords(params?: {
+    scope?: string
+    memory_type?: string
+    limit?: number
+  }): Promise<{ memories: Array<{
+    memory_id: string
+    content_hash: string
+    tenant_id: string | null
+    user_id: string | null
+    agent_id: string | null
+    scope: string
+    visibility: string
+    memory_type: string | null
+    importance: number | null
+    created_at: string | null
+    updated_at: string | null
+  }> }> {
+    return await this.call('list_memories', params || {})
+  }
+
+  // Memory API - Query memory records
+  async queryMemoryRecords(params?: {
+    scope?: string
+    memory_type?: string
+    limit?: number
+  }): Promise<{ memories: Array<{
+    memory_id: string
+    content: string
+    content_hash: string
+    tenant_id: string | null
+    user_id: string | null
+    agent_id: string | null
+    scope: string
+    visibility: string
+    memory_type: string | null
+    importance: number | null
+    created_at: string | null
+    updated_at: string | null
+  }> }> {
+    return await this.call('query_memories', params || {})
+  }
 }
 
 // Default client instance
