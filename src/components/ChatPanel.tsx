@@ -9,6 +9,7 @@ import type { Message } from '@langchain/langgraph-sdk'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ToolCalls } from './ToolCalls'
+import { useAuth } from '../contexts/AuthContext'
 
 interface ChatPanelProps {
   isOpen: boolean
@@ -267,14 +268,28 @@ function ChatPanelContent({ config, onThreadCreated }: { config: ChatConfig; onT
 }
 
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
+  const { apiKey, userInfo } = useAuth()
+
   const [config, setConfig] = useState<ChatConfig>({
     apiUrl: 'http://localhost:2024',
     assistantId: 'agent',
-    apiKey: '',
+    apiKey: apiKey || '',
     threadId: undefined, // Start with no thread
+    userId: userInfo?.subject_id || '',
+    tenantId: userInfo?.tenant_id || '',
   })
   const [showConfig, setShowConfig] = useState(false)
   const [chatKey, setChatKey] = useState(0) // Key to force recreation
+
+  // Update config when auth changes
+  useEffect(() => {
+    setConfig(prev => ({
+      ...prev,
+      apiKey: apiKey || prev.apiKey,
+      userId: userInfo?.subject_id || prev.userId,
+      tenantId: userInfo?.tenant_id || prev.tenantId,
+    }))
+  }, [apiKey, userInfo])
 
   const handleThreadCreated = (threadId: string) => {
     console.log('Thread created with ID:', threadId)
@@ -350,6 +365,28 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
                   />
                   <p className="text-xs text-muted-foreground">
                     Leave blank if not required
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">User ID (optional)</label>
+                  <Input
+                    placeholder="user-123"
+                    value={config.userId || ''}
+                    onChange={(e) => setConfig(prev => ({ ...prev, userId: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    User identifier for authentication
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Tenant ID (optional)</label>
+                  <Input
+                    placeholder="tenant-123"
+                    value={config.tenantId || ''}
+                    onChange={(e) => setConfig(prev => ({ ...prev, tenantId: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tenant/organization identifier
                   </p>
                 </div>
               </div>

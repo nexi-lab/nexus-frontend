@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Search, FolderTree, Brain, ChevronDown, ChevronRight, Building2, User, Bot } from 'lucide-react'
+import { Search, FolderTree, Brain, ChevronDown, ChevronRight, Building2, User, Bot, RefreshCw } from 'lucide-react'
 import { SearchBar } from './SearchBar'
 import { FileTree } from './FileTree'
 import { type ContextMenuAction } from './FileContextMenu'
 import type { FileInfo } from '../types/file'
 import { useAuth } from '../contexts/AuthContext'
+import { useQueryClient } from '@tanstack/react-query'
+import { fileKeys } from '../hooks/useFiles'
 
 interface RegisteredMemory {
   path: string
@@ -28,8 +30,10 @@ interface LeftPanelProps {
 
 export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMenuAction, creatingNewItem, onCreateItem, onCancelCreate, onOpenMemoryDialog }: LeftPanelProps) {
   const { apiClient, userInfo } = useAuth()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'explorer' | 'search'>('explorer')
   const [searchFolderPath, setSearchFolderPath] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Memory state
   const [memories, setMemories] = useState<RegisteredMemory[]>([])
@@ -39,6 +43,18 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
     user: true,
     agent: true,
   })
+
+  // Refresh file tree
+  const handleRefreshFileTree = async () => {
+    setIsRefreshing(true)
+    try {
+      // Invalidate all file list queries to force refetch
+      await queryClient.invalidateQueries({ queryKey: fileKeys.lists() })
+    } finally {
+      // Add a small delay for visual feedback
+      setTimeout(() => setIsRefreshing(false), 500)
+    }
+  }
 
   const handleContextMenuAction = (action: ContextMenuAction, file: FileInfo) => {
     if (action === 'find-in-folder' && file.isDirectory) {
@@ -115,20 +131,34 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden min-h-0">
         {activeTab === 'explorer' ? (
-          <div className="h-full overflow-auto p-2">
-            <FileTree
-              currentPath={currentPath}
-              onPathChange={(path) => {
-                onPathChange(path)
-                // When a directory is clicked in tree, we just navigate to it
-                // Don't select it for viewing
-              }}
-              onFileClick={onFileSelect}
-              onContextMenuAction={handleContextMenuAction}
-              creatingNewItem={creatingNewItem}
-              onCreateItem={onCreateItem}
-              onCancelCreate={onCancelCreate}
-            />
+          <div className="h-full flex flex-col">
+            {/* Refresh button for explorer */}
+            <div className="flex items-center justify-between px-3 py-2 border-b bg-background/50">
+              <span className="text-xs font-medium text-muted-foreground">Files</span>
+              <button
+                onClick={handleRefreshFileTree}
+                disabled={isRefreshing}
+                className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50"
+                title="Refresh file tree"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-2">
+              <FileTree
+                currentPath={currentPath}
+                onPathChange={(path) => {
+                  onPathChange(path)
+                  // When a directory is clicked in tree, we just navigate to it
+                  // Don't select it for viewing
+                }}
+                onFileClick={onFileSelect}
+                onContextMenuAction={handleContextMenuAction}
+                creatingNewItem={creatingNewItem}
+                onCreateItem={onCreateItem}
+                onCancelCreate={onCancelCreate}
+              />
+            </div>
           </div>
         ) : (
           <SearchBar
