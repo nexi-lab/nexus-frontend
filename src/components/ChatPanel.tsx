@@ -1,19 +1,43 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Settings, X, Loader2, Plus, Info, ChevronDown, ChevronUp } from 'lucide-react'
+import { Send, Settings, X, Loader2, Plus, Info, ChevronDown, ChevronUp, Bot } from 'lucide-react'
 import { Button } from './ui/button'
 import type { ChatConfig } from '../types/chat'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 import { Input } from './ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
 import { useLangGraph } from '../hooks/useLangGraph'
 import type { Message } from '@langchain/langgraph-sdk'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ToolCalls } from './ToolCalls'
 import { useAuth } from '../contexts/AuthContext'
+import { createFilesAPI } from '../api/files'
 
 interface ChatPanelProps {
   isOpen: boolean
   onClose: () => void
+}
+
+interface Agent {
+  agent_id: string
+  user_id: string
+  name: string
+  description?: string
+  created_at: string
+}
+
+interface AgentConfig {
+  platform: string
+  endpoint_url?: string
+  agent_id?: string
+  system_prompt?: string
+  tools?: string[]
 }
 
 function getContentString(content: Message['content']): string {
@@ -88,10 +112,23 @@ function MessageBubble({ message, allMessages }: { message: Message; allMessages
   )
 }
 
-function ChatPanelContent({ config, onThreadCreated }: { config: ChatConfig; onThreadCreated: (threadId: string) => void }) {
+function ChatPanelContent({
+  config,
+  onThreadCreated,
+  selectedAgentId,
+  filesAPI,
+  userInfo,
+}: {
+  config: ChatConfig
+  onThreadCreated: (threadId: string) => void
+  selectedAgentId: string
+  filesAPI: any
+  userInfo: any
+}) {
   const [inputValue, setInputValue] = useState('')
   const [firstTokenReceived, setFirstTokenReceived] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
+  const [metadataCreated, setMetadataCreated] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const prevMessageLength = useRef(0)
@@ -110,6 +147,7 @@ function ChatPanelContent({ config, onThreadCreated }: { config: ChatConfig; onT
           const thread = await stream.client.threads.create()
           console.log('Created thread:', thread)
           onThreadCreated(thread.thread_id)
+          setMetadataCreated(false) // Reset metadata flag for new thread
         } catch (error) {
           console.error('Failed to create thread:', error)
         }
@@ -117,6 +155,11 @@ function ChatPanelContent({ config, onThreadCreated }: { config: ChatConfig; onT
     }
     createThread()
   }, [config.threadId, stream.client, onThreadCreated])
+
+  // Reset metadata flag when thread changes
+  useEffect(() => {
+    setMetadataCreated(false)
+  }, [threadId])
 
   // Track when first token is received
   useEffect(() => {
@@ -150,11 +193,59 @@ function ChatPanelContent({ config, onThreadCreated }: { config: ChatConfig; onT
     }
   }, [])
 
-  const handleSendMessage = () => {
+  // Create thread metadata when first message is sent
+  const createThreadMetadata = async (threadId: string, firstMessage: string) => {
+    if (!selectedAgentId || !threadId) return
+
+    try {
+      const [userId, agentName] = selectedAgentId.split(',')
+      if (!userId || !agentName) return
+
+      // Ensure the threads directory exists
+      const threadsDir = `/agent/${userId}/${agentName}/threads`
+      const threadDir = `${threadsDir}/${threadId}`
+
+      try {
+        await filesAPI.mkdir(threadDir, { parents: true, exist_ok: true })
+      } catch (mkdirError) {
+        console.error('Failed to create thread directory:', mkdirError)
+        // Continue anyway, maybe it already exists
+      }
+
+      const metadataPath = `${threadDir}/.metadata`
+
+      // Extract first 5 words for title
+      const words = firstMessage.trim().split(/\s+/)
+      const title = words.slice(0, 5).join(' ') + (words.length > 5 ? '...' : '')
+
+      // Create metadata JSON
+      const metadata = {
+        created_time: new Date().toISOString(),
+        title: title,
+      }
+
+      const encoder = new TextEncoder()
+      const metadataBuffer = encoder.encode(JSON.stringify(metadata, null, 2)).buffer
+      await filesAPI.write(metadataPath, metadataBuffer)
+
+      setMetadataCreated(true)
+      console.log('Thread metadata created:', metadataPath, metadata)
+    } catch (error) {
+      console.error('Failed to create thread metadata:', error)
+      // Don't fail the message send if metadata creation fails
+    }
+  }
+
+  const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return
 
     const messageContent = inputValue.trim()
     setInputValue('')
+
+    // Create metadata on first message
+    if (!metadataCreated && threadId) {
+      await createThreadMetadata(threadId, messageContent)
+    }
 
     // Submit message using LangGraph SDK
     stream.submit({
@@ -268,7 +359,8 @@ function ChatPanelContent({ config, onThreadCreated }: { config: ChatConfig; onT
 }
 
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
-  const { apiKey, userInfo } = useAuth()
+  const { apiKey, userInfo, apiClient } = useAuth()
+  const filesAPI = createFilesAPI(apiClient)
 
   const [config, setConfig] = useState<ChatConfig>({
     apiUrl: 'http://localhost:2024',
@@ -280,6 +372,126 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   })
   const [showConfig, setShowConfig] = useState(false)
   const [chatKey, setChatKey] = useState(0) // Key to force recreation
+
+  // Agent management state
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
+  const [loadingAgents, setLoadingAgents] = useState(false)
+
+  // Load agents when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      loadAgents()
+    }
+  }, [isOpen])
+
+  const loadAgents = async () => {
+    setLoadingAgents(true)
+    try {
+      const agentList = await apiClient.listAgents()
+
+      // Filter to only show agents owned by current user
+      const userId = userInfo?.user || userInfo?.subject_id
+      const userAgents = userId
+        ? agentList.filter(agent => agent.user_id === userId)
+        : agentList
+
+      setAgents(userAgents)
+
+      // Auto-select first agent if available
+      if (userAgents.length > 0 && !selectedAgentId) {
+        handleAgentSelect(userAgents[0].agent_id)
+      }
+    } catch (err) {
+      console.error('Failed to load agents:', err)
+    } finally {
+      setLoadingAgents(false)
+    }
+  }
+
+  // Load agent configuration when selected
+  const handleAgentSelect = async (agentId: string) => {
+    setSelectedAgentId(agentId)
+
+    if (!agentId) {
+      return
+    }
+
+    try {
+      // Parse agent_id to get path: /agent/<user_id>/<agent_name>
+      // agent_id format: <user_id>,<agent_name>
+      // folder path: /agent/<user_id>/<agent_name>
+      const [userId, agentName] = agentId.split(',')
+      if (!userId || !agentName) {
+        console.error('Invalid agent_id format:', agentId)
+        return
+      }
+
+      const configPath = `/agent/${userId}/${agentName}/config.yaml`
+
+      // Read YAML config
+      const yamlContent = await filesAPI.read(configPath)
+      const yamlText = new TextDecoder().decode(yamlContent as Uint8Array)
+
+      // Parse YAML (simple parsing - production should use a YAML library)
+      const agentConfig = parseSimpleYaml(yamlText)
+      console.log('Loaded agent config:', { agentId, platform: agentConfig.platform, config: agentConfig })
+
+      // Update chat config based on agent platform
+      if (agentConfig.platform === 'langgraph') {
+        if (!agentConfig.endpoint_url) {
+          console.error('LangGraph agent missing endpoint_url in config')
+          return
+        }
+
+        // For LangGraph: use endpoint_url and optional agent_id from YAML
+        setConfig(prev => ({
+          ...prev,
+          apiUrl: agentConfig.endpoint_url,
+          assistantId: agentConfig.agent_id || 'agent', // LangGraph graph/assistant ID
+        }))
+        console.log('Configured LangGraph agent:', {
+          apiUrl: agentConfig.endpoint_url,
+          assistantId: agentConfig.agent_id || 'agent',
+        })
+      } else if (agentConfig.platform === 'nexus') {
+        // Nexus agents - use default endpoint and full agent_id
+        setConfig(prev => ({
+          ...prev,
+          apiUrl: 'http://localhost:2024',
+          assistantId: agentId, // Use full agent_id (<user_id>,<agent_name>)
+        }))
+        console.log('Configured Nexus agent:', {
+          apiUrl: 'http://localhost:2024',
+          assistantId: agentId,
+        })
+      }
+    } catch (err) {
+      console.error('Failed to load agent config:', err)
+    }
+  }
+
+  // Simple YAML parser for our config format
+  const parseSimpleYaml = (yaml: string): AgentConfig => {
+    const config: AgentConfig = { platform: 'nexus' }
+    const lines = yaml.split('\n')
+
+    for (const line of lines) {
+      if (line.startsWith('platform:')) {
+        const parts = line.split(':')
+        config.platform = parts.slice(1).join(':').trim()
+      } else if (line.startsWith('endpoint_url:')) {
+        // Handle URLs which contain colons (e.g., http://localhost:2024)
+        const parts = line.split(':')
+        config.endpoint_url = parts.slice(1).join(':').trim()
+      } else if (line.startsWith('agent_id:')) {
+        const parts = line.split(':')
+        config.agent_id = parts.slice(1).join(':').trim()
+      }
+    }
+
+    return config
+  }
 
   // Update config when auth changes
   useEffect(() => {
@@ -307,27 +519,18 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
 
   return (
     <div className="flex flex-col h-full border-l bg-background">
-      {/* Header with New Chat button */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-2">
+      {/* Header with Agent Selector and Controls */}
+      <div className="flex flex-col gap-3 p-4 border-b">
+        {/* Title and Settings */}
+        <div className="flex items-center justify-between">
           <h2 className="font-semibold">Chat Assistant</h2>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            type="button"
-            onClick={handleNewChat}
-            title="New Chat"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-          <Dialog open={showConfig} onOpenChange={setShowConfig}>
-            <DialogTrigger>
-              <Button variant="ghost" size="icon" type="button" onClick={() => setShowConfig(true)}>
-                <Settings className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Dialog open={showConfig} onOpenChange={setShowConfig}>
+              <DialogTrigger>
+                <Button variant="ghost" size="icon" type="button">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Chat Configuration</DialogTitle>
@@ -396,10 +599,70 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
             <X className="h-4 w-4" />
           </Button>
         </div>
+        </div>
+
+        {/* Agent Selector and New Chat */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            {agents.length === 0 && !loadingAgents ? (
+              <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/20">
+                <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">No agents - Register one to start</span>
+              </div>
+            ) : (
+              <Select value={selectedAgentId} onValueChange={handleAgentSelect} disabled={loadingAgents}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingAgents ? "Loading agents..." : "Select an agent"}>
+                    {selectedAgentId ? (
+                      <div className="flex items-center gap-2">
+                        <Bot className="h-3.5 w-3.5" />
+                        <span className="truncate">
+                          {selectedAgentId.split(',')[1] || selectedAgentId}
+                        </span>
+                      </div>
+                    ) : (
+                      "Select an agent"
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map((agent) => {
+                    const agentName = agent.agent_id.split(',')[1] || agent.agent_id
+                    return (
+                      <SelectItem key={agent.agent_id} value={agent.agent_id}>
+                        <div className="flex items-center gap-2">
+                          <Bot className="h-3.5 w-3.5" />
+                          <span>{agentName}</span>
+                        </div>
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={handleNewChat}
+            title="New Chat"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            New
+          </Button>
+        </div>
       </div>
 
       {/* Chat Content - key forces complete remount */}
-      <ChatPanelContent key={chatKey} config={config} onThreadCreated={handleThreadCreated} />
+      <ChatPanelContent
+        key={chatKey}
+        config={config}
+        onThreadCreated={handleThreadCreated}
+        selectedAgentId={selectedAgentId}
+        filesAPI={filesAPI}
+        userInfo={userInfo}
+      />
     </div>
   )
 }
