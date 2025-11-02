@@ -94,12 +94,25 @@ export function FileBrowser() {
     })
   }
 
-  const handleRegisterAgent = async (agentId: string, name: string, description: string, generateApiKey: boolean) => {
+  const handleRegisterAgent = async (
+    agentId: string,
+    name: string,
+    description: string,
+    generateApiKey: boolean,
+    config: {
+      platform: string
+      endpoint_url: string
+      agent_id?: string
+      system_prompt: string
+      tools: string[]
+    }
+  ) => {
     const result = await registerAgentMutation.mutateAsync({
       agentId,
       name,
       description: description || undefined,
       generateApiKey,
+      config,
     })
     return result
   }

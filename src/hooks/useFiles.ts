@@ -207,6 +207,8 @@ export function useCreateWorkspace() {
 // Register agent
 export function useRegisterAgent() {
   const { apiClient } = useAuth()
+  const filesAPI = useFilesAPI()
+  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async ({
@@ -214,18 +216,75 @@ export function useRegisterAgent() {
       name,
       description,
       generateApiKey,
+      config,
     }: {
       agentId: string
       name: string
       description?: string
       generateApiKey?: boolean
+      config: {
+        platform: string
+        endpoint_url: string
+        agent_id?: string
+        system_prompt: string
+        tools: string[]
+      }
     }) => {
+      // Step 1: Register the agent
       const agent = await apiClient.registerAgent({
         agent_id: agentId,
         name,
         description,
         generate_api_key: generateApiKey,
       })
+
+      // Step 2: Create agent folder as authenticated user
+      // This ensures proper permission checks and ReBAC tuple creation
+      const [userId, agentName] = agentId.split(',')
+      if (userId && agentName) {
+        const agentFolderPath = `/agent/${userId}/${agentName}`
+        try {
+          await filesAPI.mkdir(agentFolderPath, { parents: true, exist_ok: true })
+          // Invalidate parent directories to show new folder
+          queryClient.invalidateQueries({ queryKey: fileKeys.list(`/agent/${userId}`) })
+          queryClient.invalidateQueries({ queryKey: fileKeys.list('/agent') })
+        } catch (error) {
+          console.error('Failed to create agent folder:', error)
+          // Don't fail the entire operation if folder creation fails
+        }
+
+        // Step 3: Save agent config as YAML
+        try {
+          let yamlContent = `# Agent Configuration
+platform: ${config.platform}
+`
+          if (config.endpoint_url) {
+            yamlContent += `endpoint_url: ${config.endpoint_url}\n`
+          }
+          if (config.agent_id) {
+            yamlContent += `agent_id: ${config.agent_id}\n`
+          }
+          yamlContent += '\n'
+
+          if (config.system_prompt) {
+            yamlContent += `system_prompt: |
+  ${config.system_prompt.split('\n').join('\n  ')}\n\n`
+          }
+
+          if (config.tools && config.tools.length > 0) {
+            yamlContent += `tools:
+${config.tools.map(tool => `  - ${tool}`).join('\n')}
+`
+          }
+
+          const encoder = new TextEncoder()
+          const yamlBuffer = encoder.encode(yamlContent).buffer
+          await filesAPI.write(`${agentFolderPath}/config.yaml`, yamlBuffer)
+        } catch (error) {
+          console.error('Failed to save agent config:', error)
+          // Don't fail the entire operation if config save fails
+        }
+      }
 
       return agent
     },

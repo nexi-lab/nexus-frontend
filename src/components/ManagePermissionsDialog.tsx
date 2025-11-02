@@ -54,17 +54,14 @@ export function ManagePermissionsDialog({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Handle API field mapping issue - the backend returns fields in wrong positions
+  // Use raw fields directly from backend
   const permissions = rawPermissions?.map((perm: any) => ({
     tuple_id: perm.tuple_id,
-    // Actual subject is in object_type and object_id
-    subject_type: perm.object_type || perm.subject_type,
-    subject_id: perm.object_id || perm.subject_id,
-    // Actual relation is in expires_at
-    relation: perm.expires_at || perm.relation,
-    // Actual object is in tenant_id (the file path)
-    object_type: 'file',
-    object_id: perm.tenant_id || perm.object_id,
+    subject_type: perm.subject_type,
+    subject_id: perm.subject_id,
+    relation: perm.relation,
+    object_type: perm.object_type,
+    object_id: perm.object_id,
     created_at: perm.created_at,
   }))
 
@@ -156,44 +153,46 @@ export function ManagePermissionsDialog({
               </div>
             ) : (
               <div className="space-y-2">
-                {permissions.map((perm) => {
-                  const relationInfo = relationLabels[perm.relation] || {
-                    label: perm.relation,
-                    color: 'text-gray-600 bg-gray-50 border-gray-200',
-                  }
-                  const Icon = subjectTypeIcons[perm.subject_type] || User
+                {permissions
+                  .filter((perm) => perm.relation.startsWith('direct_'))
+                  .map((perm) => {
+                    const relationInfo = relationLabels[perm.relation] || {
+                      label: perm.relation,
+                      color: 'text-gray-600 bg-gray-50 border-gray-200',
+                    }
+                    const Icon = subjectTypeIcons[perm.subject_type] || User
 
-                  return (
-                    <div
-                      key={perm.tuple_id}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <span className="text-sm font-medium truncate">
-                          {perm.subject_id}
-                        </span>
-                        <div
-                          className={`text-xs px-2 py-0.5 rounded border ${relationInfo.color} font-medium whitespace-nowrap`}
-                        >
-                          {relationInfo.label}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(perm.tuple_id)}
-                        disabled={deleting === perm.tuple_id}
+                    return (
+                      <div
+                        key={perm.tuple_id}
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
                       >
-                        {deleting === perm.tuple_id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        )}
-                      </Button>
-                    </div>
-                  )
-                })}
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm font-medium truncate">
+                            {perm.subject_id}
+                          </span>
+                          <div
+                            className={`text-xs px-2 py-0.5 rounded border ${relationInfo.color} font-medium whitespace-nowrap`}
+                          >
+                            {relationInfo.label}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(perm.tuple_id)}
+                          disabled={deleting === perm.tuple_id}
+                        >
+                          {deleting === perm.tuple_id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          )}
+                        </Button>
+                      </div>
+                    )
+                  })}
               </div>
             )}
           </div>

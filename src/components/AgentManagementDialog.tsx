@@ -10,13 +10,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
 import { Bot, Eye, EyeOff, Copy, Check, Info, Trash2, Plus, Calendar } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface AgentManagementDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onRegisterAgent: (agentId: string, name: string, description: string, generateApiKey: boolean) => Promise<{ api_key?: string }>
+  onRegisterAgent: (
+    agentId: string,
+    name: string,
+    description: string,
+    generateApiKey: boolean,
+    config: {
+      platform: string
+      endpoint_url: string
+      agent_id?: string
+      system_prompt: string
+      tools: string[]
+    }
+  ) => Promise<{ api_key?: string }>
 }
 
 interface Agent {
@@ -26,6 +45,38 @@ interface Agent {
   description?: string
   created_at: string
 }
+
+// System prompt templates
+const SYSTEM_PROMPT_TEMPLATES = {
+  general_assistant: `You are a helpful AI assistant. You can help users with a wide variety of tasks including answering questions, writing code, analyzing data, and more. Always be concise, accurate, and helpful.`,
+  deep_research: `You are a deep research assistant. Your role is to:
+1. Conduct thorough research on complex topics
+2. Synthesize information from multiple sources
+3. Provide well-structured, evidence-based analysis
+4. Cite sources and verify facts
+5. Break down complex topics into understandable explanations`,
+  quant_analysis: `You are a quantitative analysis expert. Your role is to:
+1. Analyze financial and numerical data
+2. Build statistical models and perform data analysis
+3. Create visualizations and reports
+4. Identify trends, patterns, and anomalies
+5. Provide data-driven insights and recommendations
+Use tools like Python, pandas, numpy, and matplotlib when needed.`,
+  code_expert: `You are an expert software engineer. Your role is to:
+1. Write clean, efficient, and well-documented code
+2. Debug and optimize existing code
+3. Explain complex programming concepts
+4. Follow best practices and design patterns
+5. Provide code reviews and suggestions`,
+}
+
+// Available tool sets from nexus_tools
+const AVAILABLE_TOOL_SETS = [
+  { id: 'file_operations', name: 'File Operations', description: 'Read, write, search files' },
+  { id: 'web_search', name: 'Web Search', description: 'Search the web for information' },
+  { id: 'coding_capability', name: 'Coding & Data Analysis', description: 'Execute Python code and analyze data' },
+  { id: 'memory', name: 'Memory', description: 'Store and retrieve information' },
+]
 
 export function AgentManagementDialog({
   open,
@@ -50,6 +101,16 @@ export function AgentManagementDialog({
   const [showApiKey, setShowApiKey] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  // Agent configuration state
+  const [platform, setPlatform] = useState('nexus')
+  const [endpointUrl, setEndpointUrl] = useState('http://localhost:2024')
+  const [langgraphAgentId, setLanggraphAgentId] = useState('')
+  const [promptTemplate, setPromptTemplate] = useState('general_assistant')
+  const [systemPrompt, setSystemPrompt] = useState(SYSTEM_PROMPT_TEMPLATES.general_assistant)
+  const [selectedTools, setSelectedTools] = useState<string[]>(
+    AVAILABLE_TOOL_SETS.map(tool => tool.id)
+  )
+
   // Load agents when dialog opens
   useEffect(() => {
     if (open) {
@@ -68,6 +129,19 @@ export function AgentManagementDialog({
     } finally {
       setLoadingAgents(false)
     }
+  }
+
+  const handlePromptTemplateChange = (template: string) => {
+    setPromptTemplate(template)
+    setSystemPrompt(SYSTEM_PROMPT_TEMPLATES[template as keyof typeof SYSTEM_PROMPT_TEMPLATES])
+  }
+
+  const toggleTool = (toolId: string) => {
+    setSelectedTools(prev =>
+      prev.includes(toolId)
+        ? prev.filter(id => id !== toolId)
+        : [...prev, toolId]
+    )
   }
 
   const handleDeleteAgent = async (agentId: string, agentName: string) => {
@@ -104,6 +178,22 @@ export function AgentManagementDialog({
       return
     }
 
+    // Validate endpoint URL for LangGraph platform
+    if (platform === 'langgraph') {
+      if (!endpointUrl.trim()) {
+        setError('Endpoint URL is required for LangGraph agents')
+        return
+      }
+
+      // Validate endpoint URL format
+      try {
+        new URL(endpointUrl)
+      } catch {
+        setError('Invalid endpoint URL format')
+        return
+      }
+    }
+
     // Get user_id from userInfo
     const userId = userInfo?.user || userInfo?.subject_id
     if (!userId) {
@@ -123,7 +213,21 @@ export function AgentManagementDialog({
         fullAgentId,
         agentName.trim(),  // Using agent_name since display name isn't stored
         description.trim(),
-        generateApiKey
+        generateApiKey,
+        platform === 'langgraph'
+          ? {
+              platform,
+              endpoint_url: endpointUrl.trim(),
+              agent_id: langgraphAgentId.trim() || undefined,
+              system_prompt: '',
+              tools: [],
+            }
+          : {
+              platform,
+              endpoint_url: '',
+              system_prompt: systemPrompt.trim(),
+              tools: selectedTools,
+            }
       )
 
       // If API key was generated, show it
@@ -150,6 +254,12 @@ export function AgentManagementDialog({
     setShowApiKey(false)
     setCopied(false)
     setError(null)
+    setPlatform('nexus')
+    setEndpointUrl('http://localhost:2024')
+    setLanggraphAgentId('')
+    setPromptTemplate('general_assistant')
+    setSystemPrompt(SYSTEM_PROMPT_TEMPLATES.general_assistant)
+    setSelectedTools(AVAILABLE_TOOL_SETS.map(tool => tool.id))
   }
 
   const handleClose = () => {
@@ -389,6 +499,135 @@ export function AgentManagementDialog({
                     rows={3}
                   />
                 </div>
+
+                {/* Platform */}
+                <div className="space-y-2">
+                  <label htmlFor="platform" className="text-sm font-medium">
+                    Platform *
+                  </label>
+                  <Select value={platform} onValueChange={setPlatform} disabled={isRegistering}>
+                    <SelectTrigger id="platform">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nexus">Nexus</SelectItem>
+                      <SelectItem value="langgraph">LangGraph</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {platform === 'nexus'
+                      ? 'Built-in Nexus agent with tools and memory'
+                      : 'External LangGraph agent endpoint'}
+                  </p>
+                </div>
+
+                {/* LangGraph-specific configuration fields */}
+                {platform === 'langgraph' && (
+                  <>
+                    {/* Endpoint URL */}
+                    <div className="space-y-2">
+                      <label htmlFor="endpoint-url" className="text-sm font-medium">
+                        Endpoint URL *
+                      </label>
+                      <Input
+                        id="endpoint-url"
+                        placeholder="http://localhost:2024"
+                        value={endpointUrl}
+                        onChange={(e) => setEndpointUrl(e.target.value)}
+                        disabled={isRegistering}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        LangGraph agent service endpoint URL
+                      </p>
+                    </div>
+
+                    {/* Agent ID */}
+                    <div className="space-y-2">
+                      <label htmlFor="langgraph-agent-id" className="text-sm font-medium">
+                        Agent ID
+                      </label>
+                      <Input
+                        id="langgraph-agent-id"
+                        placeholder="agent-123 (optional)"
+                        value={langgraphAgentId}
+                        onChange={(e) => setLanggraphAgentId(e.target.value)}
+                        disabled={isRegistering}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Optional: LangGraph agent identifier for routing
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* Nexus-specific configuration fields */}
+                {platform === 'nexus' && (
+                  <>
+                    {/* System Prompt Template */}
+                    <div className="space-y-2">
+                      <label htmlFor="prompt-template" className="text-sm font-medium">
+                        System Prompt Template
+                      </label>
+                      <Select value={promptTemplate} onValueChange={handlePromptTemplateChange}>
+                        <SelectTrigger id="prompt-template">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="general_assistant">General Assistant</SelectItem>
+                          <SelectItem value="deep_research">Deep Research</SelectItem>
+                          <SelectItem value="quant_analysis">Quantitative Analysis</SelectItem>
+                          <SelectItem value="code_expert">Code Expert</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* System Prompt */}
+                    <div className="space-y-2">
+                      <label htmlFor="system-prompt" className="text-sm font-medium">
+                        System Prompt
+                      </label>
+                      <Textarea
+                        id="system-prompt"
+                        value={systemPrompt}
+                        onChange={(e) => setSystemPrompt(e.target.value)}
+                        disabled={isRegistering}
+                        rows={5}
+                        className="font-mono text-xs"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Customize the agent's behavior and instructions
+                      </p>
+                    </div>
+
+                    {/* Tools */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        Tools & Capabilities
+                      </label>
+                      <div className="space-y-2 border rounded-lg p-3 bg-muted/50">
+                        {AVAILABLE_TOOL_SETS.map((tool) => (
+                          <div key={tool.id} className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              id={`tool-${tool.id}`}
+                              checked={selectedTools.includes(tool.id)}
+                              onChange={() => toggleTool(tool.id)}
+                              disabled={isRegistering}
+                              className="h-4 w-4 mt-0.5"
+                            />
+                            <label htmlFor={`tool-${tool.id}`} className="flex-1 cursor-pointer">
+                              <div className="text-sm font-medium">{tool.name}</div>
+                              <div className="text-xs text-muted-foreground">{tool.description}</div>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Select the tools and capabilities available to this agent
+                      </p>
+                    </div>
+                  </>
+                )}
 
                 {/* Generate API Key Option */}
                 <div className="space-y-2">
