@@ -4,7 +4,9 @@ import type { Message } from '@langchain/langgraph-sdk'
 interface UseLangGraphOptions {
   apiUrl?: string
   assistantId?: string
-  apiKey?: string
+  apiKey?: string  // LangGraph API key
+  nexusApiKey?: string  // Nexus API key for tool calls
+  nexusServerUrl?: string  // Nexus backend URL for tools
   threadId?: string
   userId?: string
   tenantId?: string
@@ -16,18 +18,22 @@ export type StateType = { messages: Message[] }
 const useTypedStream = useStream<StateType>
 
 export function useLangGraph(options: UseLangGraphOptions = {}) {
+  // Debug logging
+  console.log('useLangGraph called with:', {
+    apiUrl: options.apiUrl,
+    langgraphApiKey: options.apiKey ? `${options.apiKey.substring(0, 20)}...` : 'NOT SET',
+    nexusApiKey: options.nexusApiKey ? `${options.nexusApiKey.substring(0, 20)}...` : 'NOT SET',
+    nexusServerUrl: options.nexusServerUrl || 'NOT SET',
+    assistantId: options.assistantId,
+  })
+
   const stream = useTypedStream({
     apiUrl: options.apiUrl || '',
-    apiKey: options.apiKey || undefined,
+    apiKey: options.apiKey || undefined, // SDK handles auth internally
     assistantId: options.assistantId || '',
     threadId: options.threadId, // Use provided thread ID
     fetchStateHistory: false, // Don't fetch history to avoid errors
-    // Add defaultHeaders for HTTP-level authentication
-    defaultHeaders: {
-      ...(options.apiKey && { 'X-Api-Key': options.apiKey }),
-      ...(options.userId && { 'X-User-Id': options.userId }),
-      ...(options.tenantId && { 'X-Tenant-Id': options.tenantId }),
-    },
+    // Don't add Nexus-specific headers - LangGraph server rejects them with 403
   })
 
   // Wrap submit to automatically add metadata
@@ -35,11 +41,11 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     input: any,
     submitOptions?: any
   ) => {
+    // Add Nexus API key and server URL to metadata for tool calls
     const metadata = {
       ...(submitOptions?.metadata || {}),
-      ...(options.apiKey && { x_auth: `Bearer ${options.apiKey}` }),
-      ...(options.userId && { user_id: options.userId }),
-      ...(options.tenantId && { tenant_id: options.tenantId }),
+      ...(options.nexusApiKey && { x_auth: `Bearer ${options.nexusApiKey}` }),
+      ...(options.nexusServerUrl && { nexus_server_url: options.nexusServerUrl }),
     }
 
     return stream.submit(input, {

@@ -36,6 +36,7 @@ interface AgentConfig {
   platform: string
   endpoint_url?: string
   agent_id?: string
+  api_key?: string
   system_prompt?: string
   tools?: string[]
 }
@@ -142,7 +143,8 @@ function ChatPanelContent({
   // Create thread when component mounts (if no thread ID exists)
   useEffect(() => {
     async function createThread() {
-      if (!config.threadId && stream.client) {
+      // Only create thread if agent is selected and no thread exists
+      if (!config.threadId && stream.client && selectedAgentId) {
         try {
           const thread = await stream.client.threads.create()
           console.log('Created thread:', thread)
@@ -154,7 +156,7 @@ function ChatPanelContent({
       }
     }
     createThread()
-  }, [config.threadId, stream.client, onThreadCreated])
+  }, [config.threadId, stream.client, onThreadCreated, selectedAgentId])
 
   // Reset metadata flag when thread changes
   useEffect(() => {
@@ -365,7 +367,9 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const [config, setConfig] = useState<ChatConfig>({
     apiUrl: 'http://localhost:2024',
     assistantId: 'agent',
-    apiKey: apiKey || '',
+    apiKey: apiKey || '',  // Will be LangGraph key for LangGraph agents
+    nexusApiKey: apiKey || '',  // Nexus API key for tool calls
+    nexusServerUrl: import.meta.env.VITE_API_URL || 'http://localhost:8080',  // Nexus backend URL
     threadId: undefined, // Start with no thread
     userId: userInfo?.subject_id || '',
     tenantId: userInfo?.tenant_id || '',
@@ -411,9 +415,8 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
 
   // Load agent configuration when selected
   const handleAgentSelect = async (agentId: string) => {
-    setSelectedAgentId(agentId)
-
     if (!agentId) {
+      setSelectedAgentId('')
       return
     }
 
@@ -445,14 +448,21 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
         }
 
         // For LangGraph: use endpoint_url and optional agent_id from YAML
+        // API key: use config.yaml value if provided, otherwise use environment variable
+        const langgraphApiKey = agentConfig.api_key || import.meta.env.VITE_LANGGRAPH_API_KEY || ''
         setConfig(prev => ({
           ...prev,
           apiUrl: agentConfig.endpoint_url,
           assistantId: agentConfig.agent_id || 'agent', // LangGraph graph/assistant ID
+          apiKey: langgraphApiKey, // LangGraph API key from config or environment
         }))
         console.log('Configured LangGraph agent:', {
           apiUrl: agentConfig.endpoint_url,
           assistantId: agentConfig.agent_id || 'agent',
+          apiKey: langgraphApiKey ? `${langgraphApiKey.substring(0, 10)}...` : 'not set',
+          apiKeyLength: langgraphApiKey.length,
+          apiKeySource: agentConfig.api_key ? 'config.yaml' : 'environment',
+          envVarCheck: import.meta.env.VITE_LANGGRAPH_API_KEY ? 'set' : 'NOT SET',
         })
       } else if (agentConfig.platform === 'nexus') {
         // Nexus agents - use default endpoint and full agent_id
@@ -466,8 +476,12 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
           assistantId: agentId,
         })
       }
+
+      // Only set selectedAgentId AFTER config is successfully loaded
+      setSelectedAgentId(agentId)
     } catch (err) {
       console.error('Failed to load agent config:', err)
+      // Don't set selectedAgentId if config loading failed
     }
   }
 
@@ -487,6 +501,9 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       } else if (line.startsWith('agent_id:')) {
         const parts = line.split(':')
         config.agent_id = parts.slice(1).join(':').trim()
+      } else if (line.startsWith('api_key:')) {
+        const parts = line.split(':')
+        config.api_key = parts.slice(1).join(':').trim()
       }
     }
 
@@ -497,7 +514,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   useEffect(() => {
     setConfig(prev => ({
       ...prev,
-      apiKey: apiKey || prev.apiKey,
+      nexusApiKey: apiKey || prev.nexusApiKey,  // Update Nexus key only
       userId: userInfo?.subject_id || prev.userId,
       tenantId: userInfo?.tenant_id || prev.tenantId,
     }))
@@ -655,14 +672,32 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       </div>
 
       {/* Chat Content - key forces complete remount */}
-      <ChatPanelContent
-        key={chatKey}
-        config={config}
-        onThreadCreated={handleThreadCreated}
-        selectedAgentId={selectedAgentId}
-        filesAPI={filesAPI}
-        userInfo={userInfo}
-      />
+      {selectedAgentId ? (
+        <ChatPanelContent
+          key={chatKey}
+          config={config}
+          onThreadCreated={handleThreadCreated}
+          selectedAgentId={selectedAgentId}
+          filesAPI={filesAPI}
+          userInfo={userInfo}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="text-center text-muted-foreground">
+            {loadingAgents ? (
+              <>
+                <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                <p>Loading agents...</p>
+              </>
+            ) : (
+              <>
+                <Bot className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Please select an agent to start chatting</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
