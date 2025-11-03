@@ -117,7 +117,7 @@ function ChatPanelContent({
   onThreadCreated,
   selectedAgentId,
   filesAPI,
-  userInfo,
+  userInfo: _userInfo,
 }: {
   config: ChatConfig
   onThreadCreated: (threadId: string) => void
