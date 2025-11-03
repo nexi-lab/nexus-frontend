@@ -709,6 +709,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
         open={agentManagementDialogOpen}
         onOpenChange={setAgentManagementDialogOpen}
         onRegisterAgent={handleRegisterAgent}
+        onAgentSelect={handleAgentSelect}
       />
 
       {/* Chat Content - key forces complete remount */}
