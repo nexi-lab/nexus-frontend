@@ -24,6 +24,7 @@ import { useRegisterAgent } from '../hooks/useFiles'
 interface ChatPanelProps {
   isOpen: boolean
   onClose: () => void
+  initialSelectedAgentId?: string
 }
 
 interface Agent {
@@ -362,7 +363,7 @@ function ChatPanelContent({
   )
 }
 
-export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
+export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanelProps) {
   const { apiKey, userInfo, apiClient } = useAuth()
   const filesAPI = createFilesAPI(apiClient)
   const registerAgentMutation = useRegisterAgent()
@@ -392,6 +393,13 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       loadAgents()
     }
   }, [isOpen])
+
+  // Select agent when initialSelectedAgentId is provided
+  useEffect(() => {
+    if (initialSelectedAgentId && agents.length > 0) {
+      handleAgentSelect(initialSelectedAgentId)
+    }
+  }, [initialSelectedAgentId, agents])
 
   const loadAgents = async () => {
     setLoadingAgents(true)

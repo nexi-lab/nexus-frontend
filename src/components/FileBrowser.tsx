@@ -41,6 +41,7 @@ export function FileBrowser() {
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null)
   const [loginDialogOpen, setLoginDialogOpen] = useState(!isAuthenticated)
   const [chatPanelOpen, setChatPanelOpen] = useState(false)
+  const [initialSelectedAgentId, setInitialSelectedAgentId] = useState<string | undefined>(undefined)
 
   const deleteMutation = useDeleteFile()
   const uploadMutation = useUploadFile()
@@ -115,6 +116,11 @@ export function FileBrowser() {
       config,
     })
     return result
+  }
+
+  const handleAgentSelect = (agentId: string) => {
+    setInitialSelectedAgentId(agentId)
+    setChatPanelOpen(true)
   }
 
   const handleContextMenuAction = async (action: ContextMenuAction, file: FileInfo) => {
@@ -345,7 +351,11 @@ export function FileBrowser() {
         {/* Right Panel - Chat */}
         {chatPanelOpen && (
           <div className="w-96">
-            <ChatPanel isOpen={chatPanelOpen} onClose={() => setChatPanelOpen(false)} />
+            <ChatPanel
+              isOpen={chatPanelOpen}
+              onClose={() => setChatPanelOpen(false)}
+              initialSelectedAgentId={initialSelectedAgentId}
+            />
           </div>
         )}
       </div>
@@ -423,6 +433,7 @@ export function FileBrowser() {
         open={registerAgentDialogOpen}
         onOpenChange={setRegisterAgentDialogOpen}
         onRegisterAgent={handleRegisterAgent}
+        onAgentSelect={handleAgentSelect}
       />
 
       <RenameDialog

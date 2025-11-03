@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select'
-import { Bot, Eye, EyeOff, Copy, Check, Info, Trash2, Plus, Calendar, Zap } from 'lucide-react'
+import { Bot, Eye, EyeOff, Copy, Check, Info, Trash2, Plus, Calendar, Zap, MessageSquare } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface AgentManagementDialogProps {
@@ -385,15 +385,7 @@ export function AgentManagementDialog({
                         key={agent.agent_id}
                         className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                       >
-                        <div
-                          className="flex-1 cursor-pointer"
-                          onClick={() => {
-                            if (onAgentSelect) {
-                              onAgentSelect(agent.agent_id)
-                              handleClose()
-                            }
-                          }}
-                        >
+                        <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <Bot className="h-4 w-4 text-muted-foreground" />
                             <span className="font-medium">{agentName}</span>
@@ -408,17 +400,32 @@ export function AgentManagementDialog({
                             Created {new Date(agent.created_at).toLocaleDateString()}
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeleteAgent(agent.agent_id, agentName)
-                          }}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={async () => {
+                              if (onAgentSelect) {
+                                await onAgentSelect(agent.agent_id)
+                                handleClose()
+                              }
+                            }}
+                          >
+                            <MessageSquare className="h-4 w-4 mr-1" />
+                            Use Agent
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteAgent(agent.agent_id, agentName)
+                            }}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     )
                   })}
