@@ -9,12 +9,14 @@ export default defineConfig({
     allowedHosts: ['.ngrok.io', '.ngrok-free.app', 'localhost'],
     proxy: {
       '/api': {
-        target: 'https://nexus.nexilab.co',
+        // target: 'https://nexus.nexilab.co',
+        target: 'https://nexus-dev.nexilab.co',
         changeOrigin: true,
         secure: true,
       },
       '/health': {
-        target: 'https://nexus.nexilab.co',
+        // target: 'https://nexus.nexilab.co',
+        target: 'https://nexus-dev.nexilab.co',
         changeOrigin: true,
         secure: true,
       },

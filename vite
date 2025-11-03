@@ -1,0 +1,16 @@
+
+
+  VITE v7.1.11  ready in 682 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.124.4:5173/
+  ➜  Network: http://169.254.217.244:5173/
+  ➜  press h + enter to show help
+(!) Failed to run dependency scan. Skipping dependency pre-bundling. Error: The following dependencies are imported but could not be resolved:
+
+  @radix-ui/react-slot (imported by /Users/xiaohei/Documents/freelancer/jinjing/nexus-frontend/src/components/ui/button.tsx)
+
+Are they installed?
+    at file:///Users/xiaohei/Documents/freelancer/jinjing/nexus-frontend/node_modules/.pnpm/vite@7.1.11_@types+node@24.8.1_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:10902:33
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async file:///Users/xiaohei/Documents/freelancer/jinjing/nexus-frontend/node_modules/.pnpm/vite@7.1.11_@types+node@24.8.1_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:34350:15

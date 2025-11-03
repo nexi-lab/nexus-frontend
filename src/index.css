@@ -1,5 +1,8 @@
+/* biome-ignore lint: Tailwind utilities */
 @tailwind base;
+/* biome-ignore lint: Tailwind utilities */
 @tailwind components;
+/* biome-ignore lint: Tailwind utilities */
 @tailwind utilities;
 
 @layer base {
