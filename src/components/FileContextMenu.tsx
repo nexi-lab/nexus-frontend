@@ -1,26 +1,7 @@
-import { type ReactNode } from 'react'
-import {
-  Search,
-  FileText,
-  FolderPlus,
-  Upload,
-  Edit,
-  Copy,
-  Trash2,
-  File,
-  Download,
-  Shield,
-  History,
-} from 'lucide-react'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuShortcut,
-  ContextMenuTrigger,
-} from './ui/context-menu'
-import type { FileInfo } from '../types/file'
+import { Copy, Download, Edit, File, FileText, FolderPlus, History, Search, Shield, Trash2, Upload } from 'lucide-react';
+import type { ReactNode } from 'react';
+import type { FileInfo } from '../types/file';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from './ui/context-menu';
 
 export type ContextMenuAction =
   | 'find-in-folder'
@@ -34,18 +15,18 @@ export type ContextMenuAction =
   | 'delete'
   | 'copy-path'
   | 'copy-relative-path'
-  | 'manage-permissions'
+  | 'manage-permissions';
 
 interface FileContextMenuProps {
-  children: ReactNode
-  file: FileInfo
-  onAction: (action: ContextMenuAction, file: FileInfo) => void
+  children: ReactNode;
+  file: FileInfo;
+  onAction: (action: ContextMenuAction, file: FileInfo) => void;
 }
 
 export function FileContextMenu({ children, file, onAction }: FileContextMenuProps) {
   const handleAction = (action: ContextMenuAction) => {
-    onAction(action, file)
-  }
+    onAction(action, file);
+  };
 
   return (
     <ContextMenu>
@@ -133,5 +114,5 @@ export function FileContextMenu({ children, file, onAction }: FileContextMenuPro
         )}
       </ContextMenuContent>
     </ContextMenu>
-  )
+  );
 }

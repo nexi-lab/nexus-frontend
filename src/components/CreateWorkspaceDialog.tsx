@@ -1,66 +1,55 @@
-import { useState } from 'react'
-import { Button } from './ui/button'
-import { Input } from './ui/input'
-import { Textarea } from './ui/textarea'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog'
-import { FolderPlus } from 'lucide-react'
+import { FolderPlus } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 
 interface CreateWorkspaceDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onCreateWorkspace: (path: string, name: string, description: string) => Promise<void>
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreateWorkspace: (path: string, name: string, description: string) => Promise<void>;
 }
 
-export function CreateWorkspaceDialog({
-  open,
-  onOpenChange,
-  onCreateWorkspace,
-}: CreateWorkspaceDialogProps) {
-  const [workspaceName, setWorkspaceName] = useState('')
-  const [displayName, setDisplayName] = useState('')
-  const [description, setDescription] = useState('')
-  const [isCreating, setIsCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export function CreateWorkspaceDialog({ open, onOpenChange, onCreateWorkspace }: CreateWorkspaceDialogProps) {
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
+    e.preventDefault();
+    setError(null);
 
     if (!workspaceName.trim()) {
-      setError('Workspace name is required')
-      return
+      setError('Workspace name is required');
+      return;
     }
 
     // Validate workspace name (no slashes, no special chars at start)
     if (workspaceName.includes('/')) {
-      setError('Workspace name cannot contain slashes')
-      return
+      setError('Workspace name cannot contain slashes');
+      return;
     }
 
-    setIsCreating(true)
+    setIsCreating(true);
 
     try {
-      const fullPath = `/workspace/${workspaceName.trim()}`
-      await onCreateWorkspace(fullPath, displayName.trim(), description.trim())
+      const fullPath = `/workspace/${workspaceName.trim()}`;
+      await onCreateWorkspace(fullPath, displayName.trim(), description.trim());
 
       // Reset form
-      setWorkspaceName('')
-      setDisplayName('')
-      setDescription('')
-      onOpenChange(false)
+      setWorkspaceName('');
+      setDisplayName('');
+      setDescription('');
+      onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create workspace')
+      setError(err instanceof Error ? err.message : 'Failed to create workspace');
     } finally {
-      setIsCreating(false)
+      setIsCreating(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -70,9 +59,7 @@ export function CreateWorkspaceDialog({
             <FolderPlus className="h-5 w-5" />
             Create New Workspace
           </DialogTitle>
-          <DialogDescription>
-            Create a new workspace directory and register it. This will create the folder and set up permissions.
-          </DialogDescription>
+          <DialogDescription>Create a new workspace directory and register it. This will create the folder and set up permissions.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
@@ -83,9 +70,7 @@ export function CreateWorkspaceDialog({
                 Workspace Name *
               </label>
               <div className="flex items-center gap-0">
-                <span className="px-3 py-2 bg-muted text-muted-foreground border border-r-0 rounded-l-md font-mono text-sm">
-                  /workspace/
-                </span>
+                <span className="px-3 py-2 bg-muted text-muted-foreground border border-r-0 rounded-l-md font-mono text-sm">/workspace/</span>
                 <Input
                   id="workspace-name"
                   placeholder="my-workspace"
@@ -95,9 +80,7 @@ export function CreateWorkspaceDialog({
                   className="font-mono rounded-l-none"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Name for your workspace (e.g., my-project, joe_personal)
-              </p>
+              <p className="text-xs text-muted-foreground">Name for your workspace (e.g., my-project, joe_personal)</p>
             </div>
 
             {/* Display Name */}
@@ -105,16 +88,8 @@ export function CreateWorkspaceDialog({
               <label htmlFor="display-name" className="text-sm font-medium">
                 Display Name
               </label>
-              <Input
-                id="display-name"
-                placeholder="My Workspace"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                disabled={isCreating}
-              />
-              <p className="text-xs text-muted-foreground">
-                Optional friendly name for the workspace
-              </p>
+              <Input id="display-name" placeholder="My Workspace" value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={isCreating} />
+              <p className="text-xs text-muted-foreground">Optional friendly name for the workspace</p>
             </div>
 
             {/* Description */}
@@ -132,20 +107,11 @@ export function CreateWorkspaceDialog({
               />
             </div>
 
-            {error && (
-              <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">
-                {error}
-              </div>
-            )}
+            {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{error}</div>}
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isCreating}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isCreating}>
               Cancel
             </Button>
             <Button type="submit" disabled={isCreating}>
@@ -155,5 +121,5 @@ export function CreateWorkspaceDialog({
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

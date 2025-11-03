@@ -1,73 +1,73 @@
-import { useEffect, useState, useMemo } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { Download, Trash2, FileText, Image as ImageIcon, Code, FileJson, Film, FileIcon, Edit, Save, X, History, Loader2 } from 'lucide-react'
-import { Button } from './ui/button'
-import { Textarea } from './ui/textarea'
-import { PDFViewer } from './PDFViewer'
-import { FileVersionHistoryDialog } from './FileVersionHistoryDialog'
-import { useFileContent, useDeleteFile, useUpdateFile } from '../hooks/useFiles'
-import { createFilesAPI } from '../api/files'
-import { useAuth } from '../contexts/AuthContext'
-import type { FileInfo } from '../types/file'
+import { Code, Download, Edit, FileIcon, FileJson, FileText, Film, History, Image as ImageIcon, Loader2, Save, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { createFilesAPI } from '../api/files';
+import { useAuth } from '../contexts/AuthContext';
+import { useDeleteFile, useFileContent, useUpdateFile } from '../hooks/useFiles';
+import type { FileInfo } from '../types/file';
+import { FileVersionHistoryDialog } from './FileVersionHistoryDialog';
+import { PDFViewer } from './PDFViewer';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
 
 // Helper to convert Uint8Array to string
 function bytesToString(bytes: Uint8Array | undefined | null | any): string {
-  if (!bytes) return ''
+  if (!bytes) return '';
 
   // Handle Uint8Array
   if (bytes instanceof Uint8Array) {
-    const decoder = new TextDecoder('utf-8')
-    return decoder.decode(bytes)
+    const decoder = new TextDecoder('utf-8');
+    return decoder.decode(bytes);
   }
 
   // Handle ArrayBuffer
   if (bytes instanceof ArrayBuffer) {
-    const decoder = new TextDecoder('utf-8')
-    return decoder.decode(new Uint8Array(bytes))
+    const decoder = new TextDecoder('utf-8');
+    return decoder.decode(new Uint8Array(bytes));
   }
 
   // Handle empty or invalid data
   if (typeof bytes === 'object' && bytes.length === 0) {
-    return ''
+    return '';
   }
 
   // Fallback: return empty string for unexpected types
-  console.warn('Unexpected bytes type:', typeof bytes, bytes)
-  return ''
+  console.warn('Unexpected bytes type:', typeof bytes, bytes);
+  return '';
 }
 
 interface FileContentViewerProps {
-  file: FileInfo | null
-  onFileDeleted?: () => void
+  file: FileInfo | null;
+  onFileDeleted?: () => void;
 }
 
 export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProps) {
-  const { apiClient } = useAuth()
-  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient])
+  const { apiClient } = useAuth();
+  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
 
-  const filePath = file?.path || ''
-  const fileName = file?.name || 'Unknown'
+  const filePath = file?.path || '';
+  const fileName = file?.name || 'Unknown';
 
-  const { data: contentBytes, isLoading, error } = useFileContent(filePath, !!file && !file.isDirectory)
-  const deleteMutation = useDeleteFile()
-  const updateMutation = useUpdateFile()
+  const { data: contentBytes, isLoading, error } = useFileContent(filePath, !!file && !file.isDirectory);
+  const deleteMutation = useDeleteFile();
+  const updateMutation = useUpdateFile();
 
   // For binary files (PDF, XLSX, etc.), try to load the parsed markdown file
   // Pattern: {filename without ext}_parsed.{ext}.md
   // Example: AR_Subledger_05.2025.xlsx -> AR_Subledger_05.2025_parsed.xlsx.md
-  const fileExt = fileName.toLowerCase().split('.').pop() || ''
-  const binaryFileTypes = ['pdf', 'xlsx', 'xls', 'docx', 'doc', 'pptx', 'ppt']
-  const hasParsedMarkdown = binaryFileTypes.includes(fileExt)
+  const fileExt = fileName.toLowerCase().split('.').pop() || '';
+  const binaryFileTypes = ['pdf', 'xlsx', 'xls', 'docx', 'doc', 'pptx', 'ppt'];
+  const hasParsedMarkdown = binaryFileTypes.includes(fileExt);
 
   // Construct parsed markdown path by removing extension and adding _parsed.{ext}.md
-  let parsedMdPath = ''
+  let parsedMdPath = '';
   if (hasParsedMarkdown && filePath) {
-    const pathWithoutExt = filePath.substring(0, filePath.lastIndexOf('.'))
-    parsedMdPath = `${pathWithoutExt}_parsed.${fileExt}.md`
+    const pathWithoutExt = filePath.substring(0, filePath.lastIndexOf('.'));
+    parsedMdPath = `${pathWithoutExt}_parsed.${fileExt}.md`;
   }
 
-  const { data: parsedMdBytes, isLoading: parsedMdLoading, error: parsedMdError } = useFileContent(parsedMdPath, hasParsedMarkdown)
+  const { data: parsedMdBytes, isLoading: parsedMdLoading, error: parsedMdError } = useFileContent(parsedMdPath, hasParsedMarkdown);
 
   // Debug: log parsed markdown path construction
   useEffect(() => {
@@ -79,141 +79,143 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         isLoading: parsedMdLoading,
         hasError: !!parsedMdError,
         errorMessage: parsedMdError instanceof Error ? parsedMdError.message : parsedMdError,
-      })
+      });
     }
-  }, [hasParsedMarkdown, filePath, parsedMdPath, parsedMdBytes, parsedMdLoading, parsedMdError])
+  }, [hasParsedMarkdown, filePath, parsedMdPath, parsedMdBytes, parsedMdLoading, parsedMdError]);
 
   // Convert bytes to string for text display
-  const content = bytesToString(contentBytes)
-  const parsedMdContent = bytesToString(parsedMdBytes)
+  const content = bytesToString(contentBytes);
+  const parsedMdContent = bytesToString(parsedMdBytes);
 
-  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'excel' | 'unknown'>('unknown')
-  const [isEditing, setIsEditing] = useState(false)
-  const [editContent, setEditContent] = useState('')
-  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false)
+  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'excel' | 'unknown'>('unknown');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
   // Check if file is editable
-  const isEditable = fileType === 'text' || fileType === 'markdown'
+  const isEditable = fileType === 'text' || fileType === 'markdown';
 
   // Reset editing state when file changes
   useEffect(() => {
-    setIsEditing(false)
-    setEditContent('')
-  }, [file?.path])
+    setIsEditing(false);
+    setEditContent('');
+  }, [file?.path]);
 
   // Update edit content when file content loads
   useEffect(() => {
     if (content && !isEditing) {
-      setEditContent(content)
+      setEditContent(content);
     }
-  }, [content, isEditing])
+  }, [content, isEditing]);
 
   useEffect(() => {
     if (!file || file.isDirectory) {
-      setFileType('unknown')
-      return
+      setFileType('unknown');
+      return;
     }
 
-    const ext = fileName.split('.').pop()?.toLowerCase()
+    const ext = fileName.split('.').pop()?.toLowerCase();
     if (!ext) {
-      setFileType('text')
-      return
+      setFileType('text');
+      return;
     }
 
     // Determine file type based on extension
     if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
-      setFileType('image')
+      setFileType('image');
     } else if (ext === 'pdf') {
-      setFileType('pdf')
+      setFileType('pdf');
     } else if (['xlsx', 'xls', 'xlsm', 'xlsb'].includes(ext)) {
-      setFileType('excel')
+      setFileType('excel');
     } else if (['md', 'markdown'].includes(ext)) {
-      setFileType('markdown')
+      setFileType('markdown');
     } else if (['json', 'jsonl'].includes(ext)) {
-      setFileType('json')
-    } else if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'rb', 'php', 'html', 'css', 'scss', 'sql', 'sh', 'yaml', 'yml', 'xml'].includes(ext)) {
-      setFileType('code')
+      setFileType('json');
+    } else if (
+      ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'rb', 'php', 'html', 'css', 'scss', 'sql', 'sh', 'yaml', 'yml', 'xml'].includes(ext)
+    ) {
+      setFileType('code');
     } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
-      setFileType('video')
+      setFileType('video');
     } else if (['txt', 'log', 'csv'].includes(ext)) {
-      setFileType('text')
+      setFileType('text');
     } else {
-      setFileType('text') // Default to text
+      setFileType('text'); // Default to text
     }
-  }, [fileName, file])
+  }, [fileName, file]);
 
   const handleDownload = async () => {
-    if (!file) return
+    if (!file) return;
 
     try {
-      const fileContent = await filesAPI.read(filePath)
-      const blob = new Blob([fileContent as unknown as BlobPart], { type: 'application/octet-stream' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const fileContent = await filesAPI.read(filePath);
+      const blob = new Blob([fileContent as unknown as BlobPart], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Failed to download file:', error)
+      console.error('Failed to download file:', error);
     }
-  }
+  };
 
   const handleDelete = async () => {
-    if (!file) return
-    if (!confirm(`Are you sure you want to delete ${fileName}?`)) return
+    if (!file) return;
+    if (!confirm(`Are you sure you want to delete ${fileName}?`)) return;
 
     try {
       await deleteMutation.mutateAsync({
         path: filePath,
         isDirectory: file.isDirectory,
-      })
-      onFileDeleted?.()
+      });
+      onFileDeleted?.();
     } catch (error) {
-      console.error('Failed to delete:', error)
+      console.error('Failed to delete:', error);
     }
-  }
+  };
 
   const handleEdit = () => {
-    setEditContent(content || '')
-    setIsEditing(true)
-  }
+    setEditContent(content || '');
+    setIsEditing(true);
+  };
 
   const handleCancelEdit = () => {
-    setIsEditing(false)
-    setEditContent(content || '')
-  }
+    setIsEditing(false);
+    setEditContent(content || '');
+  };
 
   const handleSave = async () => {
-    if (!file) return
+    if (!file) return;
 
     try {
-      const encoder = new TextEncoder()
-      const contentBuffer = encoder.encode(editContent).buffer
-      await updateMutation.mutateAsync({ path: filePath, content: contentBuffer })
-      setIsEditing(false)
+      const encoder = new TextEncoder();
+      const contentBuffer = encoder.encode(editContent).buffer;
+      await updateMutation.mutateAsync({ path: filePath, content: contentBuffer });
+      setIsEditing(false);
     } catch (error) {
-      console.error('Failed to save file:', error)
-      alert(`Failed to save file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('Failed to save file:', error);
+      alert(`Failed to save file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }
+  };
 
   const getFileIcon = () => {
     switch (fileType) {
       case 'image':
-        return <ImageIcon className="h-5 w-5" />
+        return <ImageIcon className="h-5 w-5" />;
       case 'code':
-        return <Code className="h-5 w-5" />
+        return <Code className="h-5 w-5" />;
       case 'json':
-        return <FileJson className="h-5 w-5" />
+        return <FileJson className="h-5 w-5" />;
       case 'video':
-        return <Film className="h-5 w-5" />
+        return <Film className="h-5 w-5" />;
       default:
-        return <FileText className="h-5 w-5" />
+        return <FileText className="h-5 w-5" />;
     }
-  }
+  };
 
   const renderContent = () => {
     if (!file) {
@@ -223,7 +225,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
           <p className="text-lg">No file selected</p>
           <p className="text-sm">Select a file from the left panel to view its contents</p>
         </div>
-      )
+      );
     }
 
     if (file.isDirectory) {
@@ -233,7 +235,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
           <p className="text-lg">Directory selected</p>
           <p className="text-sm">Select a file to view its contents</p>
         </div>
-      )
+      );
     }
 
     if (isLoading) {
@@ -245,7 +247,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
             <p className="text-sm text-muted-foreground">{fileName}</p>
           </div>
         </div>
-      )
+      );
     }
 
     if (error) {
@@ -253,12 +255,10 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <p className="text-destructive mb-2">Failed to load file</p>
-            <p className="text-sm text-muted-foreground">
-              {error instanceof Error ? error.message : 'Unknown error'}
-            </p>
+            <p className="text-sm text-muted-foreground">{error instanceof Error ? error.message : 'Unknown error'}</p>
           </div>
         </div>
-      )
+      );
     }
 
     switch (fileType) {
@@ -271,22 +271,14 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
               className="max-w-full max-h-full object-contain"
             />
           </div>
-        )
+        );
 
       case 'json':
         try {
-          const jsonData = JSON.parse(content || '{}')
-          return (
-            <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono">
-              {JSON.stringify(jsonData, null, 2)}
-            </pre>
-          )
+          const jsonData = JSON.parse(content || '{}');
+          return <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono">{JSON.stringify(jsonData, null, 2)}</pre>;
         } catch {
-          return (
-            <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono whitespace-pre-wrap">
-              {content}
-            </pre>
-          )
+          return <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono whitespace-pre-wrap">{content}</pre>;
         }
 
       case 'markdown':
@@ -311,20 +303,20 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
                 </div>
               </div>
             </div>
-          )
+          );
         }
         return (
           <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || ''}</ReactMarkdown>
           </div>
-        )
+        );
 
       case 'code':
         return (
           <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono">
             <code>{content}</code>
           </pre>
-        )
+        );
 
       case 'pdf':
         // If we have parsed markdown content, show that instead of PDF viewer
@@ -334,7 +326,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  table: ({ node, ...props }) => (
+                  table: ({ node: _node, ...props }) => (
                     <div
                       style={{
                         overflowX: 'auto',
@@ -350,18 +342,16 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
                       <table {...props} style={{ width: 'max-content', minWidth: '100%' }} />
                     </div>
                   ),
-                  th: ({ node, ...props }) => (
+                  th: ({ node: _node, ...props }) => (
                     <th {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem', background: '#f9fafb', fontWeight: 600 }} />
                   ),
-                  td: ({ node, ...props }) => (
-                    <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />
-                  ),
+                  td: ({ node: _node, ...props }) => <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />,
                 }}
               >
                 {parsedMdContent}
               </ReactMarkdown>
             </div>
-          )
+          );
         }
 
         // Otherwise, fall back to PDF viewer
@@ -371,25 +361,18 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
               <Loader2 className="h-12 w-12 text-primary animate-spin" />
               <p className="text-lg font-medium">Loading PDF content...</p>
             </div>
-          )
+          );
         }
 
         if (!contentBytes || !(contentBytes instanceof Uint8Array)) {
           return (
             <div className="p-8 text-center bg-muted/20 rounded-lg h-full flex flex-col items-center justify-center">
               <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                {contentBytes ? 'Invalid PDF data format' : 'Loading PDF...'}
-              </p>
+              <p className="text-muted-foreground">{contentBytes ? 'Invalid PDF data format' : 'Loading PDF...'}</p>
             </div>
-          )
+          );
         }
-        return (
-          <PDFViewer
-            fileData={contentBytes}
-            onDownload={handleDownload}
-          />
-        )
+        return <PDFViewer fileData={contentBytes} onDownload={handleDownload} />;
 
       case 'excel':
         // If we have parsed markdown content, show that instead
@@ -399,7 +382,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  table: ({ node, ...props }) => (
+                  table: ({ node: _node, ...props }) => (
                     <div
                       style={{
                         overflowX: 'auto',
@@ -415,18 +398,16 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
                       <table {...props} style={{ width: 'max-content', minWidth: '100%' }} />
                     </div>
                   ),
-                  th: ({ node, ...props }) => (
+                  th: ({ node: _node, ...props }) => (
                     <th {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem', background: '#f9fafb', fontWeight: 600 }} />
                   ),
-                  td: ({ node, ...props }) => (
-                    <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />
-                  ),
+                  td: ({ node: _node, ...props }) => <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />,
                 }}
               >
                 {parsedMdContent}
               </ReactMarkdown>
             </div>
-          )
+          );
         }
 
         // Loading state
@@ -436,7 +417,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
               <Loader2 className="h-12 w-12 text-primary animate-spin" />
               <p className="text-lg font-medium">Loading Excel content...</p>
             </div>
-          )
+          );
         }
 
         // No parsed content available - show download message
@@ -444,15 +425,13 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
           <div className="p-8 text-center bg-muted/20 rounded-lg h-full flex flex-col items-center justify-center">
             <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <p className="text-lg font-medium mb-2">Excel File</p>
-            <p className="text-muted-foreground mb-4">
-              {parsedMdError ? 'No parsed content available.' : 'Preview not available.'}
-            </p>
+            <p className="text-muted-foreground mb-4">{parsedMdError ? 'No parsed content available.' : 'Preview not available.'}</p>
             <Button onClick={handleDownload}>
               <Download className="h-4 w-4 mr-2" />
               Download File
             </Button>
           </div>
-        )
+        );
 
       case 'video':
         return (
@@ -462,9 +441,10 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
               Your browser does not support video playback.
             </video>
           </div>
-        )
+        );
 
       case 'text':
+        return null;
       default:
         if (isEditing) {
           return (
@@ -474,24 +454,18 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
               className="h-full font-mono text-sm resize-none"
               placeholder="Enter text content..."
             />
-          )
+          );
         }
-        return (
-          <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono whitespace-pre-wrap">
-            {content}
-          </pre>
-        )
+        return <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono whitespace-pre-wrap">{content}</pre>;
     }
-  }
+  };
 
   if (!file) {
     return (
       <div className="flex-1 flex flex-col h-full min-w-0">
-        <div className="flex-1 overflow-auto p-6">
-          {renderContent()}
-        </div>
+        <div className="flex-1 overflow-auto p-6">{renderContent()}</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -564,18 +538,10 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
       )}
 
       {/* File Content */}
-      <div className={`flex-1 overflow-auto ${hasParsedMarkdown && parsedMdContent && !parsedMdError ? '' : 'p-6'}`}>
-        {renderContent()}
-      </div>
+      <div className={`flex-1 overflow-auto ${hasParsedMarkdown && parsedMdContent && !parsedMdError ? '' : 'p-6'}`}>{renderContent()}</div>
 
       {/* Version History Dialog */}
-      {file && !file.isDirectory && (
-        <FileVersionHistoryDialog
-          open={versionHistoryOpen}
-          onOpenChange={setVersionHistoryOpen}
-          filePath={filePath}
-        />
-      )}
+      {file && !file.isDirectory && <FileVersionHistoryDialog open={versionHistoryOpen} onOpenChange={setVersionHistoryOpen} filePath={filePath} />}
     </div>
-  )
+  );
 }

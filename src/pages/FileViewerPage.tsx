@@ -1,108 +1,110 @@
-import { useEffect, useState, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
-import { ArrowLeft, Download, Edit, Trash2, FileText, Image as ImageIcon, Code, FileJson, Film } from 'lucide-react'
-import { Button } from '../components/ui/button'
-import { useFileContent, useDeleteFile } from '../hooks/useFiles'
-import { createFilesAPI } from '../api/files'
-import { useAuth } from '../contexts/AuthContext'
+import { ArrowLeft, Code, Download, Edit, FileJson, FileText, Film, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { createFilesAPI } from '../api/files';
+import { Button } from '../components/ui/button';
+import { useAuth } from '../contexts/AuthContext';
+import { useDeleteFile, useFileContent } from '../hooks/useFiles';
 
 // Helper to convert Uint8Array to string
 function bytesToString(bytes: Uint8Array | undefined): string {
-  if (!bytes) return ''
-  const decoder = new TextDecoder('utf-8')
-  return decoder.decode(bytes)
+  if (!bytes) return '';
+  const decoder = new TextDecoder('utf-8');
+  return decoder.decode(bytes);
 }
 
 export function FileViewerPage() {
-  const { apiClient } = useAuth()
-  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient])
+  const { apiClient } = useAuth();
+  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
 
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const filePath = searchParams.get('path') || '/'
-  const fileName = filePath.split('/').pop() || 'Unknown'
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const filePath = searchParams.get('path') || '/';
+  const fileName = filePath.split('/').pop() || 'Unknown';
 
-  const { data: contentBytes, isLoading, error } = useFileContent(filePath, true)
-  const deleteMutation = useDeleteFile()
+  const { data: contentBytes, isLoading, error } = useFileContent(filePath, true);
+  const deleteMutation = useDeleteFile();
 
   // Convert bytes to string for text display
-  const content = bytesToString(contentBytes)
+  const content = bytesToString(contentBytes);
 
-  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'unknown'>('unknown')
+  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'unknown'>('unknown');
 
   useEffect(() => {
-    const ext = fileName.split('.').pop()?.toLowerCase()
+    const ext = fileName.split('.').pop()?.toLowerCase();
     if (!ext) {
-      setFileType('text')
-      return
+      setFileType('text');
+      return;
     }
 
     // Determine file type based on extension
     if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
-      setFileType('image')
+      setFileType('image');
     } else if (ext === 'pdf') {
-      setFileType('pdf')
+      setFileType('pdf');
     } else if (['md', 'markdown'].includes(ext)) {
-      setFileType('markdown')
+      setFileType('markdown');
     } else if (['json', 'jsonl'].includes(ext)) {
-      setFileType('json')
-    } else if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'rb', 'php', 'html', 'css', 'scss', 'sql', 'sh', 'yaml', 'yml', 'xml'].includes(ext)) {
-      setFileType('code')
+      setFileType('json');
+    } else if (
+      ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'rb', 'php', 'html', 'css', 'scss', 'sql', 'sh', 'yaml', 'yml', 'xml'].includes(ext)
+    ) {
+      setFileType('code');
     } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
-      setFileType('video')
+      setFileType('video');
     } else if (['txt', 'log', 'csv'].includes(ext)) {
-      setFileType('text')
+      setFileType('text');
     } else {
-      setFileType('text') // Default to text
+      setFileType('text'); // Default to text
     }
-  }, [fileName])
+  }, [fileName]);
 
   const handleDownload = async () => {
     try {
-      const fileContent = await filesAPI.read(filePath)
-      const blob = new Blob([fileContent as unknown as BlobPart], { type: 'application/octet-stream' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const fileContent = await filesAPI.read(filePath);
+      const blob = new Blob([fileContent as unknown as BlobPart], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Failed to download file:', error)
+      console.error('Failed to download file:', error);
     }
-  }
+  };
 
   const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${fileName}?`)) return
+    if (!confirm(`Are you sure you want to delete ${fileName}?`)) return;
 
     try {
       await deleteMutation.mutateAsync({
         path: filePath,
         isDirectory: false,
-      })
-      navigate('/')
+      });
+      navigate('/');
     } catch (error) {
-      console.error('Failed to delete:', error)
+      console.error('Failed to delete:', error);
     }
-  }
+  };
 
   const getFileIcon = () => {
     switch (fileType) {
       case 'image':
-        return <ImageIcon className="h-6 w-6" />
+        return <ImageIcon className="h-6 w-6" />;
       case 'code':
-        return <Code className="h-6 w-6" />
+        return <Code className="h-6 w-6" />;
       case 'json':
-        return <FileJson className="h-6 w-6" />
+        return <FileJson className="h-6 w-6" />;
       case 'video':
-        return <Film className="h-6 w-6" />
+        return <Film className="h-6 w-6" />;
       default:
-        return <FileText className="h-6 w-6" />
+        return <FileText className="h-6 w-6" />;
     }
-  }
+  };
 
   const renderContent = () => {
     if (isLoading) {
@@ -110,7 +112,7 @@ export function FileViewerPage() {
         <div className="flex items-center justify-center h-96">
           <p className="text-muted-foreground">Loading file...</p>
         </div>
-      )
+      );
     }
 
     if (error) {
@@ -118,12 +120,10 @@ export function FileViewerPage() {
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <p className="text-destructive mb-2">Failed to load file</p>
-            <p className="text-sm text-muted-foreground">
-              {error instanceof Error ? error.message : 'Unknown error'}
-            </p>
+            <p className="text-sm text-muted-foreground">{error instanceof Error ? error.message : 'Unknown error'}</p>
           </div>
         </div>
-      )
+      );
     }
 
     switch (fileType) {
@@ -136,22 +136,14 @@ export function FileViewerPage() {
               className="max-w-full max-h-[70vh] object-contain"
             />
           </div>
-        )
+        );
 
       case 'json':
         try {
-          const jsonData = JSON.parse(content || '{}')
-          return (
-            <pre className="p-6 bg-muted rounded-lg overflow-auto max-h-[70vh] text-sm font-mono">
-              {JSON.stringify(jsonData, null, 2)}
-            </pre>
-          )
+          const jsonData = JSON.parse(content || '{}');
+          return <pre className="p-6 bg-muted rounded-lg overflow-auto max-h-[70vh] text-sm font-mono">{JSON.stringify(jsonData, null, 2)}</pre>;
         } catch {
-          return (
-            <pre className="p-6 bg-muted rounded-lg overflow-auto max-h-[70vh] text-sm font-mono whitespace-pre-wrap">
-              {content}
-            </pre>
-          )
+          return <pre className="p-6 bg-muted rounded-lg overflow-auto max-h-[70vh] text-sm font-mono whitespace-pre-wrap">{content}</pre>;
         }
 
       case 'markdown':
@@ -159,28 +151,26 @@ export function FileViewerPage() {
           <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg">
             <ReactMarkdown>{content || ''}</ReactMarkdown>
           </div>
-        )
+        );
 
       case 'code':
         return (
           <pre className="p-6 bg-muted rounded-lg overflow-auto max-h-[70vh] text-sm font-mono">
             <code>{content}</code>
           </pre>
-        )
+        );
 
       case 'pdf':
         return (
           <div className="p-8 text-center bg-muted/20 rounded-lg">
             <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground mb-4">
-              PDF preview is not supported in browser
-            </p>
+            <p className="text-muted-foreground mb-4">PDF preview is not supported in browser</p>
             <Button onClick={handleDownload}>
               <Download className="h-4 w-4 mr-2" />
               Download PDF
             </Button>
           </div>
-        )
+        );
 
       case 'video':
         return (
@@ -190,17 +180,13 @@ export function FileViewerPage() {
               Your browser does not support video playback.
             </video>
           </div>
-        )
+        );
 
       case 'text':
       default:
-        return (
-          <pre className="p-6 bg-muted rounded-lg overflow-auto max-h-[70vh] text-sm font-mono whitespace-pre-wrap">
-            {content}
-          </pre>
-        )
+        return <pre className="p-6 bg-muted rounded-lg overflow-auto max-h-[70vh] text-sm font-mono whitespace-pre-wrap">{content}</pre>;
     }
-  }
+  };
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -240,16 +226,13 @@ export function FileViewerPage() {
           <div className="mb-4 p-4 bg-muted/50 rounded-lg">
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
-                <span className="text-muted-foreground">Path:</span>{' '}
-                <span className="font-mono">{filePath}</span>
+                <span className="text-muted-foreground">Path:</span> <span className="font-mono">{filePath}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Type:</span>{' '}
-                <span className="capitalize">{fileType}</span>
+                <span className="text-muted-foreground">Type:</span> <span className="capitalize">{fileType}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Size:</span>{' '}
-                <span>{content ? `${content.length} bytes` : '-'}</span>
+                <span className="text-muted-foreground">Size:</span> <span>{content ? `${content.length} bytes` : '-'}</span>
               </div>
             </div>
           </div>
@@ -259,5 +242,5 @@ export function FileViewerPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

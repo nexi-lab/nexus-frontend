@@ -1,104 +1,113 @@
-import { useState, useEffect } from 'react'
-import { Search, FolderTree, Brain, ChevronDown, ChevronRight, Building2, User, Bot, RefreshCw } from 'lucide-react'
-import { SearchBar } from './SearchBar'
-import { FileTree } from './FileTree'
-import { type ContextMenuAction } from './FileContextMenu'
-import type { FileInfo } from '../types/file'
-import { useAuth } from '../contexts/AuthContext'
-import { useQueryClient } from '@tanstack/react-query'
-import { fileKeys } from '../hooks/useFiles'
+import { useQueryClient } from '@tanstack/react-query';
+import { Bot, Brain, Building2, ChevronDown, ChevronRight, FolderTree, RefreshCw, Search, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { fileKeys } from '../hooks/useFiles';
+import type { FileInfo } from '../types/file';
+import type { ContextMenuAction } from './FileContextMenu';
+import { FileTree } from './FileTree';
+import { SearchBar } from './SearchBar';
 
 interface RegisteredMemory {
-  path: string
-  name: string | null
-  description: string
-  created_at: string
-  created_by: string | null
-  metadata: Record<string, any>
+  path: string;
+  name: string | null;
+  description: string;
+  created_at: string;
+  created_by: string | null;
+  metadata: Record<string, any>;
 }
 
 interface LeftPanelProps {
-  currentPath: string
-  onPathChange: (path: string) => void
-  onFileSelect: (file: FileInfo) => void
-  onContextMenuAction?: (action: ContextMenuAction, file: FileInfo) => void
-  creatingNewItem?: { type: 'file' | 'folder'; parentPath: string } | null
-  onCreateItem?: (path: string, type: 'file' | 'folder') => void
-  onCancelCreate?: () => void
-  onOpenMemoryDialog?: () => void
+  currentPath: string;
+  onPathChange: (path: string) => void;
+  onFileSelect: (file: FileInfo) => void;
+  onContextMenuAction?: (action: ContextMenuAction, file: FileInfo) => void;
+  creatingNewItem?: { type: 'file' | 'folder'; parentPath: string } | null;
+  onCreateItem?: (path: string, type: 'file' | 'folder') => void;
+  onCancelCreate?: () => void;
+  onOpenMemoryDialog?: () => void;
 }
 
-export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMenuAction, creatingNewItem, onCreateItem, onCancelCreate, onOpenMemoryDialog }: LeftPanelProps) {
-  const { apiClient, userInfo } = useAuth()
-  const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'explorer' | 'search'>('explorer')
-  const [searchFolderPath, setSearchFolderPath] = useState<string | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+export function LeftPanel({
+  currentPath,
+  onPathChange,
+  onFileSelect,
+  onContextMenuAction,
+  creatingNewItem,
+  onCreateItem,
+  onCancelCreate,
+  onOpenMemoryDialog,
+}: LeftPanelProps) {
+  const { apiClient, userInfo } = useAuth();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'explorer' | 'search'>('explorer');
+  const [searchFolderPath, setSearchFolderPath] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Memory state
-  const [memories, setMemories] = useState<RegisteredMemory[]>([])
-  const [loadingMemories, setLoadingMemories] = useState(false)
+  const [memories, setMemories] = useState<RegisteredMemory[]>([]);
+  const [loadingMemories, setLoadingMemories] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     org: true,
     user: true,
     agent: true,
-  })
+  });
 
   // Refresh file tree
   const handleRefreshFileTree = async () => {
-    setIsRefreshing(true)
+    setIsRefreshing(true);
     try {
       // Invalidate all file list queries to force refetch
-      await queryClient.invalidateQueries({ queryKey: fileKeys.lists() })
+      await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
     } finally {
       // Add a small delay for visual feedback
-      setTimeout(() => setIsRefreshing(false), 500)
+      setTimeout(() => setIsRefreshing(false), 500);
     }
-  }
+  };
 
   const handleContextMenuAction = (action: ContextMenuAction, file: FileInfo) => {
     if (action === 'find-in-folder' && file.isDirectory) {
       // Switch to search tab and set the folder context
-      setActiveTab('search')
-      setSearchFolderPath(file.path)
+      setActiveTab('search');
+      setSearchFolderPath(file.path);
     }
     // Pass all actions to parent
-    onContextMenuAction?.(action, file)
-  }
+    onContextMenuAction?.(action, file);
+  };
 
   // Load memories on mount
   useEffect(() => {
-    loadMemories()
-  }, [])
+    loadMemories();
+  }, []);
 
   const loadMemories = async () => {
-    setLoadingMemories(true)
+    setLoadingMemories(true);
     try {
-      const memoryList = await apiClient.listRegisteredMemories()
-      setMemories(memoryList)
+      const memoryList = await apiClient.listRegisteredMemories();
+      setMemories(memoryList);
     } catch (err) {
-      console.error('Failed to load memories:', err)
-      setMemories([])
+      console.error('Failed to load memories:', err);
+      setMemories([]);
     } finally {
-      setLoadingMemories(false)
+      setLoadingMemories(false);
     }
-  }
+  };
 
   // Group memories by scope
   const groupedMemories = {
-    org: memories.filter(m => m.metadata?.scope === 'tenant'),
-    user: memories.filter(m => m.metadata?.scope === 'user'),
-    agent: memories.filter(m => {
-      if (m.metadata?.scope !== 'agent') return false
+    org: memories.filter((m) => m.metadata?.scope === 'tenant'),
+    user: memories.filter((m) => m.metadata?.scope === 'user'),
+    agent: memories.filter((m) => {
+      if (m.metadata?.scope !== 'agent') return false;
       // Only show agent-scoped memories for current user's agents
-      const userId = userInfo?.user || userInfo?.subject_id
-      return m.metadata?.user_id === userId
+      const userId = userInfo?.user || userInfo?.subject_id;
+      return m.metadata?.user_id === userId;
     }),
-  }
+  };
 
   const toggleGroup = (group: string) => {
-    setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }))
-  }
+    setExpandedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
+  };
 
   return (
     <div className="w-80 border-r bg-muted/20 flex flex-col h-full">
@@ -117,9 +126,7 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
         </button>
         <button
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
-            activeTab === 'search'
-              ? 'bg-background border-b-2 border-primary text-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            activeTab === 'search' ? 'bg-background border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
           }`}
           onClick={() => setActiveTab('search')}
         >
@@ -148,7 +155,7 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
               <FileTree
                 currentPath={currentPath}
                 onPathChange={(path) => {
-                  onPathChange(path)
+                  onPathChange(path);
                   // When a directory is clicked in tree, we just navigate to it
                   // Don't select it for viewing
                 }}
@@ -161,11 +168,7 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
             </div>
           </div>
         ) : (
-          <SearchBar
-            currentPath={searchFolderPath || currentPath}
-            onFileSelect={onFileSelect}
-            onContextMenuAction={handleContextMenuAction}
-          />
+          <SearchBar currentPath={searchFolderPath || currentPath} onFileSelect={onFileSelect} onContextMenuAction={handleContextMenuAction} />
         )}
       </div>
 
@@ -175,53 +178,28 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
           <Brain className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">Memories</span>
           {loadingMemories && <span className="text-xs text-muted-foreground">(loading...)</span>}
-          <button
-            onClick={onOpenMemoryDialog}
-            className="ml-auto p-1 hover:bg-muted rounded transition-colors"
-            title="Add Memory"
-          >
+          <button onClick={onOpenMemoryDialog} className="ml-auto p-1 hover:bg-muted rounded transition-colors" title="Add Memory">
             <Brain className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
           </button>
         </div>
         <div className="flex-1 overflow-auto">
           {/* Org (Tenant) Group */}
           <div className="border-b">
-            <button
-              onClick={() => toggleGroup('org')}
-              className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors"
-            >
-              {expandedGroups.org ? (
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="h-3 w-3 text-muted-foreground" />
-              )}
+            <button onClick={() => toggleGroup('org')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
+              {expandedGroups.org ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
               <Building2 className="h-3 w-3 text-blue-500" />
               <span className="text-xs font-medium">Organization</span>
-              <span className="text-xs text-muted-foreground ml-auto">
-                ({groupedMemories.org.length})
-              </span>
+              <span className="text-xs text-muted-foreground ml-auto">({groupedMemories.org.length})</span>
             </button>
             {expandedGroups.org && (
               <div className="bg-muted/20">
                 {groupedMemories.org.length === 0 ? (
-                  <div className="px-4 py-2 text-xs text-muted-foreground italic">
-                    No organization memories
-                  </div>
+                  <div className="px-4 py-2 text-xs text-muted-foreground italic">No organization memories</div>
                 ) : (
                   groupedMemories.org.map((memory) => (
-                    <div
-                      key={memory.path}
-                      className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer"
-                      title={memory.description || memory.path}
-                    >
-                      <div className="text-xs font-medium truncate">
-                        {memory.name || memory.path.split('/').pop()}
-                      </div>
-                      {memory.description && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          {memory.description}
-                        </div>
-                      )}
+                    <div key={memory.path} className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer" title={memory.description || memory.path}>
+                      <div className="text-xs font-medium truncate">{memory.name || memory.path.split('/').pop()}</div>
+                      {memory.description && <div className="text-xs text-muted-foreground truncate">{memory.description}</div>}
                     </div>
                   ))
                 )}
@@ -231,42 +209,21 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
 
           {/* User Group */}
           <div className="border-b">
-            <button
-              onClick={() => toggleGroup('user')}
-              className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors"
-            >
-              {expandedGroups.user ? (
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="h-3 w-3 text-muted-foreground" />
-              )}
+            <button onClick={() => toggleGroup('user')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
+              {expandedGroups.user ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
               <User className="h-3 w-3 text-green-500" />
               <span className="text-xs font-medium">User</span>
-              <span className="text-xs text-muted-foreground ml-auto">
-                ({groupedMemories.user.length})
-              </span>
+              <span className="text-xs text-muted-foreground ml-auto">({groupedMemories.user.length})</span>
             </button>
             {expandedGroups.user && (
               <div className="bg-muted/20">
                 {groupedMemories.user.length === 0 ? (
-                  <div className="px-4 py-2 text-xs text-muted-foreground italic">
-                    No user memories
-                  </div>
+                  <div className="px-4 py-2 text-xs text-muted-foreground italic">No user memories</div>
                 ) : (
                   groupedMemories.user.map((memory) => (
-                    <div
-                      key={memory.path}
-                      className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer"
-                      title={memory.description || memory.path}
-                    >
-                      <div className="text-xs font-medium truncate">
-                        {memory.name || memory.path.split('/').pop()}
-                      </div>
-                      {memory.description && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          {memory.description}
-                        </div>
-                      )}
+                    <div key={memory.path} className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer" title={memory.description || memory.path}>
+                      <div className="text-xs font-medium truncate">{memory.name || memory.path.split('/').pop()}</div>
+                      {memory.description && <div className="text-xs text-muted-foreground truncate">{memory.description}</div>}
                     </div>
                   ))
                 )}
@@ -276,48 +233,25 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
 
           {/* Agent Group */}
           <div>
-            <button
-              onClick={() => toggleGroup('agent')}
-              className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors"
-            >
-              {expandedGroups.agent ? (
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="h-3 w-3 text-muted-foreground" />
-              )}
+            <button onClick={() => toggleGroup('agent')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
+              {expandedGroups.agent ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
               <Bot className="h-3 w-3 text-purple-500" />
               <span className="text-xs font-medium">Agent</span>
-              <span className="text-xs text-muted-foreground ml-auto">
-                ({groupedMemories.agent.length})
-              </span>
+              <span className="text-xs text-muted-foreground ml-auto">({groupedMemories.agent.length})</span>
             </button>
             {expandedGroups.agent && (
               <div className="bg-muted/20">
                 {groupedMemories.agent.length === 0 ? (
-                  <div className="px-4 py-2 text-xs text-muted-foreground italic">
-                    No agent memories
-                  </div>
+                  <div className="px-4 py-2 text-xs text-muted-foreground italic">No agent memories</div>
                 ) : (
                   groupedMemories.agent.map((memory) => (
-                    <div
-                      key={memory.path}
-                      className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer"
-                      title={memory.description || memory.path}
-                    >
-                      <div className="text-xs font-medium truncate">
-                        {memory.name || memory.path.split('/').pop()}
-                      </div>
+                    <div key={memory.path} className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer" title={memory.description || memory.path}>
+                      <div className="text-xs font-medium truncate">{memory.name || memory.path.split('/').pop()}</div>
                       <div className="flex items-center gap-2">
-                        {memory.description && (
-                          <div className="text-xs text-muted-foreground truncate flex-1">
-                            {memory.description}
-                          </div>
-                        )}
+                        {memory.description && <div className="text-xs text-muted-foreground truncate flex-1">{memory.description}</div>}
                         {memory.metadata?.agent_id && (
                           <div className="text-xs text-purple-500 font-mono">
-                            {memory.metadata.agent_id.includes(',')
-                              ? memory.metadata.agent_id.split(',')[1]
-                              : memory.metadata.agent_id}
+                            {memory.metadata.agent_id.includes(',') ? memory.metadata.agent_id.split(',')[1] : memory.metadata.agent_id}
                           </div>
                         )}
                       </div>
@@ -330,5 +264,5 @@ export function LeftPanel({ currentPath, onPathChange, onFileSelect, onContextMe
         </div>
       </div>
     </div>
-  )
+  );
 }

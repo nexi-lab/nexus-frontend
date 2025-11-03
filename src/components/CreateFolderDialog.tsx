@@ -1,42 +1,32 @@
-import { useState } from 'react'
-import { Button } from './ui/button'
-import { Input } from './ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from './ui/dialog'
-import { useCreateDirectory } from '../hooks/useFiles'
+import { useState } from 'react';
+import { useCreateDirectory } from '../hooks/useFiles';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
 
 interface CreateFolderDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  currentPath: string
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentPath: string;
 }
 
-export function CreateFolderDialog({
-  open,
-  onOpenChange,
-  currentPath,
-}: CreateFolderDialogProps) {
-  const [folderName, setFolderName] = useState('')
-  const createMutation = useCreateDirectory()
+export function CreateFolderDialog({ open, onOpenChange, currentPath }: CreateFolderDialogProps) {
+  const [folderName, setFolderName] = useState('');
+  const createMutation = useCreateDirectory();
 
   const handleCreate = async () => {
-    if (!folderName.trim()) return
+    if (!folderName.trim()) return;
 
-    const newPath = `${currentPath}/${folderName}`.replace('//', '/')
+    const newPath = `${currentPath}/${folderName}`.replace('//', '/');
 
     try {
-      await createMutation.mutateAsync({ path: newPath })
-      setFolderName('')
-      onOpenChange(false)
+      await createMutation.mutateAsync({ path: newPath });
+      setFolderName('');
+      onOpenChange(false);
     } catch (error) {
-      console.error('Failed to create folder:', error)
+      console.error('Failed to create folder:', error);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -55,23 +45,18 @@ export function CreateFolderDialog({
               onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
             />
           </div>
-          <p className="text-sm text-muted-foreground">
-            Location: {currentPath}
-          </p>
+          <p className="text-sm text-muted-foreground">Location: {currentPath}</p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={handleCreate}
-            disabled={!folderName.trim() || createMutation.isPending}
-          >
+          <Button onClick={handleCreate} disabled={!folderName.trim() || createMutation.isPending}>
             {createMutation.isPending ? 'Creating...' : 'Create'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

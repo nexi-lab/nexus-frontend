@@ -1,21 +1,21 @@
-import { useStream } from '@langchain/langgraph-sdk/react'
-import type { Message } from '@langchain/langgraph-sdk'
+import type { Message } from '@langchain/langgraph-sdk';
+import { useStream } from '@langchain/langgraph-sdk/react';
 
 interface UseLangGraphOptions {
-  apiUrl?: string
-  assistantId?: string
-  apiKey?: string  // LangGraph API key
-  nexusApiKey?: string  // Nexus API key for tool calls
-  nexusServerUrl?: string  // Nexus backend URL for tools
-  threadId?: string
-  userId?: string
-  tenantId?: string
-  key?: number // Add key to force recreation
+  apiUrl?: string;
+  assistantId?: string;
+  apiKey?: string; // LangGraph API key
+  nexusApiKey?: string; // Nexus API key for tool calls
+  nexusServerUrl?: string; // Nexus backend URL for tools
+  threadId?: string;
+  userId?: string;
+  tenantId?: string;
+  key?: number; // Add key to force recreation
 }
 
-export type StateType = { messages: Message[] }
+export type StateType = { messages: Message[] };
 
-const useTypedStream = useStream<StateType>
+const useTypedStream = useStream<StateType>;
 
 export function useLangGraph(options: UseLangGraphOptions = {}) {
   // Debug logging
@@ -25,7 +25,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     nexusApiKey: options.nexusApiKey ? `${options.nexusApiKey.substring(0, 20)}...` : 'NOT SET',
     nexusServerUrl: options.nexusServerUrl || 'NOT SET',
     assistantId: options.assistantId,
-  })
+  });
 
   const stream = useTypedStream({
     apiUrl: options.apiUrl || '',
@@ -34,25 +34,22 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     threadId: options.threadId, // Use provided thread ID
     fetchStateHistory: false, // Don't fetch history to avoid errors
     // Don't add Nexus-specific headers - LangGraph server rejects them with 403
-  })
+  });
 
   // Wrap submit to automatically add metadata
-  const submitWithMetadata = (
-    input: any,
-    submitOptions?: any
-  ) => {
+  const submitWithMetadata = (input: any, submitOptions?: any) => {
     // Add Nexus API key and server URL to metadata for tool calls
     const metadata = {
-      ...(submitOptions?.metadata || {}),
+      ...submitOptions?.metadata,
       ...(options.nexusApiKey && { x_auth: `Bearer ${options.nexusApiKey}` }),
       ...(options.nexusServerUrl && { nexus_server_url: options.nexusServerUrl }),
-    }
+    };
 
     return stream.submit(input, {
       ...submitOptions,
       metadata,
-    })
-  }
+    });
+  };
 
   return {
     messages: stream.messages,
@@ -60,5 +57,5 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     submit: submitWithMetadata,
     threadId: options.threadId || null, // Return what we passed in
     client: (stream as any).client, // Expose client for thread creation
-  }
+  };
 }
