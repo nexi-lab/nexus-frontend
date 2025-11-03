@@ -18,6 +18,8 @@ import remarkGfm from 'remark-gfm'
 import { ToolCalls } from './ToolCalls'
 import { useAuth } from '../contexts/AuthContext'
 import { createFilesAPI } from '../api/files'
+import { AgentManagementDialog } from './AgentManagementDialog'
+import { useRegisterAgent } from '../hooks/useFiles'
 
 interface ChatPanelProps {
   isOpen: boolean
@@ -363,6 +365,7 @@ function ChatPanelContent({
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const { apiKey, userInfo, apiClient } = useAuth()
   const filesAPI = createFilesAPI(apiClient)
+  const registerAgentMutation = useRegisterAgent()
 
   const [config, setConfig] = useState<ChatConfig>({
     apiUrl: 'http://localhost:2024',
@@ -381,6 +384,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState<string>('')
   const [loadingAgents, setLoadingAgents] = useState(false)
+  const [agentManagementDialogOpen, setAgentManagementDialogOpen] = useState(false)
 
   // Load agents when panel opens
   useEffect(() => {
@@ -532,6 +536,31 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
     setChatKey(prev => prev + 1)
   }
 
+  const handleRegisterAgent = async (
+    agentId: string,
+    name: string,
+    description: string,
+    generateApiKey: boolean,
+    config: {
+      platform: string
+      endpoint_url: string
+      agent_id?: string
+      system_prompt: string
+      tools: string[]
+    }
+  ) => {
+    const result = await registerAgentMutation.mutateAsync({
+      agentId,
+      name,
+      description: description || undefined,
+      generateApiKey,
+      config,
+    })
+    // Reload agents after registration
+    await loadAgents()
+    return result
+  }
+
   if (!isOpen) return null
 
   return (
@@ -622,10 +651,14 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
         <div className="flex items-center gap-2">
           <div className="flex-1">
             {agents.length === 0 && !loadingAgents ? (
-              <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/20">
+              <button
+                onClick={() => setAgentManagementDialogOpen(true)}
+                className="flex items-center gap-2 p-2 border rounded-md bg-muted/20 hover:bg-muted/40 transition-colors w-full cursor-pointer"
+                type="button"
+              >
                 <Bot className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">No agents - Register one to start</span>
-              </div>
+              </button>
             ) : (
               <Select value={selectedAgentId} onValueChange={handleAgentSelect} disabled={loadingAgents}>
                 <SelectTrigger>
@@ -670,6 +703,13 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
           </Button>
         </div>
       </div>
+
+      {/* Agent Management Dialog */}
+      <AgentManagementDialog
+        open={agentManagementDialogOpen}
+        onOpenChange={setAgentManagementDialogOpen}
+        onRegisterAgent={handleRegisterAgent}
+      />
 
       {/* Chat Content - key forces complete remount */}
       {selectedAgentId ? (

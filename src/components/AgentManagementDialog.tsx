@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select'
-import { Bot, Eye, EyeOff, Copy, Check, Info, Trash2, Plus, Calendar } from 'lucide-react'
+import { Bot, Eye, EyeOff, Copy, Check, Info, Trash2, Plus, Calendar, Zap } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 interface AgentManagementDialogProps {
@@ -262,6 +262,16 @@ export function AgentManagementDialog({
     setSelectedTools(AVAILABLE_TOOL_SETS.map(tool => tool.id))
   }
 
+  const handleQuickSetupNexusAssistant = () => {
+    setAgentName('nexus_assistant')
+    setDescription('A claude-code like general agent that connects to Nexus File System.')
+    setPlatform('langgraph')
+    setEndpointUrl('https://nexus-dev-3028be15439a59638a13b8f1c4ed065d.us.langgraph.app')
+    setLanggraphAgentId('agent')
+    setGenerateApiKey(false)
+    setError(null)
+  }
+
   const handleClose = () => {
     resetForm()
     setActiveTab('list')
@@ -462,6 +472,32 @@ export function AgentManagementDialog({
             // Register Agent Form
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
+                {/* Quick Setup Card */}
+                <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-2 border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Zap className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">
+                        Quick Setup: Nexus Assistant
+                      </h3>
+                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
+                        A Claude-Code-like general agent that connects to Nexus File System
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleQuickSetupNexusAssistant}
+                        disabled={isRegistering}
+                        className="bg-white dark:bg-gray-900 hover:bg-purple-50 dark:hover:bg-purple-950"
+                      >
+                        <Zap className="h-4 w-4 mr-2" />
+                        Use This Template
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Agent Name */}
                 <div className="space-y-2">
                   <label htmlFor="agent-name" className="text-sm font-medium">
