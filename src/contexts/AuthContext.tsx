@@ -80,11 +80,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return newUserInfo;
   };
 
-  const logout = () => {
-    setApiKey(null);
-    setUserInfo(null);
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    localStorage.removeItem(USER_INFO_STORAGE_KEY);
+  const logout = async () => {
+    if (!confirm('Are you sure you want to logout?')) {
+      return;
+    }
+    try {
+      setApiKey(null);
+      setUserInfo(null);
+      localStorage.removeItem(API_KEY_STORAGE_KEY);
+      localStorage.removeItem(USER_INFO_STORAGE_KEY);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const value: AuthContextType = {
