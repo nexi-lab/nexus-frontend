@@ -39,7 +39,8 @@
         "noSvgWithoutTitle": "off",
         "useValidAnchor": "off",
         "useMediaCaption": "off",
-        "noLabelWithoutControl": "off"
+        "noLabelWithoutControl": "off",
+        "useAnchorContent": "off"
       },
       "security": {
         "noDangerouslySetInnerHtml": "off"
