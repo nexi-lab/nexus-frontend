@@ -110,7 +110,7 @@ export function LeftPanel({
   };
 
   return (
-    <div className="w-80 border-r bg-muted/20 flex flex-col h-full">
+    <div className="w-full border-r bg-muted/20 flex flex-col h-full">
       {/* Tab Header */}
       <div className="border-b bg-background/95 flex">
         <button
