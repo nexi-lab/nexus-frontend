@@ -392,7 +392,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
     assistantId: 'agent',
     apiKey: apiKey || '',  // Will be LangGraph key for LangGraph agents
     nexusApiKey: apiKey || '',  // Nexus API key for tool calls
-    nexusServerUrl: import.meta.env.VITE_API_URL || 'http://localhost:8080',  // Nexus backend URL
+    nexusServerUrl: import.meta.env.VITE_NEXUS_SERVER_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080',  // Nexus backend URL for LangGraph to connect
     sandboxId: undefined,  // Sandbox ID for code execution
     threadId: undefined, // Start with no thread
     userId: userInfo?.subject_id || '',
@@ -503,7 +503,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
           // Store sandbox details in config
           const sandboxStatus = agentSandbox.status as 'running' | 'paused' | 'stopped' | 'unknown'
           const sandboxProvider = agentSandbox.provider
-          const sandboxExpiresAt = agentSandbox.expires_at
+          const sandboxExpiresAt = agentSandbox.expires_at ?? undefined
 
           // Check if sandbox is expired
           if (sandboxExpiresAt) {

@@ -215,7 +215,7 @@ export function AgentManagementDialog({
 
           // Select provider based on whether Nexus is running locally
           const baseURL = apiClient.getBaseURL()
-          const isLocalhost = baseURL.includes('localhost') || baseURL.includes('127.0.0.1') || baseURL.includes('nexi.ngrok.io')
+          const isLocalhost = baseURL.includes('localhost') || baseURL.includes('127.0.0.1')
           const provider = isLocalhost ? 'docker' : 'e2b'
 
           console.log(`Using sandbox provider: ${provider} (baseURL: ${baseURL}, isLocalhost: ${isLocalhost})`)
