@@ -48,7 +48,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} closeOnOverlayClick={false}>
       <DialogContent className="w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
