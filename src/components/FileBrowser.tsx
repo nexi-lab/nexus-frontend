@@ -1,6 +1,7 @@
 import { Bot, Brain, FolderPlus, MessageSquare, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { useCreateDirectory, useCreateWorkspace, useDeleteFile, useRegisterAgent, useUploadFile } from '../hooks/useFiles';
@@ -290,27 +291,38 @@ export function FileBrowser() {
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Panel - File Tree + Search */}
-        <LeftPanel
-          currentPath={currentPath}
-          onPathChange={setCurrentPath}
-          onFileSelect={handleFileSelect}
-          onContextMenuAction={handleContextMenuAction}
-          creatingNewItem={creatingNewItem}
-          onCreateItem={handleCreateItem}
-          onCancelCreate={handleCancelCreate}
-          onOpenMemoryDialog={() => setStoreMemoryDialogOpen(true)}
-        />
+        <PanelGroup direction="horizontal">
+          {/* Left Panel - File Tree + Search */}
+          <Panel defaultSize={20} minSize={15} maxSize={40}>
+            <LeftPanel
+              currentPath={currentPath}
+              onPathChange={setCurrentPath}
+              onFileSelect={handleFileSelect}
+              onContextMenuAction={handleContextMenuAction}
+              creatingNewItem={creatingNewItem}
+              onCreateItem={handleCreateItem}
+              onCancelCreate={handleCancelCreate}
+              onOpenMemoryDialog={() => setStoreMemoryDialogOpen(true)}
+            />
+          </Panel>
 
-        {/* Middle Panel - File Content Viewer */}
-        <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
+          <PanelResizeHandle className="w-1 bg-border hover:bg-blue-500 transition-colors" />
 
-        {/* Right Panel - Chat */}
-        {chatPanelOpen && (
-          <div className="w-96">
-            <ChatPanel isOpen={chatPanelOpen} onClose={() => setChatPanelOpen(false)} initialSelectedAgentId={initialSelectedAgentId} />
-          </div>
-        )}
+          {/* Middle Panel - File Content Viewer */}
+          <Panel defaultSize={chatPanelOpen ? 50 : 80} minSize={30}>
+            <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
+          </Panel>
+
+          {/* Right Panel - Chat */}
+          {chatPanelOpen && (
+            <>
+              <PanelResizeHandle className="w-1 bg-border hover:bg-blue-500 transition-colors" />
+              <Panel defaultSize={30} minSize={20} maxSize={50}>
+                <ChatPanel isOpen={chatPanelOpen} onClose={() => setChatPanelOpen(false)} initialSelectedAgentId={initialSelectedAgentId} />
+              </Panel>
+            </>
+          )}
+        </PanelGroup>
       </div>
 
       {/* Footer */}
