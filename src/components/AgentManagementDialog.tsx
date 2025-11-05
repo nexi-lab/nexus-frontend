@@ -1,37 +1,57 @@
-import { Bot, Calendar, Check, Copy, Eye, EyeOff, Info, MessageSquare, Plus, Trash2, Zap } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { Input } from './ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
+import { useState, useEffect } from 'react'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
+import { Textarea } from './ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
+import { Bot, Eye, EyeOff, Copy, Check, Info, Trash2, Plus, Calendar, Zap, MessageSquare, Plug } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 interface AgentManagementDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onRegisterAgent: (
     agentId: string,
     name: string,
     description: string,
     generateApiKey: boolean,
     config: {
-      platform: string;
-      endpoint_url: string;
-      agent_id?: string;
-      system_prompt: string;
-      tools: string[];
-    },
-  ) => Promise<{ api_key?: string }>;
-  onAgentSelect?: (agentId: string) => void;
+      platform: string
+      endpoint_url: string
+      agent_id?: string
+      system_prompt: string
+      tools: string[]
+    }
+  ) => Promise<{ api_key?: string }>
+  onAgentSelect?: (agentId: string) => void
 }
 
 interface Agent {
-  agent_id: string;
-  user_id: string;
-  name: string;
-  description?: string;
-  created_at: string;
+  agent_id: string
+  user_id: string
+  name: string
+  description?: string
+  created_at: string
+}
+
+interface SandboxConnectionStatus {
+  sandboxStatus: 'none' | 'creating' | 'created' | 'error'
+  nexusStatus: 'disconnected' | 'connecting' | 'connected' | 'error'
+  sandbox_id?: string
+  error?: string
 }
 
 // System prompt templates
@@ -56,7 +76,7 @@ Use tools like Python, pandas, numpy, and matplotlib when needed.`,
 3. Explain complex programming concepts
 4. Follow best practices and design patterns
 5. Provide code reviews and suggestions`,
-};
+}
 
 // Available tool sets from nexus_tools
 const AVAILABLE_TOOL_SETS = [
@@ -64,132 +84,331 @@ const AVAILABLE_TOOL_SETS = [
   { id: 'web_search', name: 'Web Search', description: 'Search the web for information' },
   { id: 'coding_capability', name: 'Coding & Data Analysis', description: 'Execute Python code and analyze data' },
   { id: 'memory', name: 'Memory', description: 'Store and retrieve information' },
-];
+]
 
-export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onAgentSelect }: AgentManagementDialogProps) {
-  const { userInfo, apiClient } = useAuth();
-  const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+export function AgentManagementDialog({
+  open,
+  onOpenChange,
+  onRegisterAgent,
+  onAgentSelect,
+}: AgentManagementDialogProps) {
+  const { userInfo, apiClient, apiKey } = useAuth()
+  const [activeTab, setActiveTab] = useState<'list' | 'create'>('list')
 
   // Agent list state
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loadingAgents, setLoadingAgents] = useState(false);
-  const [agentError, setAgentError] = useState<string | null>(null);
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [loadingAgents, setLoadingAgents] = useState(false)
+  const [agentError, setAgentError] = useState<string | null>(null)
+
+  // Sandbox connection state (keyed by agent_id)
+  const [sandboxConnections, setSandboxConnections] = useState<Record<string, SandboxConnectionStatus>>({})
+
 
   // Create agent state
-  const [agentName, setAgentName] = useState('');
-  const [description, setDescription] = useState('');
-  const [generateApiKey, setGenerateApiKey] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [newApiKey, setNewApiKey] = useState<string | null>(null);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [agentName, setAgentName] = useState('')
+  const [description, setDescription] = useState('')
+  const [generateApiKey, setGenerateApiKey] = useState(false)
+  const [isRegistering, setIsRegistering] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [newApiKey, setNewApiKey] = useState<string | null>(null)
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // Agent configuration state
-  const [platform, setPlatform] = useState('nexus');
-  const [endpointUrl, setEndpointUrl] = useState('http://localhost:2024');
-  const [langgraphAgentId, setLanggraphAgentId] = useState('');
-  const [promptTemplate, setPromptTemplate] = useState('general_assistant');
-  const [systemPrompt, setSystemPrompt] = useState(SYSTEM_PROMPT_TEMPLATES.general_assistant);
-  const [selectedTools, setSelectedTools] = useState<string[]>(AVAILABLE_TOOL_SETS.map((tool) => tool.id));
+  const [platform, setPlatform] = useState('nexus')
+  const [endpointUrl, setEndpointUrl] = useState('http://localhost:2024')
+  const [langgraphAgentId, setLanggraphAgentId] = useState('')
+  const [promptTemplate, setPromptTemplate] = useState('general_assistant')
+  const [systemPrompt, setSystemPrompt] = useState(SYSTEM_PROMPT_TEMPLATES.general_assistant)
+  const [selectedTools, setSelectedTools] = useState<string[]>(
+    AVAILABLE_TOOL_SETS.map(tool => tool.id)
+  )
 
   // Load agents when dialog opens
   useEffect(() => {
     if (open) {
-      loadAgents();
+      loadAgents()
     }
-  }, [open]);
+  }, [open])
 
   const loadAgents = async () => {
-    setLoadingAgents(true);
-    setAgentError(null);
+    setLoadingAgents(true)
+    setAgentError(null)
     try {
-      const agentList = await apiClient.listAgents();
-      setAgents(agentList);
+      const agentList = await apiClient.listAgents()
+      setAgents(agentList)
     } catch (err) {
-      setAgentError(err instanceof Error ? err.message : 'Failed to load agents');
+      setAgentError(err instanceof Error ? err.message : 'Failed to load agents')
     } finally {
-      setLoadingAgents(false);
+      setLoadingAgents(false)
     }
-  };
+  }
+
+  const handleStartSandbox = async (agentId: string) => {
+    // Get user_id
+    const userId = userInfo?.user || userInfo?.subject_id
+    if (!userId) {
+      setAgentError('Unable to determine user ID. Please log in again.')
+      return
+    }
+
+    // Check if Nexus is connected first
+    const currentConnection = sandboxConnections[agentId]
+    if (currentConnection?.nexusStatus !== 'connected') {
+      setAgentError('Please connect to Nexus first.')
+      return
+    }
+
+    // Set creating status
+    setSandboxConnections(prev => ({
+      ...prev,
+      [agentId]: {
+        sandboxStatus: 'creating',
+        nexusStatus: prev[agentId]?.nexusStatus || 'disconnected'
+      }
+    }))
+
+    try {
+      // Step 1: Check if sandbox exists with name <user_id>,<agent_id>
+      const sandboxName = agentId // Already in format <user_id>,<agent_id>
+      const sandboxResponse = await apiClient.sandboxList()
+      // Search by name only (names are unique per user)
+      let existingSandbox = sandboxResponse.sandboxes.find(sb => sb.name === sandboxName)
+
+      let sandboxId: string | undefined = undefined
+      let needsNewSandbox = !existingSandbox
+      let sandboxProvider: string | undefined = undefined
+
+      // Check if existing sandbox is expired
+      if (existingSandbox) {
+        if (existingSandbox.expires_at) {
+          const expiresAt = new Date(existingSandbox.expires_at)
+          const now = new Date()
+          if (expiresAt <= now) {
+            console.log(`Existing sandbox ${existingSandbox.sandbox_id} has expired (${existingSandbox.expires_at}), stopping it...`)
+            try {
+              await apiClient.sandboxStop(existingSandbox.sandbox_id)
+              console.log(`Stopped expired sandbox ${existingSandbox.sandbox_id}`)
+            } catch (stopErr) {
+              console.warn(`Failed to stop expired sandbox: ${stopErr}`)
+              // Continue anyway - we'll create a new one
+            }
+            needsNewSandbox = true
+          } else {
+            // Not expired, use it
+            sandboxId = existingSandbox.sandbox_id
+            sandboxProvider = existingSandbox.provider
+            console.log(`Found existing sandbox: ${sandboxId} (expires at ${existingSandbox.expires_at})`)
+          }
+        } else {
+          // No expiration time, use it
+          sandboxId = existingSandbox.sandbox_id
+          sandboxProvider = existingSandbox.provider
+          console.log(`Found existing sandbox: ${sandboxId} (no expiration)`)
+        }
+      }
+
+      if (needsNewSandbox) {
+        // Step 2: Create new sandbox (or handle if it already exists)
+        try {
+          console.log(`Creating new sandbox with name: ${sandboxName}`)
+
+          // Select provider based on whether Nexus is running locally
+          const baseURL = apiClient.getBaseURL()
+          const isLocalhost = baseURL.includes('localhost') || baseURL.includes('127.0.0.1') || baseURL.includes('nexi.ngrok.io')
+          const provider = isLocalhost ? 'docker' : 'e2b'
+
+          console.log(`Using sandbox provider: ${provider} (baseURL: ${baseURL}, isLocalhost: ${isLocalhost})`)
+
+          const newSandbox = await apiClient.sandboxCreate({
+            name: sandboxName,
+            ttl_minutes: 60, // 1 hour TTL
+            provider, // Use Docker for localhost, E2B for remote
+          })
+          sandboxId = newSandbox.sandbox_id
+          sandboxProvider = provider
+          console.log(`Created sandbox: ${sandboxId}`)
+        } catch (createErr) {
+          // Creation failed, throw error
+          throw createErr
+        }
+      }
+
+      // Step 3: Connect and mount Nexus filesystem in the sandbox
+      try {
+        console.log(`Mounting Nexus in sandbox ${sandboxId}...`)
+
+        const mountResult = await apiClient.sandboxConnect({
+          sandbox_id: sandboxId!,
+          provider: sandboxProvider,
+          mount_path: '/mnt/nexus',
+          nexus_url: apiClient.getBaseURL(),
+          nexus_api_key: apiKey || undefined,
+        })
+
+        if (mountResult.success) {
+          console.log(`Successfully mounted Nexus at ${mountResult.mount_path}`)
+        } else {
+          console.warn(`Failed to mount Nexus in sandbox ${sandboxId}`)
+        }
+      } catch (mountErr) {
+        console.error('Failed to mount Nexus:', mountErr)
+        // Don't fail the entire operation if mount fails
+        // The sandbox is still created and can be used
+      }
+
+      // Success
+      setSandboxConnections(prev => ({
+        ...prev,
+        [agentId]: {
+          sandboxStatus: 'created',
+          nexusStatus: prev[agentId]?.nexusStatus || 'disconnected',
+          sandbox_id: sandboxId
+        }
+      }))
+      console.log(`Successfully created/found sandbox ${sandboxId}`)
+    } catch (err) {
+      console.error('Failed to start sandbox:', err)
+      setSandboxConnections(prev => ({
+        ...prev,
+        [agentId]: {
+          sandboxStatus: 'error',
+          nexusStatus: prev[agentId]?.nexusStatus || 'disconnected',
+          error: err instanceof Error ? err.message : 'Failed to start sandbox'
+        }
+      }))
+    }
+  }
+
+  const handleConnectNexus = async (agentId: string) => {
+    // Get Nexus API key from auth context
+    if (!apiKey) {
+      setAgentError('No Nexus API key found. Please log in again.')
+      return
+    }
+
+    // Set connecting status
+    setSandboxConnections(prev => ({
+      ...prev,
+      [agentId]: {
+        sandboxStatus: prev[agentId]?.sandboxStatus || 'none',
+        nexusStatus: 'connecting'
+      }
+    }))
+
+    try {
+      // Check Nexus connection by calling /health endpoint
+      console.log(`Checking Nexus connection...`)
+      const healthResult = await apiClient.health()
+
+      if (healthResult.status === 'ok' || healthResult.status === 'healthy') {
+        // Success - Nexus is healthy
+        setSandboxConnections(prev => ({
+          ...prev,
+          [agentId]: {
+            ...prev[agentId],
+            nexusStatus: 'connected'
+          }
+        }))
+        console.log(`Successfully verified Nexus connection (status: ${healthResult.status})`)
+      } else {
+        // Unhealthy
+        throw new Error(`Nexus server is unhealthy: ${healthResult.status}`)
+      }
+    } catch (err) {
+      console.error('Failed to connect Nexus:', err)
+      setSandboxConnections(prev => ({
+        ...prev,
+        [agentId]: {
+          ...prev[agentId],
+          nexusStatus: 'error',
+          error: err instanceof Error ? err.message : 'Failed to connect Nexus'
+        }
+      }))
+    }
+  }
 
   const handlePromptTemplateChange = (template: string) => {
-    setPromptTemplate(template);
-    setSystemPrompt(SYSTEM_PROMPT_TEMPLATES[template as keyof typeof SYSTEM_PROMPT_TEMPLATES]);
-  };
+    setPromptTemplate(template)
+    setSystemPrompt(SYSTEM_PROMPT_TEMPLATES[template as keyof typeof SYSTEM_PROMPT_TEMPLATES])
+  }
 
   const toggleTool = (toolId: string) => {
-    setSelectedTools((prev) => (prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]));
-  };
+    setSelectedTools(prev =>
+      prev.includes(toolId)
+        ? prev.filter(id => id !== toolId)
+        : [...prev, toolId]
+    )
+  }
 
   const handleDeleteAgent = async (agentId: string, agentName: string) => {
     if (!confirm(`Are you sure you want to delete agent "${agentName}"?`)) {
-      return;
+      return
     }
 
     try {
-      await apiClient.deleteAgent(agentId);
-      await loadAgents(); // Refresh list
+      await apiClient.deleteAgent(agentId)
+      await loadAgents() // Refresh list
     } catch (err) {
-      setAgentError(err instanceof Error ? err.message : 'Failed to delete agent');
+      setAgentError(err instanceof Error ? err.message : 'Failed to delete agent')
     }
-  };
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+    e.preventDefault()
+    setError(null)
 
     if (!agentName.trim()) {
-      setError('Agent name is required');
-      return;
+      setError('Agent name is required')
+      return
     }
 
     // Validate agent name (alphanumeric, underscores, hyphens only - NO commas)
     if (!/^[a-z0-9_-]+$/.test(agentName.trim())) {
-      setError('Agent name must contain only lowercase letters, numbers, underscores, and hyphens');
-      return;
+      setError('Agent name must contain only lowercase letters, numbers, underscores, and hyphens')
+      return
     }
 
     // Check for commas explicitly
     if (agentName.includes(',')) {
-      setError('Agent name cannot contain commas');
-      return;
+      setError('Agent name cannot contain commas')
+      return
     }
 
     // Validate endpoint URL for LangGraph platform
     if (platform === 'langgraph') {
       if (!endpointUrl.trim()) {
-        setError('Endpoint URL is required for LangGraph agents');
-        return;
+        setError('Endpoint URL is required for LangGraph agents')
+        return
       }
 
       // Validate endpoint URL format
       try {
-        new URL(endpointUrl);
+        new URL(endpointUrl)
       } catch {
-        setError('Invalid endpoint URL format');
-        return;
+        setError('Invalid endpoint URL format')
+        return
       }
     }
 
     // Get user_id from userInfo
-    const userId = userInfo?.user || userInfo?.subject_id;
+    const userId = userInfo?.user || userInfo?.subject_id
     if (!userId) {
-      setError('Unable to determine user ID. Please log in again.');
-      return;
+      setError('Unable to determine user ID. Please log in again.')
+      return
     }
 
     // Compose full agent_id as <user_id>,<agent_name>
-    const fullAgentId = `${userId},${agentName.trim()}`;
+    const fullAgentId = `${userId},${agentName.trim()}`
 
-    setIsRegistering(true);
+    setIsRegistering(true)
 
     try {
       // Note: Backend currently doesn't store display name (TODO: fix backend)
       // Using agent name as placeholder for the 'name' parameter
       const result = await onRegisterAgent(
         fullAgentId,
-        agentName.trim(), // Using agent_name since display name isn't stored
+        agentName.trim(),  // Using agent_name since display name isn't stored
         description.trim(),
         generateApiKey,
         platform === 'langgraph'
@@ -205,87 +424,87 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
               endpoint_url: '',
               system_prompt: systemPrompt.trim(),
               tools: selectedTools,
-            },
-      );
+            }
+      )
 
       // If API key was generated, show it
       if (result.api_key) {
-        setNewApiKey(result.api_key);
+        setNewApiKey(result.api_key)
       } else {
         // No API key - reset form and switch to list view
-        resetForm();
-        await loadAgents(); // Refresh the list
-        setActiveTab('list');
+        resetForm()
+        await loadAgents() // Refresh the list
+        setActiveTab('list')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register agent');
+      setError(err instanceof Error ? err.message : 'Failed to register agent')
     } finally {
-      setIsRegistering(false);
+      setIsRegistering(false)
     }
-  };
+  }
 
   const resetForm = () => {
-    setAgentName('');
-    setDescription('');
-    setGenerateApiKey(false);
-    setNewApiKey(null);
-    setShowApiKey(false);
-    setCopied(false);
-    setError(null);
-    setPlatform('nexus');
-    setEndpointUrl('http://localhost:2024');
-    setLanggraphAgentId('');
-    setPromptTemplate('general_assistant');
-    setSystemPrompt(SYSTEM_PROMPT_TEMPLATES.general_assistant);
-    setSelectedTools(AVAILABLE_TOOL_SETS.map((tool) => tool.id));
-  };
+    setAgentName('')
+    setDescription('')
+    setGenerateApiKey(false)
+    setNewApiKey(null)
+    setShowApiKey(false)
+    setCopied(false)
+    setError(null)
+    setPlatform('nexus')
+    setEndpointUrl('http://localhost:2024')
+    setLanggraphAgentId('')
+    setPromptTemplate('general_assistant')
+    setSystemPrompt(SYSTEM_PROMPT_TEMPLATES.general_assistant)
+    setSelectedTools(AVAILABLE_TOOL_SETS.map(tool => tool.id))
+  }
 
   const handleQuickSetupNexusAssistant = () => {
-    setAgentName('nexus_assistant');
-    setDescription('A claude-code like general agent that connects to Nexus File System.');
-    setPlatform('langgraph');
-    setEndpointUrl('https://nexus-dev-3028be15439a59638a13b8f1c4ed065d.us.langgraph.app');
-    setLanggraphAgentId('agent');
-    setGenerateApiKey(false);
-    setError(null);
-  };
+    setAgentName('nexus_assistant')
+    setDescription('A claude-code like general agent that connects to Nexus File System.')
+    setPlatform('langgraph')
+    setEndpointUrl('https://nexus-dev-3028be15439a59638a13b8f1c4ed065d.us.langgraph.app')
+    setLanggraphAgentId('agent')
+    setGenerateApiKey(false)
+    setError(null)
+  }
 
   const handleClose = () => {
-    resetForm();
-    setActiveTab('list');
-    onOpenChange(false);
-  };
+    resetForm()
+    setActiveTab('list')
+    onOpenChange(false)
+  }
 
   const handleCopyApiKey = async () => {
-    if (!newApiKey) return;
+    if (!newApiKey) return
 
     try {
-      await navigator.clipboard.writeText(newApiKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(newApiKey)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      console.error('Failed to copy:', err);
+      console.error('Failed to copy:', err)
     }
-  };
+  }
 
   const maskApiKey = (key: string) => {
     if (key.length <= 12) {
-      return '*'.repeat(key.length);
+      return '*'.repeat(key.length)
     }
-    return key.slice(0, 4) + '*'.repeat(key.length - 8) + key.slice(-4);
-  };
+    return key.slice(0, 4) + '*'.repeat(key.length - 8) + key.slice(-4)
+  }
 
   // Extract agent name from full agent_id (user_id,agent_name)
   const getAgentDisplayName = (agentId: string) => {
-    const parts = agentId.split(',');
-    return parts.length === 2 ? parts[1] : agentId;
-  };
+    const parts = agentId.split(',')
+    return parts.length === 2 ? parts[1] : agentId
+  }
 
   // Filter to only show user's agents
-  const userAgents = agents.filter((agent) => {
-    const userId = userInfo?.user || userInfo?.subject_id;
-    return agent.user_id === userId;
-  });
+  const userAgents = agents.filter(agent => {
+    const userId = userInfo?.user || userInfo?.subject_id
+    return agent.user_id === userId
+  })
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -295,14 +514,18 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
             <Bot className="h-5 w-5" />
             Agent Management
           </DialogTitle>
-          <DialogDescription>Manage your AI agents for delegation and multi-agent workflows.</DialogDescription>
+          <DialogDescription>
+            Manage your AI agents for delegation and multi-agent workflows.
+          </DialogDescription>
         </DialogHeader>
 
         {/* Tabs */}
         <div className="flex border-b">
           <button
             className={`px-4 py-2 font-medium transition-colors ${
-              activeTab === 'list' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'list'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => setActiveTab('list')}
           >
@@ -310,7 +533,9 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
           </button>
           <button
             className={`px-4 py-2 font-medium transition-colors ${
-              activeTab === 'create' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'create'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => setActiveTab('create')}
           >
@@ -324,10 +549,16 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
           {activeTab === 'list' ? (
             // Agent List View
             <div className="space-y-4">
-              {agentError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{agentError}</div>}
+              {agentError && (
+                <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">
+                  {agentError}
+                </div>
+              )}
 
               {loadingAgents ? (
-                <div className="text-center py-8 text-muted-foreground">Loading agents...</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  Loading agents...
+                </div>
               ) : userAgents.length === 0 ? (
                 <div className="text-center py-12">
                   <Bot className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-50" />
@@ -342,57 +573,185 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                   {userAgents.map((agent) => {
                     // Backend doesn't store display name (see TODO in nexus_fs.py:2397)
                     // Extract just the agent name part (without user_id prefix)
-                    const agentName = getAgentDisplayName(agent.agent_id);
+                    const agentName = getAgentDisplayName(agent.agent_id)
+                    const connectionStatus = sandboxConnections[agent.agent_id] || {
+                      sandboxStatus: 'none',
+                      nexusStatus: 'disconnected'
+                    }
+
+                    // Determine sandbox status indicator color
+                    const sandboxStatusColor = {
+                      none: 'bg-gray-400',
+                      creating: 'bg-yellow-400 animate-pulse',
+                      created: 'bg-blue-500',
+                      error: 'bg-red-500'
+                    }[connectionStatus.sandboxStatus]
+
+                    // Determine nexus connection status indicator color
+                    const nexusStatusColor = {
+                      disconnected: 'bg-gray-400',
+                      connecting: 'bg-yellow-400 animate-pulse',
+                      connected: 'bg-green-500',
+                      error: 'bg-red-500'
+                    }[connectionStatus.nexusStatus]
+
+                    const sandboxTooltip = {
+                      none: 'Sandbox not created',
+                      creating: 'Creating sandbox...',
+                      created: `Sandbox created (${connectionStatus.sandbox_id})`,
+                      error: `Sandbox error: ${connectionStatus.error || 'Unknown error'}`
+                    }[connectionStatus.sandboxStatus]
+
+                    const nexusTooltip = {
+                      disconnected: 'Nexus not connected',
+                      connecting: 'Connecting Nexus...',
+                      connected: 'Nexus connected',
+                      error: `Nexus connection failed: ${connectionStatus.error || 'Unknown error'}`
+                    }[connectionStatus.nexusStatus]
 
                     return (
-                      <div key={agent.agent_id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Bot className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{agentName}</span>
+                      <div
+                        key={agent.agent_id}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
+                        {/* Agent Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Bot className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{agentName}</span>
+                            </div>
+                            {agent.description && (
+                              <div className="text-sm text-muted-foreground mb-2">
+                                {agent.description}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Calendar className="h-3 w-3" />
+                              Created {new Date(agent.created_at).toLocaleDateString()}
+                            </div>
                           </div>
-                          {agent.description && <div className="text-sm text-muted-foreground mb-2">{agent.description}</div>}
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Calendar className="h-3 w-3" />
-                            Created {new Date(agent.created_at).toLocaleDateString()}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={async () => {
+                                if (onAgentSelect) {
+                                  await onAgentSelect(agent.agent_id)
+                                  handleClose()
+                                }
+                              }}
+                            >
+                              <MessageSquare className="h-4 w-4 mr-1" />
+                              Use Agent
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeleteAgent(agent.agent_id, agentName)
+                              }}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={async () => {
-                              if (onAgentSelect) {
-                                await onAgentSelect(agent.agent_id);
-                                handleClose();
+
+                        {/* Nexus Connection Settings */}
+                        <div className="border-t pt-3">
+                          <div className="text-sm font-medium mb-3 flex items-center gap-2">
+                            <Plug className="h-4 w-4" />
+                            Nexus Connection Settings
+                          </div>
+
+                          {/* Status indicators */}
+                          <div className="flex items-center gap-4 mb-3 text-xs">
+                            {/* Nexus connection status */}
+                            <div className="flex items-center gap-2" title={nexusTooltip}>
+                              <span className="text-muted-foreground">Nexus:</span>
+                              <div className={`h-2 w-2 rounded-full ${nexusStatusColor}`} />
+                              <span className="text-muted-foreground">
+                                {connectionStatus.nexusStatus === 'disconnected' ? 'Not connected' :
+                                 connectionStatus.nexusStatus === 'connecting' ? 'Connecting...' :
+                                 connectionStatus.nexusStatus === 'connected' ? 'Connected' :
+                                 'Error'}
+                              </span>
+                            </div>
+                            {/* Sandbox status */}
+                            <div className="flex items-center gap-2" title={sandboxTooltip}>
+                              <span className="text-muted-foreground">Sandbox:</span>
+                              <div className={`h-2 w-2 rounded-full ${sandboxStatusColor}`} />
+                              <span className="text-muted-foreground">
+                                {connectionStatus.sandboxStatus === 'none' ? 'Not created' :
+                                 connectionStatus.sandboxStatus === 'creating' ? 'Creating...' :
+                                 connectionStatus.sandboxStatus === 'created' ? 'Running' :
+                                 'Error'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-2">
+                            {/* Connect Nexus Button */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleConnectNexus(agent.agent_id)}
+                              disabled={
+                                connectionStatus.nexusStatus === 'connecting' ||
+                                connectionStatus.nexusStatus === 'connected'
                               }
-                            }}
-                          >
-                            <MessageSquare className="h-4 w-4 mr-1" />
-                            Use Agent
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteAgent(agent.agent_id, agentName);
-                            }}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                              title={
+                                connectionStatus.nexusStatus === 'connected' ? 'Already connected' :
+                                'Connect to Nexus server'
+                              }
+                            >
+                              <Plug className="h-4 w-4 mr-1" />
+                              {connectionStatus.nexusStatus === 'connecting' ? 'Connecting...' :
+                               connectionStatus.nexusStatus === 'connected' ? 'Connected' :
+                               'Connect Nexus'}
+                            </Button>
+                            {/* Start Sandbox Button */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleStartSandbox(agent.agent_id)}
+                              disabled={
+                                connectionStatus.nexusStatus !== 'connected' ||
+                                connectionStatus.sandboxStatus === 'creating' ||
+                                connectionStatus.sandboxStatus === 'created'
+                              }
+                              title={
+                                connectionStatus.nexusStatus !== 'connected' ? 'Connect to Nexus first' :
+                                connectionStatus.sandboxStatus === 'created' ? 'Sandbox already running' :
+                                'Start sandbox'
+                              }
+                            >
+                              <Zap className="h-4 w-4 mr-1" />
+                              {connectionStatus.sandboxStatus === 'creating' ? 'Starting...' :
+                               connectionStatus.sandboxStatus === 'created' ? 'Running' :
+                               'Start Sandbox'}
+                            </Button>
+                          </div>
+
+                          {/* Error message if any */}
+                          {connectionStatus.error && (
+                            <div className="mt-2 text-xs text-destructive bg-destructive/10 p-2 rounded">
+                              {connectionStatus.error}
+                            </div>
+                          )}
                         </div>
                       </div>
-                    );
+                    )
                   })}
                 </div>
               )}
 
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm mt-4">
                 <p className="text-blue-900 dark:text-blue-100">
-                  <strong>💡 How to use agents:</strong> Agents inherit all your permissions and can be used with the{' '}
-                  <code className="bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded">X-Agent-ID</code> header in API requests.
+                  <strong>💡 How to use agents:</strong> Agents inherit all your permissions and can be used with the <code className="bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded">X-Agent-ID</code> header in API requests.
                 </p>
               </div>
             </div>
@@ -403,7 +762,9 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                 <div className="flex items-start gap-3">
                   <Info className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium text-orange-900 dark:text-orange-100 mb-1">Important: Save Your API Key</p>
+                    <p className="font-medium text-orange-900 dark:text-orange-100 mb-1">
+                      Important: Save Your API Key
+                    </p>
                     <p className="text-sm text-orange-800 dark:text-orange-200">
                       This is the only time the API key will be displayed. Make sure to copy and save it securely.
                     </p>
@@ -422,11 +783,17 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                     variant="outline"
                     size="icon"
                     onClick={() => setShowApiKey(!showApiKey)}
-                    title={showApiKey ? 'Hide API key' : 'Show API key'}
+                    title={showApiKey ? "Hide API key" : "Show API key"}
                   >
                     {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
-                  <Button type="button" variant="outline" size="icon" onClick={handleCopyApiKey} title="Copy to clipboard">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyApiKey}
+                    title="Copy to clipboard"
+                  >
                     {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
@@ -434,8 +801,7 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
 
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm">
                 <p className="text-blue-900 dark:text-blue-100">
-                  <strong>Note:</strong> This agent can authenticate using its own API key, or use the owner's credentials with the{' '}
-                  <code className="bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded">X-Agent-ID</code> header (recommended).
+                  <strong>Note:</strong> This agent can authenticate using its own API key, or use the owner's credentials with the <code className="bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded">X-Agent-ID</code> header (recommended).
                 </p>
               </div>
             </div>
@@ -448,8 +814,12 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                   <div className="flex items-start gap-3">
                     <Zap className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
-                      <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Quick Setup: Nexus Assistant</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">A Claude-Code-like general agent that connects to Nexus File System</p>
+                      <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">
+                        Quick Setup: Nexus Assistant
+                      </h3>
+                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
+                        A Claude-Code-like general agent that connects to Nexus File System
+                      </p>
                       <Button
                         type="button"
                         variant="outline"
@@ -483,7 +853,9 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                       className="font-mono rounded-l-none"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">Unique name for your agent (lowercase, alphanumeric, underscores, hyphens only)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Unique name for your agent (lowercase, alphanumeric, underscores, hyphens only)
+                  </p>
                 </div>
 
                 {/* Description */}
@@ -516,7 +888,9 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {platform === 'nexus' ? 'Built-in Nexus agent with tools and memory' : 'External LangGraph agent endpoint'}
+                    {platform === 'nexus'
+                      ? 'Built-in Nexus agent with tools and memory'
+                      : 'External LangGraph agent endpoint'}
                   </p>
                 </div>
 
@@ -535,7 +909,9 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                         onChange={(e) => setEndpointUrl(e.target.value)}
                         disabled={isRegistering}
                       />
-                      <p className="text-xs text-muted-foreground">LangGraph agent service endpoint URL</p>
+                      <p className="text-xs text-muted-foreground">
+                        LangGraph agent service endpoint URL
+                      </p>
                     </div>
 
                     {/* Agent ID */}
@@ -550,7 +926,9 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                         onChange={(e) => setLanggraphAgentId(e.target.value)}
                         disabled={isRegistering}
                       />
-                      <p className="text-xs text-muted-foreground">Optional: LangGraph agent identifier for routing</p>
+                      <p className="text-xs text-muted-foreground">
+                        Optional: LangGraph agent identifier for routing
+                      </p>
                     </div>
                   </>
                 )}
@@ -589,12 +967,16 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                         rows={5}
                         className="font-mono text-xs"
                       />
-                      <p className="text-xs text-muted-foreground">Customize the agent's behavior and instructions</p>
+                      <p className="text-xs text-muted-foreground">
+                        Customize the agent's behavior and instructions
+                      </p>
                     </div>
 
                     {/* Tools */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Tools & Capabilities</label>
+                      <label className="text-sm font-medium">
+                        Tools & Capabilities
+                      </label>
                       <div className="space-y-2 border rounded-lg p-3 bg-muted/50">
                         {AVAILABLE_TOOL_SETS.map((tool) => (
                           <div key={tool.id} className="flex items-start gap-2">
@@ -613,7 +995,9 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                           </div>
                         ))}
                       </div>
-                      <p className="text-xs text-muted-foreground">Select the tools and capabilities available to this agent</p>
+                      <p className="text-xs text-muted-foreground">
+                        Select the tools and capabilities available to this agent
+                      </p>
                     </div>
                   </>
                 )}
@@ -635,9 +1019,13 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                   </div>
                   <p className="text-xs text-muted-foreground ml-6">
                     {generateApiKey ? (
-                      <span className="text-orange-600 dark:text-orange-400">⚠️ Agent will have its own API key (for independent authentication)</span>
+                      <span className="text-orange-600 dark:text-orange-400">
+                        ⚠️ Agent will have its own API key (for independent authentication)
+                      </span>
                     ) : (
-                      <span className="text-green-600 dark:text-green-400">✓ Recommended: Agent will use owner's credentials + X-Agent-ID header</span>
+                      <span className="text-green-600 dark:text-green-400">
+                        ✓ Recommended: Agent will use owner's credentials + X-Agent-ID header
+                      </span>
                     )}
                   </p>
                 </div>
@@ -650,7 +1038,11 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                   </p>
                 </div>
 
-                {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{error}</div>}
+                {error && (
+                  <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">
+                    {error}
+                  </div>
+                )}
               </div>
             </form>
           )}
@@ -660,7 +1052,12 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
         <DialogFooter>
           {activeTab === 'create' && !newApiKey ? (
             <>
-              <Button type="button" variant="outline" onClick={handleClose} disabled={isRegistering}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={isRegistering}
+              >
                 Cancel
               </Button>
               <Button onClick={handleSubmit} disabled={isRegistering}>
@@ -668,13 +1065,11 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
               </Button>
             </>
           ) : newApiKey ? (
-            <Button
-              onClick={() => {
-                resetForm();
-                loadAgents();
-                setActiveTab('list');
-              }}
-            >
+            <Button onClick={() => {
+              resetForm()
+              loadAgents()
+              setActiveTab('list')
+            }}>
               Done
             </Button>
           ) : (
@@ -685,5 +1080,5 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
