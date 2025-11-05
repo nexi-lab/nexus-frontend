@@ -37,6 +37,7 @@ import '@univerjs/presets/lib/styles/preset-sheets-drawing.css';
 import '@univerjs/presets/lib/styles/preset-sheets-find-replace.css';
 import '@univerjs/presets/lib/styles/preset-sheets-hyper-link.css';
 import '@univerjs/presets/lib/styles/preset-sheets-sort.css';
+
 import { UNIVER_ENDPOINT, UNIVER_LICENSE } from '@/utils/config';
 
 export default function ExcelViewer({ contentBytes }: IExcelViewerProps) {
@@ -53,8 +54,9 @@ export default function ExcelViewer({ contentBytes }: IExcelViewerProps) {
   }, []);
 
   const init = async () => {
-    const file = new File([contentBytes as unknown as BlobPart], 'excel.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    console.log('file', file);
+    const file = new File([contentBytes as unknown as BlobPart], `${Date.now()}.xlsx`, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
 
     const collaboration = undefined;
     const { univerAPI, univer } = createUniver({
@@ -115,6 +117,7 @@ export default function ExcelViewer({ contentBytes }: IExcelViewerProps) {
     });
     univer.createUnit(UniverInstanceType.UNIVER_SHEET, {});
     state.current.univerAPI = univerAPI;
+    // Don't need to add event listener for sheet value changed
     // state.current.disposable = univerAPI.addEvent(univerAPI.Event.SheetValueChanged, () => {
     //   console.log('sheet value changed');
     //   state.current.changed = true;
@@ -124,7 +127,7 @@ export default function ExcelViewer({ contentBytes }: IExcelViewerProps) {
     console.log('workbook', workbook);
   };
 
-  return <div ref={containerRef} />;
+  return <div ref={containerRef} className="size-full" />;
 }
 
 interface IExcelViewerProps {
