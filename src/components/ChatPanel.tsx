@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, Settings, X, Loader2, Plus, Info, ChevronDown, ChevronUp, Bot, Wifi, WifiOff, Box } from 'lucide-react'
 import { Button } from './ui/button'
 import type { ChatConfig } from '../types/chat'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from './ui/dialog'
 import { Input } from './ui/input'
 import {
   Select,
@@ -497,7 +497,40 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
             sandboxId,
             provider: agentSandbox.provider,
             status: agentSandbox.status,
+            expiresAt: agentSandbox.expires_at,
           })
+
+          // Store sandbox details in config
+          const sandboxStatus = agentSandbox.status as 'running' | 'paused' | 'stopped' | 'unknown'
+          const sandboxProvider = agentSandbox.provider
+          const sandboxExpiresAt = agentSandbox.expires_at
+
+          // Check if sandbox is expired
+          if (sandboxExpiresAt) {
+            const expiresAt = new Date(sandboxExpiresAt)
+            const now = new Date()
+            if (expiresAt <= now) {
+              console.log('[ChatPanel] Sandbox has expired, marking as stopped')
+              // Don't use expired sandbox
+              sandboxId = undefined
+            } else {
+              // Store sandbox info
+              setConfig(prev => ({
+                ...prev,
+                sandboxStatus,
+                sandboxProvider,
+                sandboxExpiresAt,
+              }))
+            }
+          } else {
+            // No expiration, store sandbox info
+            setConfig(prev => ({
+              ...prev,
+              sandboxStatus,
+              sandboxProvider,
+              sandboxExpiresAt,
+            }))
+          }
         } else {
           console.log('[ChatPanel] No sandbox found for agent:', agentId)
           console.log('[ChatPanel] Available sandbox names:', sandboxResponse.sandboxes.map(sb => sb.name))
@@ -530,7 +563,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
             apiUrl: agentConfig.endpoint_url,
             assistantId: agentConfig.agent_id || 'agent', // LangGraph graph/assistant ID
             apiKey: langgraphApiKey, // LangGraph API key from config or environment
-            sandboxId,  // Add sandbox_id
+            sandboxId,  // Add sandbox_id (undefined if expired)
           }
           console.log('[ChatPanel] New config after setConfig:', {
             sandboxId: newConfig.sandboxId,
@@ -606,6 +639,69 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
     }))
   }, [apiKey, userInfo])
 
+  // Poll sandbox status periodically if sandbox exists
+  useEffect(() => {
+    if (!config.sandboxId || !selectedAgentId) {
+      return
+    }
+
+    const checkSandboxStatus = async () => {
+      try {
+        const sandboxResponse = await apiClient.sandboxList()
+        const agentSandbox = sandboxResponse.sandboxes.find(sb => sb.name === selectedAgentId)
+
+        if (agentSandbox) {
+          const sandboxStatus = agentSandbox.status as 'running' | 'paused' | 'stopped' | 'unknown'
+          const sandboxExpiresAt = agentSandbox.expires_at
+
+          // Check if sandbox is expired
+          if (sandboxExpiresAt) {
+            const expiresAt = new Date(sandboxExpiresAt)
+            const now = new Date()
+            if (expiresAt <= now) {
+              console.log('[ChatPanel] Sandbox has expired during polling')
+              // Clear sandbox ID
+              setConfig(prev => ({
+                ...prev,
+                sandboxId: undefined,
+                sandboxStatus: 'stopped',
+              }))
+              return
+            }
+          }
+
+          // Update status if changed
+          if (config.sandboxStatus !== sandboxStatus) {
+            console.log('[ChatPanel] Sandbox status updated:', {
+              oldStatus: config.sandboxStatus,
+              newStatus: sandboxStatus,
+            })
+            setConfig(prev => ({
+              ...prev,
+              sandboxStatus,
+            }))
+          }
+        } else {
+          // Sandbox no longer exists
+          console.log('[ChatPanel] Sandbox no longer exists')
+          setConfig(prev => ({
+            ...prev,
+            sandboxId: undefined,
+            sandboxStatus: 'stopped',
+          }))
+        }
+      } catch (err) {
+        console.error('[ChatPanel] Failed to poll sandbox status:', err)
+      }
+    }
+
+    // Poll every 30 seconds
+    const intervalId = setInterval(checkSandboxStatus, 30000)
+
+    // Cleanup on unmount or when sandbox ID changes
+    return () => clearInterval(intervalId)
+  }, [config.sandboxId, selectedAgentId, apiClient])
+
   const handleThreadCreated = (threadId: string) => {
     console.log('Thread created with ID:', threadId)
     setConfig(prev => ({ ...prev, threadId }))
@@ -616,6 +712,61 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
     // Clear thread ID and increment key to force complete remount
     setConfig(prev => ({ ...prev, threadId: undefined }))
     setChatKey(prev => prev + 1)
+  }
+
+  const handlePauseSandbox = async () => {
+    if (!config.sandboxId) return
+
+    try {
+      await apiClient.sandboxPause(config.sandboxId)
+      console.log('[ChatPanel] Sandbox paused:', config.sandboxId)
+
+      // Update status immediately
+      setConfig(prev => ({ ...prev, sandboxStatus: 'paused' }))
+    } catch (err) {
+      console.error('[ChatPanel] Failed to pause sandbox:', err)
+      alert('Failed to pause sandbox: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+
+  const handleResumeSandbox = async () => {
+    if (!config.sandboxId) return
+
+    try {
+      await apiClient.sandboxResume(config.sandboxId)
+      console.log('[ChatPanel] Sandbox resumed:', config.sandboxId)
+
+      // Update status immediately
+      setConfig(prev => ({ ...prev, sandboxStatus: 'running' }))
+    } catch (err) {
+      console.error('[ChatPanel] Failed to resume sandbox:', err)
+      alert('Failed to resume sandbox: ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+
+  const handleStopSandbox = async () => {
+    if (!config.sandboxId) return
+
+    if (!confirm('Are you sure you want to stop this sandbox? You will need to create a new one to continue.')) {
+      return
+    }
+
+    try {
+      await apiClient.sandboxStop(config.sandboxId)
+      console.log('[ChatPanel] Sandbox stopped:', config.sandboxId)
+
+      // Clear sandbox info
+      setConfig(prev => ({
+        ...prev,
+        sandboxId: undefined,
+        sandboxStatus: 'stopped',
+        sandboxProvider: undefined,
+        sandboxExpiresAt: undefined,
+      }))
+    } catch (err) {
+      console.error('[ChatPanel] Failed to stop sandbox:', err)
+      alert('Failed to stop sandbox: ' + (err instanceof Error ? err.message : String(err)))
+    }
   }
 
   const handleRegisterAgent = async (
@@ -673,10 +824,18 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
               size="icon"
               type="button"
               onClick={() => setSandboxDialogOpen(true)}
-              title={config.sandboxId ? `Sandbox: ${config.sandboxId}` : "No sandbox configured"}
+              title={config.sandboxId ? `Sandbox: ${config.sandboxStatus || 'unknown'}` : "No sandbox configured"}
             >
               {config.sandboxId ? (
-                <Box className="h-4 w-4 text-blue-500" />
+                config.sandboxStatus === 'running' ? (
+                  <Box className="h-4 w-4 text-green-500" />
+                ) : config.sandboxStatus === 'paused' ? (
+                  <Box className="h-4 w-4 text-yellow-500" />
+                ) : config.sandboxStatus === 'stopped' ? (
+                  <Box className="h-4 w-4 text-red-500" />
+                ) : (
+                  <Box className="h-4 w-4 text-blue-500" />
+                )
               ) : (
                 <Box className="h-4 w-4 text-gray-400" />
               )}
@@ -841,27 +1000,43 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
             <DialogTitle>Sandbox Status</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Status:</span>
-                <span className={`text-sm ${config.sandboxId ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                  {config.sandboxId ? 'Connected' : 'Not Configured'}
+                <span className={`text-sm font-semibold ${
+                  config.sandboxStatus === 'running' ? 'text-green-600 dark:text-green-400' :
+                  config.sandboxStatus === 'paused' ? 'text-yellow-600 dark:text-yellow-400' :
+                  config.sandboxStatus === 'stopped' ? 'text-red-600 dark:text-red-400' :
+                  config.sandboxId ? 'text-blue-600 dark:text-blue-400' :
+                  'text-gray-600 dark:text-gray-400'
+                }`}>
+                  {config.sandboxStatus ? config.sandboxStatus.charAt(0).toUpperCase() + config.sandboxStatus.slice(1) :
+                   config.sandboxId ? 'Unknown' : 'Not Configured'}
                 </span>
               </div>
               <div className="flex items-start justify-between gap-4">
                 <span className="text-sm font-medium">Sandbox ID:</span>
-                <span className="text-sm text-muted-foreground font-mono break-all text-right">
+                <span className="text-sm text-muted-foreground font-mono break-all text-right max-w-[200px]">
                   {config.sandboxId || 'None'}
                 </span>
               </div>
               {config.sandboxId && (
-                <div className="flex items-start justify-between gap-4">
-                  <span className="text-sm font-medium">Provider:</span>
-                  <span className="text-sm text-muted-foreground">
-                    {/* We can add provider info if we track it in config */}
-                    Auto-selected
-                  </span>
-                </div>
+                <>
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="text-sm font-medium">Provider:</span>
+                    <span className="text-sm text-muted-foreground">
+                      {config.sandboxProvider || 'Auto-selected'}
+                    </span>
+                  </div>
+                  {config.sandboxExpiresAt && (
+                    <div className="flex items-start justify-between gap-4">
+                      <span className="text-sm font-medium">Expires:</span>
+                      <span className="text-sm text-muted-foreground">
+                        {new Date(config.sandboxExpiresAt).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
             {!config.sandboxId && (
@@ -869,7 +1044,36 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
                 To use a sandbox, click the "Start Sandbox" button in the Agent Management dialog.
               </div>
             )}
+            {config.sandboxId && config.sandboxStatus === 'stopped' && (
+              <div className="text-sm text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
+                This sandbox has been stopped. Restart it from the Agent Management dialog.
+              </div>
+            )}
+            {config.sandboxId && config.sandboxStatus === 'paused' && (
+              <div className="text-sm text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
+                This sandbox is paused. Resume it to continue using it.
+              </div>
+            )}
           </div>
+          {config.sandboxId && (
+            <DialogFooter className="flex gap-2">
+              {config.sandboxStatus === 'running' && (
+                <Button variant="outline" onClick={handlePauseSandbox}>
+                  Pause Sandbox
+                </Button>
+              )}
+              {config.sandboxStatus === 'paused' && (
+                <Button variant="outline" onClick={handleResumeSandbox}>
+                  Resume Sandbox
+                </Button>
+              )}
+              {(config.sandboxStatus === 'running' || config.sandboxStatus === 'paused') && (
+                <Button variant="destructive" onClick={handleStopSandbox}>
+                  Stop Sandbox
+                </Button>
+              )}
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 

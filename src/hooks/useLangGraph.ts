@@ -10,6 +10,7 @@ interface UseLangGraphOptions {
   threadId?: string;
   userId?: string;
   tenantId?: string;
+  sandboxId?: string; // Sandbox ID for code execution
   key?: number; // Add key to force recreation
 }
 
@@ -25,6 +26,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     nexusApiKey: options.nexusApiKey ? `${options.nexusApiKey.substring(0, 20)}...` : 'NOT SET',
     nexusServerUrl: options.nexusServerUrl || 'NOT SET',
     assistantId: options.assistantId,
+    sandboxId: options.sandboxId || 'NOT SET',
   });
 
   const stream = useTypedStream({
@@ -38,11 +40,12 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
 
   // Wrap submit to automatically add metadata
   const submitWithMetadata = (input: any, submitOptions?: any) => {
-    // Add Nexus API key and server URL to metadata for tool calls
+    // Add Nexus API key, server URL, and sandbox ID to metadata for tool calls
     const metadata = {
       ...submitOptions?.metadata,
       ...(options.nexusApiKey && { x_auth: `Bearer ${options.nexusApiKey}` }),
       ...(options.nexusServerUrl && { nexus_server_url: options.nexusServerUrl }),
+      ...(options.sandboxId && { sandbox_id: options.sandboxId }),
     };
 
     return stream.submit(input, {

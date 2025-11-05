@@ -4,8 +4,10 @@ import type { RPCRequest, RPCResponse } from '../types/file';
 class NexusAPIClient {
   private client: AxiosInstance;
   private requestId = 0;
+  private baseURL: string;
 
   constructor(baseURL: string = 'http://localhost:8080', apiKey?: string) {
+    this.baseURL = baseURL;
     this.client = axios.create({
       baseURL,
       headers: {
@@ -13,6 +15,10 @@ class NexusAPIClient {
         ...(apiKey && { Authorization: `Bearer ${apiKey}` }),
       },
     });
+  }
+
+  getBaseURL(): string {
+    return this.baseURL;
   }
 
   private getNextId(): number {
@@ -86,6 +92,26 @@ class NexusAPIClient {
     } catch (error) {
       if (axios.isAxiosError(error)) {
         throw new Error(`Network error: ${error.message}${error.response?.data ? ` - ${JSON.stringify(error.response.data)}` : ''}`);
+      }
+      throw error;
+    }
+  }
+
+  // Health endpoint - checks server status
+  async health(): Promise<{
+    status: string;
+    version?: string;
+  }> {
+    try {
+      const response = await this.client.get('/health');
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(
+          `Health check failed: ${error.message}${
+            error.response?.data ? ` - ${JSON.stringify(error.response.data)}` : ''
+          }`
+        );
       }
       throw error;
     }
@@ -235,6 +261,150 @@ class NexusAPIClient {
   // Agent API - Delete agent
   async deleteAgent(agentId: string): Promise<boolean> {
     return await this.call('delete_agent', { agent_id: agentId });
+  }
+
+  // Sandbox API - Create a new sandbox
+  async sandboxCreate(params: {
+    name: string;
+    ttl_minutes?: number;
+    template_id?: string;
+    provider?: string;
+  }): Promise<{
+    sandbox_id: string;
+    name: string;
+    user_id: string;
+    agent_id: string | null;
+    tenant_id: string;
+    provider: string;
+    template_id: string | null;
+    status: string;
+    created_at: string;
+    last_active_at: string;
+    ttl_minutes: number;
+    expires_at: string | null;
+  }> {
+    return await this.call('sandbox_create', params);
+  }
+
+  // Sandbox API - Connect to user-managed sandbox
+  async sandboxConnect(params: {
+    sandbox_id: string;
+    provider?: string;
+    sandbox_api_key?: string;
+    mount_path?: string;
+    nexus_url?: string;
+    nexus_api_key?: string;
+  }): Promise<{
+    success: boolean;
+    sandbox_id: string;
+    provider: string;
+    mount_path: string;
+    mounted_at: string;
+  }> {
+    return await this.call('sandbox_connect', params);
+  }
+
+  // Sandbox API - Disconnect from user-managed sandbox
+  async sandboxDisconnect(params: {
+    sandbox_id: string;
+    provider?: string;
+    sandbox_api_key?: string;
+  }): Promise<{
+    success: boolean;
+    sandbox_id: string;
+    provider: string;
+    unmounted_at: string;
+  }> {
+    return await this.call('sandbox_disconnect', params);
+  }
+
+  // Sandbox API - List sandboxes
+  async sandboxList(): Promise<{
+    sandboxes: Array<{
+      sandbox_id: string;
+      name: string;
+      user_id: string;
+      agent_id: string | null;
+      tenant_id: string;
+      provider: string;
+      template_id: string | null;
+      status: string;
+      created_at: string;
+      last_active_at: string;
+      paused_at: string | null;
+      stopped_at: string | null;
+      ttl_minutes: number;
+      expires_at: string | null;
+      uptime_seconds: number;
+    }>;
+  }> {
+    return await this.call('sandbox_list', {});
+  }
+
+  // Sandbox API - Get sandbox status
+  async sandboxStatus(sandbox_id: string): Promise<{
+    sandbox_id: string;
+    name: string;
+    user_id: string;
+    agent_id: string | null;
+    tenant_id: string;
+    provider: string;
+    template_id: string | null;
+    status: string;
+    created_at: string;
+    last_active_at: string;
+    paused_at: string | null;
+    stopped_at: string | null;
+    ttl_minutes: number;
+    expires_at: string | null;
+    uptime_seconds: number;
+  }> {
+    return await this.call('sandbox_status', { sandbox_id });
+  }
+
+  // Sandbox API - Run code in sandbox
+  async sandboxRun(params: {
+    sandbox_id: string;
+    language: string;
+    code: string;
+    timeout?: number;
+  }): Promise<{
+    stdout: string;
+    stderr: string;
+    exit_code: number;
+    execution_time: number;
+  }> {
+    return await this.call('sandbox_run', params);
+  }
+
+  // Sandbox API - Pause sandbox
+  async sandboxPause(sandbox_id: string): Promise<{
+    sandbox_id: string;
+    name: string;
+    status: string;
+    paused_at: string;
+  }> {
+    return await this.call('sandbox_pause', { sandbox_id });
+  }
+
+  // Sandbox API - Resume sandbox
+  async sandboxResume(sandbox_id: string): Promise<{
+    sandbox_id: string;
+    name: string;
+    status: string;
+    last_active_at: string;
+  }> {
+    return await this.call('sandbox_resume', { sandbox_id });
+  }
+
+  // Sandbox API - Stop sandbox
+  async sandboxStop(sandbox_id: string): Promise<{
+    sandbox_id: string;
+    name: string;
+    status: string;
+    stopped_at: string;
+  }> {
+    return await this.call('sandbox_stop', { sandbox_id });
   }
 
   // ReBAC API - Create a relationship tuple
