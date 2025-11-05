@@ -16,15 +16,24 @@ interface AuthContextType {
   login: (apiKey: string) => Promise<UserInfo>;
   logout: () => void;
   apiClient: NexusAPIClient;
+  updateConnection: (apiUrl: string, apiKey: string) => Promise<UserInfo>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_KEY_STORAGE_KEY = 'nexus_api_key';
 const USER_INFO_STORAGE_KEY = 'nexus_user_info';
+const API_URL_STORAGE_KEY = 'nexus_api_url';
 
-// Get API URL from environment
+// Get API URL from localStorage or environment
 const getApiURL = () => {
+  // First try localStorage (user-configured URL)
+  const storedUrl = localStorage.getItem(API_URL_STORAGE_KEY);
+  if (storedUrl) {
+    return storedUrl;
+  }
+
+  // Fall back to environment variable
   const apiURL =
     (import.meta as any).env.VITE_API_URL !== undefined && (import.meta as any).env.VITE_API_URL !== '' ? (import.meta as any).env.VITE_API_URL : ''; // Empty string means use same origin (Vite proxy in dev)
   return apiURL;
@@ -94,6 +103,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateConnection = async (newApiUrl: string, newApiKey: string): Promise<UserInfo> => {
+    // Create a temporary client with the new settings
+    const tempClient = new NexusAPIClient(newApiUrl || undefined, newApiKey || undefined);
+
+    // Validate the connection by calling whoami
+    const whoamiResponse = await tempClient.whoami();
+
+    if (!whoamiResponse.authenticated) {
+      throw new Error('Authentication failed');
+    }
+
+    // Extract user info
+    const newUserInfo: UserInfo = {
+      subject_type: whoamiResponse.subject_type,
+      subject_id: whoamiResponse.subject_id,
+      tenant_id: whoamiResponse.tenant_id,
+      is_admin: whoamiResponse.is_admin,
+      user: whoamiResponse.user,
+    };
+
+    // Store API URL, API key, and user info
+    localStorage.setItem(API_URL_STORAGE_KEY, newApiUrl);
+    localStorage.setItem(API_KEY_STORAGE_KEY, newApiKey);
+    localStorage.setItem(USER_INFO_STORAGE_KEY, JSON.stringify(newUserInfo));
+
+    // Update state
+    setApiKey(newApiKey);
+    setUserInfo(newUserInfo);
+    // API client will be updated by the useEffect
+
+    return newUserInfo;
+  };
+
   const value: AuthContextType = {
     apiKey,
     isAuthenticated: !!apiKey,
@@ -101,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     apiClient,
+    updateConnection,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -15,4 +15,8 @@ export interface ChatConfig {
   threadId?: string;
   userId?: string;
   tenantId?: string;
+  sandboxId?: string;
+  sandboxStatus?: 'running' | 'paused' | 'stopped' | 'unknown';
+  sandboxProvider?: string;
+  sandboxExpiresAt?: string;
 }
