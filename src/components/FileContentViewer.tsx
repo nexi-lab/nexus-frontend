@@ -6,6 +6,7 @@ import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { useDeleteFile, useFileContent, useUpdateFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
+import ExcelViewer from './ExcelViewer';
 import { FileVersionHistoryDialog } from './FileVersionHistoryDialog';
 import { PDFViewer } from './PDFViewer';
 import { Button } from './ui/button';
@@ -378,35 +379,36 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         // If we have parsed markdown content, show that instead
         if (parsedMdContent && !parsedMdError) {
           return (
-            <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  table: ({ node: _node, ...props }) => (
-                    <div
-                      style={{
-                        overflowX: 'auto',
-                        overflowY: 'auto',
-                        maxHeight: '70vh',
-                        border: '2px solid #3b82f6',
-                        borderRadius: '8px',
-                        padding: '1rem',
-                        background: 'white',
-                        marginBottom: '1rem',
-                      }}
-                    >
-                      <table {...props} style={{ width: 'max-content', minWidth: '100%' }} />
-                    </div>
-                  ),
-                  th: ({ node: _node, ...props }) => (
-                    <th {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem', background: '#f9fafb', fontWeight: 600 }} />
-                  ),
-                  td: ({ node: _node, ...props }) => <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />,
-                }}
-              >
-                {parsedMdContent}
-              </ReactMarkdown>
-            </div>
+            <ExcelViewer contentBytes={contentBytes} />
+            // <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
+            //   <ReactMarkdown
+            //     remarkPlugins={[remarkGfm]}
+            //     components={{
+            //       table: ({ node: _node, ...props }) => (
+            //         <div
+            //           style={{
+            //             overflowX: 'auto',
+            //             overflowY: 'auto',
+            //             maxHeight: '70vh',
+            //             border: '2px solid #3b82f6',
+            //             borderRadius: '8px',
+            //             padding: '1rem',
+            //             background: 'white',
+            //             marginBottom: '1rem',
+            //           }}
+            //         >
+            //           <table {...props} style={{ width: 'max-content', minWidth: '100%' }} />
+            //         </div>
+            //       ),
+            //       th: ({ node: _node, ...props }) => (
+            //         <th {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem', background: '#f9fafb', fontWeight: 600 }} />
+            //       ),
+            //       td: ({ node: _node, ...props }) => <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />,
+            //     }}
+            //   >
+            //     {parsedMdContent}
+            //   </ReactMarkdown>
+            // </div>
           );
         }
 
