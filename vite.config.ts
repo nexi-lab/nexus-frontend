@@ -13,19 +13,19 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    allowedHosts: ['.ngrok.io', '.ngrok-free.app', 'localhost'],
+    allowedHosts: ['localhost'],
     proxy: {
       '/api': {
-        // target: 'https://nexus.nexilab.co',
-        target: 'https://nexus-dev.nexilab.co',
+        // For Docker development, proxy to local Nexus server
+        // For production deployment, change to: 'https://nexus-dev.nexilab.co'
+        target: process.env.VITE_NEXUS_API_URL || 'http://localhost:8080',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
       '/health': {
-        // target: 'https://nexus.nexilab.co',
-        target: 'https://nexus-dev.nexilab.co',
+        target: process.env.VITE_NEXUS_API_URL || 'http://localhost:8080',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },

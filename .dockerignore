@@ -1,0 +1,29 @@
+# Ignore local environment files that shouldn't be in Docker builds
+.env.local
+.env.*.local
+.env.production.local
+
+# Node modules (will be installed via npm ci)
+node_modules
+
+# Build outputs
+dist
+.vite
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
