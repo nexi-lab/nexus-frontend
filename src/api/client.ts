@@ -509,7 +509,16 @@ class NexusAPIClient {
   }
 
   // Memory API - Store a memory record
-  async storeMemory(params: { content: string; scope?: string; memory_type?: string; importance?: number }): Promise<{ memory_id: string }> {
+  async storeMemory(params: {
+    content: string;
+    scope?: string;
+    memory_type?: string;
+    importance?: number;
+    namespace?: string;
+    path_key?: string;
+    state?: string;
+    tags?: string[];
+  }): Promise<{ memory_id: string }> {
     return await this.call('store_memory', params);
   }
 
@@ -533,7 +542,7 @@ class NexusAPIClient {
   }
 
   // Memory API - Query memory records
-  async queryMemoryRecords(params?: { scope?: string; memory_type?: string; limit?: number }): Promise<{
+  async queryMemoryRecords(params?: { scope?: string; memory_type?: string; state?: string | null; limit?: number }): Promise<{
     memories: Array<{
       memory_id: string;
       content: string;
@@ -545,11 +554,52 @@ class NexusAPIClient {
       visibility: string;
       memory_type: string | null;
       importance: number | null;
+      state: string | null;
+      namespace: string | null;
+      path_key: string | null;
       created_at: string | null;
       updated_at: string | null;
     }>;
   }> {
     return await this.call('query_memories', params || {});
+  }
+
+  // Memory API - Delete a memory record
+  async deleteMemory(memory_id: string): Promise<{ deleted: boolean }> {
+    return await this.call('delete_memory', { memory_id });
+  }
+
+  // Memory API - Approve/activate a memory record
+  async approveMemory(memory_id: string): Promise<{ approved: boolean }> {
+    return await this.call('approve_memory', { memory_id });
+  }
+
+  // Memory API - Deactivate a memory record
+  async deactivateMemory(memory_id: string): Promise<{ deactivated: boolean }> {
+    return await this.call('deactivate_memory', { memory_id });
+  }
+
+  // Memory API - Update a memory record
+  async updateMemory(params: { memory_id: string; content?: string; importance?: number }): Promise<{
+    memory: {
+      memory_id: string;
+      content: string;
+      content_hash: string;
+      tenant_id: string | null;
+      user_id: string | null;
+      agent_id: string | null;
+      scope: string;
+      visibility: string;
+      memory_type: string | null;
+      importance: number | null;
+      state: string | null;
+      namespace: string | null;
+      path_key: string | null;
+      created_at: string | null;
+      updated_at: string | null;
+    };
+  }> {
+    return await this.call('update_memory', params);
   }
 }
 
