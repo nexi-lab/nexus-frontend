@@ -318,7 +318,7 @@ export function FileBrowser() {
             <>
               <PanelResizeHandle className="w-1 bg-border hover:bg-blue-500 transition-colors" />
               <Panel defaultSize={30} minSize={20} maxSize={50}>
-                <ChatPanel isOpen={chatPanelOpen} onClose={() => setChatPanelOpen(false)} initialSelectedAgentId={initialSelectedAgentId} />
+                <ChatPanel isOpen={chatPanelOpen} onClose={() => setChatPanelOpen(false)} initialSelectedAgentId={initialSelectedAgentId} openedFilePath={selectedFile?.path} />
               </Panel>
             </>
           )}

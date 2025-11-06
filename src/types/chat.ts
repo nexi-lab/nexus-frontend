@@ -19,4 +19,5 @@ export interface ChatConfig {
   sandboxStatus?: 'running' | 'paused' | 'stopped' | 'unknown';
   sandboxProvider?: string;
   sandboxExpiresAt?: string;
+  openedFilePath?: string; // Currently opened file path in the editor
 }
