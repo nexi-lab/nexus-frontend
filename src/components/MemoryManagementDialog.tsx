@@ -1,4 +1,4 @@
-import { Brain, Calendar, Edit, Plus, Trash2 } from 'lucide-react';
+import { Brain, Calendar, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { StoreMemoryDialog } from './StoreMemoryDialog';
@@ -61,12 +61,12 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
   const [storeMemoryDialogOpen, setStoreMemoryDialogOpen] = useState(false);
   const [selectedNamespace, setSelectedNamespace] = useState<string | null>(null);
 
-  // Edit memory dialog state
-  const [editMemoryDialogOpen, setEditMemoryDialogOpen] = useState(false);
-  const [editingMemory, setEditingMemory] = useState<StoredMemory | null>(null);
-  const [editContent, setEditContent] = useState('');
-  const [editImportance, setEditImportance] = useState(0.5);
-  const [isUpdating, setIsUpdating] = useState(false);
+  // Edit memory dialog state - Disabled until backend update_memory is fully implemented
+  // const [editMemoryDialogOpen, setEditMemoryDialogOpen] = useState(false);
+  // const [editingMemory, setEditingMemory] = useState<StoredMemory | null>(null);
+  // const [editContent, setEditContent] = useState('');
+  // const [editImportance, setEditImportance] = useState(0.5);
+  // const [isUpdating, setIsUpdating] = useState(false);
 
   // Create memory state
   const [path, setPath] = useState('');
@@ -220,6 +220,8 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
     }
   };
 
+  // Edit handlers - Disabled until backend update_memory is fully implemented
+  /*
   const handleOpenEditMemory = (memory: StoredMemory) => {
     setEditingMemory(memory);
     setEditContent(memory.content);
@@ -264,6 +266,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
     setEditingMemory(null);
     setStoredMemoryError(null);
   };
+  */
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -491,6 +494,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
                               />
                             </button>
                           </div>
+                          {/* Edit functionality disabled - backend update_memory not fully implemented
                           <Button
                             variant="ghost"
                             size="sm"
@@ -499,6 +503,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          */}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -739,7 +744,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
         }}
       />
 
-      {/* Edit Memory Dialog */}
+      {/* Edit Memory Dialog - Disabled until backend update_memory is fully implemented
       <Dialog open={editMemoryDialogOpen} onOpenChange={handleCloseEditDialog}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -752,17 +757,14 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
 
           <form onSubmit={handleUpdateMemory}>
             <div className="space-y-4">
-              {/* Error Message */}
               {storedMemoryError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{storedMemoryError}</div>}
 
-              {/* Memory ID */}
               {editingMemory && (
                 <div className="text-xs text-muted-foreground font-mono bg-muted px-3 py-2 rounded">
                   ID: {editingMemory.memory_id}
                 </div>
               )}
 
-              {/* Memory Content */}
               <div className="space-y-2">
                 <label htmlFor="edit-memory-content" className="text-sm font-medium">
                   Memory Content *
@@ -779,7 +781,6 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
                 <p className="text-xs text-muted-foreground">Update the content of this memory record</p>
               </div>
 
-              {/* Importance Slider */}
               <div className="space-y-2">
                 <label htmlFor="edit-importance" className="text-sm font-medium">
                   Importance: {editImportance.toFixed(2)}
@@ -810,6 +811,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
           </form>
         </DialogContent>
       </Dialog>
+      */}
     </Dialog>
   );
 }
