@@ -145,13 +145,6 @@ export function AgentManagementDialog({
   }
 
   const handleStartSandbox = async (agentId: string) => {
-    // Get user_id
-    const userId = userInfo?.user || userInfo?.subject_id
-    if (!userId) {
-      setAgentError('Unable to determine user ID. Please log in again.')
-      return
-    }
-
     // Check if Nexus is connected first
     const currentConnection = sandboxConnections[agentId]
     if (currentConnection?.nexusStatus !== 'connected') {
@@ -169,78 +162,33 @@ export function AgentManagementDialog({
     }))
 
     try {
-      // Step 1: Check if sandbox exists with name <user_id>,<agent_id>
-      const sandboxName = agentId // Already in format <user_id>,<agent_id>
-      const sandboxResponse = await apiClient.sandboxList()
-      // Search by name only (names are unique per user)
-      let existingSandbox = sandboxResponse.sandboxes.find(sb => sb.name === sandboxName)
+      // Use get_or_create pattern with status verification
+      const sandboxName = agentId
 
-      let sandboxId: string | undefined = undefined
-      let needsNewSandbox = !existingSandbox
-      let sandboxProvider: string | undefined = undefined
+      // Select provider based on whether Nexus is running locally
+      const baseURL = apiClient.getBaseURL()
+      const isLocalhost = baseURL.includes('localhost') || baseURL.includes('127.0.0.1')
+      const provider = isLocalhost ? 'docker' : 'e2b'
 
-      // Check if existing sandbox is expired
-      if (existingSandbox) {
-        if (existingSandbox.expires_at) {
-          const expiresAt = new Date(existingSandbox.expires_at)
-          const now = new Date()
-          if (expiresAt <= now) {
-            console.log(`Existing sandbox ${existingSandbox.sandbox_id} has expired (${existingSandbox.expires_at}), stopping it...`)
-            try {
-              await apiClient.sandboxStop(existingSandbox.sandbox_id)
-              console.log(`Stopped expired sandbox ${existingSandbox.sandbox_id}`)
-            } catch (stopErr) {
-              console.warn(`Failed to stop expired sandbox: ${stopErr}`)
-              // Continue anyway - we'll create a new one
-            }
-            needsNewSandbox = true
-          } else {
-            // Not expired, use it
-            sandboxId = existingSandbox.sandbox_id
-            sandboxProvider = existingSandbox.provider
-            console.log(`Found existing sandbox: ${sandboxId} (expires at ${existingSandbox.expires_at})`)
-          }
-        } else {
-          // No expiration time, use it
-          sandboxId = existingSandbox.sandbox_id
-          sandboxProvider = existingSandbox.provider
-          console.log(`Found existing sandbox: ${sandboxId} (no expiration)`)
-        }
-      }
+      console.log(`Getting or creating sandbox with name: ${sandboxName}, provider: ${provider}`)
 
-      if (needsNewSandbox) {
-        // Step 2: Create new sandbox (or handle if it already exists)
-        try {
-          console.log(`Creating new sandbox with name: ${sandboxName}`)
+      // Get or create sandbox with status verification
+      const sandbox = await apiClient.sandboxGetOrCreate({
+        name: sandboxName,
+        ttl_minutes: 60,
+        provider,
+        verify_status: true  // Verify status with provider
+      })
 
-          // Select provider based on whether Nexus is running locally
-          const baseURL = apiClient.getBaseURL()
-          const isLocalhost = baseURL.includes('localhost') || baseURL.includes('127.0.0.1')
-          const provider = isLocalhost ? 'docker' : 'e2b'
+      const sandboxId = sandbox.sandbox_id
+      console.log(`Got sandbox: ${sandboxId}`)
 
-          console.log(`Using sandbox provider: ${provider} (baseURL: ${baseURL}, isLocalhost: ${isLocalhost})`)
-
-          const newSandbox = await apiClient.sandboxCreate({
-            name: sandboxName,
-            ttl_minutes: 60, // 1 hour TTL
-            provider, // Use Docker for localhost, E2B for remote
-          })
-          sandboxId = newSandbox.sandbox_id
-          sandboxProvider = provider
-          console.log(`Created sandbox: ${sandboxId}`)
-        } catch (createErr) {
-          // Creation failed, throw error
-          throw createErr
-        }
-      }
-
-      // Step 3: Connect and mount Nexus filesystem in the sandbox
+      // Mount Nexus filesystem in the sandbox
       try {
         console.log(`Mounting Nexus in sandbox ${sandboxId}...`)
-
         const mountResult = await apiClient.sandboxConnect({
-          sandbox_id: sandboxId!,
-          provider: sandboxProvider,
+          sandbox_id: sandboxId,
+          provider: sandbox.provider,
           mount_path: '/mnt/nexus',
           nexus_url: apiClient.getBaseURL(),
           nexus_api_key: apiKey || undefined,
@@ -254,7 +202,6 @@ export function AgentManagementDialog({
       } catch (mountErr) {
         console.error('Failed to mount Nexus:', mountErr)
         // Don't fail the entire operation if mount fails
-        // The sandbox is still created and can be used
       }
 
       // Success
@@ -266,15 +213,15 @@ export function AgentManagementDialog({
           sandbox_id: sandboxId
         }
       }))
-      console.log(`Successfully created/found sandbox ${sandboxId}`)
+      console.log(`Successfully got/created sandbox ${sandboxId}`)
     } catch (err) {
-      console.error('Failed to start sandbox:', err)
+      console.error('Failed to get/create sandbox:', err)
       setSandboxConnections(prev => ({
         ...prev,
         [agentId]: {
           sandboxStatus: 'error',
           nexusStatus: prev[agentId]?.nexusStatus || 'disconnected',
-          error: err instanceof Error ? err.message : 'Failed to start sandbox'
+          error: err instanceof Error ? err.message : 'Failed to get/create sandbox'
         }
       }))
     }

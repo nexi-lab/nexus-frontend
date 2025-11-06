@@ -477,7 +477,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
       // Check if agent has a sandbox (name matches agent_id)
       let sandboxId: string | undefined
       try {
-        const sandboxResponse = await apiClient.sandboxList()
+        const sandboxResponse = await apiClient.sandboxList({ verify_status: true, status: 'active' })
         console.log('[ChatPanel] All sandboxes from API:', {
           count: sandboxResponse.sandboxes.length,
           sandboxes: sandboxResponse.sandboxes.map(sb => ({
@@ -647,7 +647,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
 
     const checkSandboxStatus = async () => {
       try {
-        const sandboxResponse = await apiClient.sandboxList()
+        const sandboxResponse = await apiClient.sandboxList({ verify_status: true, status: 'active' })
         const agentSandbox = sandboxResponse.sandboxes.find(sb => sb.name === selectedAgentId)
 
         if (agentSandbox) {

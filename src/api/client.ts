@@ -319,7 +319,13 @@ class NexusAPIClient {
   }
 
   // Sandbox API - List sandboxes
-  async sandboxList(): Promise<{
+  async sandboxList(params?: {
+    verify_status?: boolean;
+    user_id?: string;
+    tenant_id?: string;
+    agent_id?: string;
+    status?: string;
+  }): Promise<{
     sandboxes: Array<{
       sandbox_id: string;
       name: string;
@@ -336,9 +342,11 @@ class NexusAPIClient {
       ttl_minutes: number;
       expires_at: string | null;
       uptime_seconds: number;
+      verified?: boolean;
+      provider_status?: string;
     }>;
   }> {
-    return await this.call('sandbox_list', {});
+    return await this.call('sandbox_list', params || {});
   }
 
   // Sandbox API - Get sandbox status
@@ -405,6 +413,30 @@ class NexusAPIClient {
     stopped_at: string;
   }> {
     return await this.call('sandbox_stop', { sandbox_id });
+  }
+
+  // Sandbox API - Get or create sandbox
+  async sandboxGetOrCreate(params: {
+    name: string;
+    ttl_minutes?: number;
+    provider?: string;
+    template_id?: string;
+    verify_status?: boolean;
+  }): Promise<{
+    sandbox_id: string;
+    name: string;
+    user_id: string;
+    agent_id: string | null;
+    tenant_id: string;
+    provider: string;
+    template_id: string | null;
+    status: string;
+    created_at: string;
+    last_active_at: string;
+    ttl_minutes: number;
+    expires_at: string | null;
+  }> {
+    return await this.call('sandbox_get_or_create', params);
   }
 
   // ReBAC API - Create a relationship tuple
