@@ -26,6 +26,7 @@ interface ChatPanelProps {
   isOpen: boolean
   onClose: () => void
   initialSelectedAgentId?: string
+  openedFilePath?: string
 }
 
 interface Agent {
@@ -382,7 +383,7 @@ function ChatPanelContent({
   )
 }
 
-export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanelProps) {
+export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFilePath }: ChatPanelProps) {
   const { apiKey, userInfo, apiClient, isAuthenticated } = useAuth()
   const filesAPI = createFilesAPI(apiClient)
   const registerAgentMutation = useRegisterAgent()
@@ -397,6 +398,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
     threadId: undefined, // Start with no thread
     userId: userInfo?.subject_id || '',
     tenantId: userInfo?.tenant_id || '',
+    openedFilePath: openedFilePath, // Currently opened file path
   })
   const [showConfig, setShowConfig] = useState(false)
   const [chatKey, setChatKey] = useState(0) // Key to force recreation
@@ -638,6 +640,14 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId }: ChatPanel
       tenantId: userInfo?.tenant_id || prev.tenantId,
     }))
   }, [apiKey, userInfo])
+
+  // Update config when opened file changes
+  useEffect(() => {
+    setConfig(prev => ({
+      ...prev,
+      openedFilePath: openedFilePath,
+    }))
+  }, [openedFilePath])
 
   // Poll sandbox status periodically if sandbox exists
   useEffect(() => {
