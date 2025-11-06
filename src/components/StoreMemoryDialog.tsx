@@ -1,4 +1,4 @@
-import { Brain } from 'lucide-react';
+import { Brain, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
@@ -8,29 +8,49 @@ import { Textarea } from './ui/textarea';
 interface StoreMemoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialNamespace?: string | null;
+  onRegisterMemory?: () => void;
 }
 
-export function StoreMemoryDialog({ open, onOpenChange }: StoreMemoryDialogProps) {
+export function StoreMemoryDialog({ open, onOpenChange, initialNamespace, onRegisterMemory }: StoreMemoryDialogProps) {
   const { userInfo, apiClient } = useAuth();
 
   // Form state
-  const [content, setContent] = useState('');
+  const [namespace, setNamespace] = useState<string>('');
   const [scope, setScope] = useState<'agent' | 'user' | 'tenant' | 'global'>('user');
-  const [memoryType, setMemoryType] = useState<string>('fact');
+  const [content, setContent] = useState('');
   const [importance, setImportance] = useState<number>(0.5);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [agents, setAgents] = useState<Array<{ agent_id: string; name: string }>>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
+
+  // Registered memories (namespaces)
+  const [registeredMemories, setRegisteredMemories] = useState<Array<{ path: string; name: string | null }>>([]);
+  const [loadingMemories, setLoadingMemories] = useState(false);
+
   const [isStoring, setIsStoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Load agents when dialog opens
+  // Load agents and registered memories when dialog opens
   useEffect(() => {
     if (open) {
       loadAgents();
+      loadRegisteredMemories();
+
+      // Set initial namespace if provided
+      if (initialNamespace) {
+        // Strip /memory/{user_id}/ prefix to get the namespace
+        const userId = userInfo?.user || userInfo?.subject_id;
+        const prefix = `/memory/${userId}/`;
+        if (initialNamespace.startsWith(prefix)) {
+          setNamespace(initialNamespace.substring(prefix.length));
+        } else {
+          setNamespace(initialNamespace);
+        }
+      }
     }
-  }, [open]);
+  }, [open, initialNamespace, userInfo]);
 
   const loadAgents = async () => {
     setLoadingAgents(true);
@@ -51,10 +71,33 @@ export function StoreMemoryDialog({ open, onOpenChange }: StoreMemoryDialogProps
     }
   };
 
+  const loadRegisteredMemories = async () => {
+    setLoadingMemories(true);
+    try {
+      const memoryList = await apiClient.listRegisteredMemories();
+
+      // Filter to only show user's memories
+      const userId = userInfo?.user || userInfo?.subject_id;
+      const userMemories = memoryList.filter((mem) => mem.metadata?.user_id === userId);
+
+      setRegisteredMemories(userMemories);
+    } catch (err) {
+      console.error('Failed to load registered memories:', err);
+      setRegisteredMemories([]);
+    } finally {
+      setLoadingMemories(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (!namespace.trim()) {
+      setError('Namespace is required');
+      return;
+    }
 
     if (!content.trim()) {
       setError('Memory content is required');
@@ -70,11 +113,16 @@ export function StoreMemoryDialog({ open, onOpenChange }: StoreMemoryDialogProps
     setIsStoring(true);
 
     try {
+      // Add /memory/{user_id}/ prefix to namespace
+      const userId = userInfo?.user || userInfo?.subject_id;
+      const fullNamespace = `/memory/${userId}/${namespace.trim()}`;
+
       const result = await apiClient.storeMemory({
         content: content.trim(),
         scope: scope,
-        memory_type: memoryType,
         importance: importance,
+        namespace: fullNamespace,
+        state: 'active',
       });
 
       setSuccess(`Memory stored successfully! ID: ${result.memory_id}`);
@@ -93,9 +141,9 @@ export function StoreMemoryDialog({ open, onOpenChange }: StoreMemoryDialogProps
   };
 
   const resetForm = () => {
-    setContent('');
+    setNamespace('');
     setScope('user');
-    setMemoryType('fact');
+    setContent('');
     setImportance(0.5);
     setSelectedAgentId('');
     setError(null);
@@ -126,21 +174,57 @@ export function StoreMemoryDialog({ open, onOpenChange }: StoreMemoryDialogProps
             {/* Error Message */}
             {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{error}</div>}
 
-            {/* Memory Content */}
+            {/* Namespace */}
             <div className="space-y-2">
-              <label htmlFor="memory-content" className="text-sm font-medium">
-                Memory Content *
+              <label htmlFor="namespace" className="text-sm font-medium">
+                Namespace *
               </label>
-              <Textarea
-                id="memory-content"
-                placeholder="Enter memory content (e.g., 'User prefers dark mode', 'Meeting scheduled for Monday 3pm')"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                disabled={isStoring}
-                rows={4}
-                className="resize-none"
-              />
-              <p className="text-xs text-muted-foreground">The actual content/data to store in this memory record</p>
+              {loadingMemories ? (
+                <div className="text-sm text-muted-foreground">Loading namespaces...</div>
+              ) : registeredMemories.length === 0 ? (
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-destructive flex-1">No registered memory namespaces. Please register a namespace first.</div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Close this dialog and notify parent to switch to register tab
+                      handleClose();
+                      if (onRegisterMemory) {
+                        onRegisterMemory();
+                      }
+                    }}
+                    title="Register Memory Namespace"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <select
+                  id="namespace"
+                  value={namespace}
+                  onChange={(e) => setNamespace(e.target.value)}
+                  disabled={isStoring}
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                >
+                  <option value="">-- Select a namespace --</option>
+                  {registeredMemories.map((memory) => {
+                    // Strip /memory/{user_id}/ prefix to show just the namespace
+                    const userId = userInfo?.user || userInfo?.subject_id;
+                    const prefix = `/memory/${userId}/`;
+                    const namespacePath = memory.path.startsWith(prefix) ? memory.path.substring(prefix.length) : memory.path;
+                    const displayName = memory.name || namespacePath;
+
+                    return (
+                      <option key={memory.path} value={namespacePath}>
+                        {displayName}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+              <p className="text-xs text-muted-foreground">Select the namespace to organize this memory</p>
             </div>
 
             {/* Scope */}
@@ -197,25 +281,21 @@ export function StoreMemoryDialog({ open, onOpenChange }: StoreMemoryDialogProps
               </div>
             )}
 
-            {/* Memory Type */}
+            {/* Memory Content */}
             <div className="space-y-2">
-              <label htmlFor="memory-type" className="text-sm font-medium">
-                Memory Type
+              <label htmlFor="memory-content" className="text-sm font-medium">
+                Memory Content *
               </label>
-              <select
-                id="memory-type"
-                value={memoryType}
-                onChange={(e) => setMemoryType(e.target.value)}
+              <Textarea
+                id="memory-content"
+                placeholder="Enter memory content (e.g., 'User prefers dark mode', 'Meeting scheduled for Monday 3pm')"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
                 disabled={isStoring}
-                className="w-full px-3 py-2 border rounded-md bg-background"
-              >
-                <option value="fact">Fact - Known fact or information</option>
-                <option value="preference">Preference - User/agent preference</option>
-                <option value="experience">Experience - Past experience or event</option>
-                <option value="strategy">Strategy - Problem-solving approach</option>
-                <option value="observation">Observation - Observed pattern</option>
-                <option value="reflection">Reflection - Self-reflection note</option>
-              </select>
+                rows={4}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">The actual content/data to store in this memory record</p>
             </div>
 
             {/* Importance Slider */}
