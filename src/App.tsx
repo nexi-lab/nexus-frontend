@@ -20,12 +20,12 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <Toaster
-        theme={theme}
+        theme={resolvedTheme}
         position="top-center"
         richColors
         toastOptions={{
