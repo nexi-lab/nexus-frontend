@@ -20,6 +20,7 @@ import { ManagePermissionsDialog } from './ManagePermissionsDialog';
 import { MemoryManagementDialog } from './MemoryManagementDialog';
 import { RenameDialog } from './RenameDialog';
 import { StoreMemoryDialog } from './StoreMemoryDialog';
+import { ThemeToggle } from './ThemeToggle';
 import { Button } from './ui/button';
 import { WorkspaceManagementDialog } from './WorkspaceManagementDialog';
 
@@ -269,6 +270,7 @@ export function FileBrowser() {
             ) : (
               <Button onClick={() => setLoginDialogOpen(true)}>Login</Button>
             )}
+            <ThemeToggle />
             <Button variant="ghost" size="icon" asChild>
               <a href="https://github.com/nexi-lab/nexus" target="_blank" rel="noopener noreferrer" aria-label="View on GitHub">
                 <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
