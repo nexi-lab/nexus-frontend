@@ -35,7 +35,9 @@ const getApiURL = () => {
 
   // Fall back to environment variable
   const apiURL =
-    (import.meta as any).env.VITE_API_URL !== undefined && (import.meta as any).env.VITE_API_URL !== '' ? (import.meta as any).env.VITE_API_URL : ''; // Empty string means use same origin (Vite proxy in dev)
+    (import.meta as any).env.VITE_NEXUS_API_URL !== undefined && (import.meta as any).env.VITE_NEXUS_API_URL !== ''
+      ? (import.meta as any).env.VITE_NEXUS_API_URL
+      : 'http://localhost:8080'; // Default to localhost:8080 if not configured
   return apiURL;
 };
 

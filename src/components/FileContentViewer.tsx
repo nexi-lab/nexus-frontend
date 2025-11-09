@@ -446,7 +446,17 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         );
 
       case 'text':
-        return null;
+        if (isEditing) {
+          return (
+            <Textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="h-full font-mono text-sm resize-none"
+              placeholder="Enter text content..."
+            />
+          );
+        }
+        return <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono whitespace-pre-wrap">{content}</pre>;
       default:
         if (isEditing) {
           return (
