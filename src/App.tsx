@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { FileBrowser } from './components/FileBrowser';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AdminSettings } from './pages/AdminSettings';
 import './index.css';
 import { Toaster } from 'sonner';
@@ -18,11 +19,13 @@ const queryClient = new QueryClient({
   },
 });
 
-function App() {
+function AppContent() {
+  const { resolvedTheme } = useTheme();
+
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <Toaster
-        theme="light"
+        theme={resolvedTheme}
         position="top-center"
         richColors
         toastOptions={{
@@ -42,6 +45,14 @@ function App() {
         </QueryClientProvider>
       </AuthProvider>
     </GoogleOAuthProvider>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 
