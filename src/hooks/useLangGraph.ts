@@ -57,10 +57,16 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     });
   };
 
+  const getThreads = async () => {
+    const threads = await stream.client.threads.search();
+    return threads;
+  };
+
   return {
     messages: stream.messages,
     isLoading: stream.isLoading,
     submit: submitWithMetadata,
+    getThreads: getThreads,
     threadId: options.threadId || null, // Return what we passed in
     client: (stream as any).client, // Expose client for thread creation
   };

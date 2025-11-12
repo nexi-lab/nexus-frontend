@@ -18,7 +18,8 @@ export default defineConfig({
       '/api': {
         // For Docker development, proxy to local Nexus server
         // For production deployment, change to: 'https://nexus-dev.nexilab.co'
-        target: process.env.VITE_NEXUS_API_URL || 'https://nexus-dev.nexilab.co',
+        // target: process.env.VITE_NEXUS_API_URL || 'https://nexus-dev.nexilab.co',
+        target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
       },
