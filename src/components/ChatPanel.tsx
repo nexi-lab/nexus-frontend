@@ -1,4 +1,4 @@
-import type { Message } from '@langchain/langgraph-sdk';
+import type { Message, Thread } from '@langchain/langgraph-sdk';
 import { Bot, Box, ChevronDown, ChevronUp, History, Info, Loader2, Plus, Send, Settings, Wifi, WifiOff, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -11,6 +11,7 @@ import { useLangGraph } from '../hooks/useLangGraph';
 import type { ChatConfig } from '../types/chat';
 import { AgentManagementDialog } from './AgentManagementDialog';
 import { ConnectionManagementDialog } from './ConnectionManagementDialog';
+import ThreadsHistoryPanel from './ThreadsHistoryPanel';
 import { ToolCalls } from './ToolCalls';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
@@ -236,6 +237,7 @@ function ChatPanelContent({
       {
         metadata: {
           unique_id: getUniqueId(),
+          selectedAgentId,
         },
       },
     );
@@ -369,7 +371,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   const [agentManagementDialogOpen, setAgentManagementDialogOpen] = useState(false);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [sandboxDialogOpen, setSandboxDialogOpen] = useState(false);
-  const stream = useLangGraph(config);
+  const [isOpenHistory, setIsOpenHistory] = useState(false);
 
   // Load agents when panel opens
   useEffect(() => {
@@ -761,14 +763,19 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   };
 
   const onOpenHistory = () => {
-    console.log('Open history clicked');
-    stream.getThreads();
+    setIsOpenHistory(true);
+  };
+
+  const onThreadClick = (thread: Thread<any>) => {
+    setSelectedAgentId(thread.metadata?.selectedAgentId as string);
+    setConfig((prev) => ({ ...prev, threadId: thread.thread_id }));
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="flex flex-col h-full border-l bg-background">
+    <div className="flex flex-col h-full border-l bg-background relative">
+      {isOpenHistory && <ThreadsHistoryPanel isOpen={isOpenHistory} onClose={() => setIsOpenHistory(false)} config={config} onThreadClick={onThreadClick} />}
       {/* Header with Agent Selector and Controls */}
       <div className="flex flex-col gap-3 p-4 border-b">
         {/* Title and Controls */}
