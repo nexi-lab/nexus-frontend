@@ -3,6 +3,7 @@ import { Bot, Box, ChevronDown, ChevronUp, History, Info, Loader2, Plus, Send, S
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getUniqueId } from '@/utils';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { useRegisterAgent } from '../hooks/useFiles';
@@ -118,6 +119,9 @@ function ChatPanelContent({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevMessageLength = useRef(0);
+  const state = useRef({
+    isCreatingThread: false,
+  });
 
   console.log('[ChatPanelContent] Rendering with config:', {
     sandboxId: config.sandboxId,
@@ -137,14 +141,22 @@ function ChatPanelContent({
   useEffect(() => {
     async function createThread() {
       // Only create thread if agent is selected and no thread exists
-      if (!config.threadId && stream.client && selectedAgentId) {
+      // forbid multiple thread creation at the same time
+      if (!config.threadId && stream.client && selectedAgentId && !state.current.isCreatingThread) {
+        state.current.isCreatingThread = true;
         try {
-          const thread = await stream.client.threads.create();
+          const thread = await stream.client.threads.create({
+            metadata: {
+              unique_id: getUniqueId(),
+            },
+          });
           console.log('Created thread:', thread);
           onThreadCreated(thread.thread_id);
           setMetadataCreated(false); // Reset metadata flag for new thread
         } catch (error) {
           console.error('Failed to create thread:', error);
+        } finally {
+          state.current.isCreatingThread = false;
         }
       }
     }
@@ -243,14 +255,21 @@ function ChatPanelContent({
     }
 
     // Submit message using LangGraph SDK
-    stream.submit({
-      messages: [
-        {
-          type: 'human',
-          content: messageContent,
+    stream.submit(
+      {
+        messages: [
+          {
+            type: 'human',
+            content: messageContent,
+          },
+        ],
+      },
+      {
+        metadata: {
+          unique_id: getUniqueId(),
         },
-      ],
-    });
+      },
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
