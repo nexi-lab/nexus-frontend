@@ -1,5 +1,5 @@
 import type { Message } from '@langchain/langgraph-sdk';
-import { Bot, Box, ChevronDown, ChevronUp, Info, Loader2, Plus, Send, Settings, Wifi, WifiOff, X } from 'lucide-react';
+import { Bot, Box, ChevronDown, ChevronUp, History, Info, Loader2, Plus, Send, Settings, Wifi, WifiOff, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -824,62 +824,11 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
                 <Box className="h-4 w-4 text-gray-400" />
               )}
             </Button>
-            <Dialog open={showConfig} onOpenChange={setShowConfig}>
-              <DialogTrigger>
-                <Button variant="ghost" size="icon" type="button">
-                  <Settings className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Chat Configuration</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">API URL</label>
-                    <Input
-                      placeholder="http://localhost:2024"
-                      value={config.apiUrl || ''}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, apiUrl: e.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground">Your LangGraph server URL</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Assistant ID</label>
-                    <Input
-                      placeholder="agent"
-                      value={config.assistantId || ''}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, assistantId: e.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground">The graph/assistant ID to use</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">API Key (optional)</label>
-                    <Input
-                      type="password"
-                      placeholder="sk-..."
-                      value={config.apiKey || ''}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground">Leave blank if not required</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">User ID (optional)</label>
-                    <Input placeholder="user-123" value={config.userId || ''} onChange={(e) => setConfig((prev) => ({ ...prev, userId: e.target.value }))} />
-                    <p className="text-xs text-muted-foreground">User identifier for authentication</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Tenant ID (optional)</label>
-                    <Input
-                      placeholder="tenant-123"
-                      value={config.tenantId || ''}
-                      onChange={(e) => setConfig((prev) => ({ ...prev, tenantId: e.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground">Tenant/organization identifier</p>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+            {!!selectedAgentId && (
+              <Button variant="ghost" size="icon" type="button" onClick={onOpenHistory}>
+                <History className="h-4 w-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" type="button" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
@@ -932,11 +881,6 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
             <Plus className="h-4 w-4 mr-1" />
             New
           </Button>
-          {!!selectedAgentId && (
-            <Button variant="outline" size="sm" type="button" onClick={onOpenHistory} title="New Chat">
-              History
-            </Button>
-          )}
         </div>
       </div>
 
@@ -1041,6 +985,56 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
               )}
             </DialogFooter>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Chat Configuration Dialog */}
+      <Dialog open={showConfig} onOpenChange={setShowConfig}>
+        <DialogTrigger>
+          <Button variant="ghost" size="icon" type="button">
+            <Settings className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chat Configuration</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">API URL</label>
+              <Input
+                placeholder="http://localhost:2024"
+                value={config.apiUrl || ''}
+                onChange={(e) => setConfig((prev) => ({ ...prev, apiUrl: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Your LangGraph server URL</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Assistant ID</label>
+              <Input placeholder="agent" value={config.assistantId || ''} onChange={(e) => setConfig((prev) => ({ ...prev, assistantId: e.target.value }))} />
+              <p className="text-xs text-muted-foreground">The graph/assistant ID to use</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">API Key (optional)</label>
+              <Input
+                type="password"
+                placeholder="sk-..."
+                value={config.apiKey || ''}
+                onChange={(e) => setConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Leave blank if not required</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">User ID (optional)</label>
+              <Input placeholder="user-123" value={config.userId || ''} onChange={(e) => setConfig((prev) => ({ ...prev, userId: e.target.value }))} />
+              <p className="text-xs text-muted-foreground">User identifier for authentication</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tenant ID (optional)</label>
+              <Input placeholder="tenant-123" value={config.tenantId || ''} onChange={(e) => setConfig((prev) => ({ ...prev, tenantId: e.target.value }))} />
+              <p className="text-xs text-muted-foreground">Tenant/organization identifier</p>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
