@@ -101,13 +101,11 @@ function MessageBubble({ message, allMessages }: { message: Message; allMessages
 
 function ChatPanelContent({
   config,
-  onThreadCreated,
   selectedAgentId,
   filesAPI,
   userInfo: _userInfo,
 }: {
   config: ChatConfig;
-  onThreadCreated: (threadId: string) => void;
   selectedAgentId: string;
   filesAPI: any;
   userInfo: any;
@@ -119,9 +117,6 @@ function ChatPanelContent({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevMessageLength = useRef(0);
-  const state = useRef({
-    isCreatingThread: false,
-  });
 
   console.log('[ChatPanelContent] Rendering with config:', {
     sandboxId: config.sandboxId,
@@ -136,32 +131,6 @@ function ChatPanelContent({
   const isLoading = stream.isLoading;
   const threadId = stream.threadId;
   const chatStarted = messages.length > 0;
-
-  // Create thread when component mounts (if no thread ID exists)
-  useEffect(() => {
-    async function createThread() {
-      // Only create thread if agent is selected and no thread exists
-      // forbid multiple thread creation at the same time
-      if (!config.threadId && stream.client && selectedAgentId && !state.current.isCreatingThread) {
-        state.current.isCreatingThread = true;
-        try {
-          const thread = await stream.client.threads.create({
-            metadata: {
-              unique_id: getUniqueId(),
-            },
-          });
-          console.log('Created thread:', thread);
-          onThreadCreated(thread.thread_id);
-          setMetadataCreated(false); // Reset metadata flag for new thread
-        } catch (error) {
-          console.error('Failed to create thread:', error);
-        } finally {
-          state.current.isCreatingThread = false;
-        }
-      }
-    }
-    createThread();
-  }, [config.threadId, stream.client, onThreadCreated, selectedAgentId]);
 
   // Reset metadata flag when thread changes
   useEffect(() => {
@@ -704,11 +673,6 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     return () => clearInterval(intervalId);
   }, [config.sandboxId, selectedAgentId, apiClient]);
 
-  const handleThreadCreated = (threadId: string) => {
-    console.log('Thread created with ID:', threadId);
-    setConfig((prev) => ({ ...prev, threadId }));
-  };
-
   const handleNewChat = () => {
     console.log('New Chat clicked - current key:', chatKey);
     // Clear thread ID and increment key to force complete remount
@@ -843,11 +807,9 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
                 <Box className="h-4 w-4 text-gray-400" />
               )}
             </Button>
-            {!!selectedAgentId && (
-              <Button variant="ghost" size="icon" type="button" onClick={onOpenHistory}>
-                <History className="h-4 w-4" />
-              </Button>
-            )}
+            <Button variant="ghost" size="icon" type="button" onClick={onOpenHistory}>
+              <History className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" type="button" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
@@ -1059,14 +1021,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
 
       {/* Chat Content - key forces complete remount */}
       {selectedAgentId ? (
-        <ChatPanelContent
-          key={chatKey}
-          config={config}
-          onThreadCreated={handleThreadCreated}
-          selectedAgentId={selectedAgentId}
-          filesAPI={filesAPI}
-          userInfo={userInfo}
-        />
+        <ChatPanelContent key={chatKey} config={config} selectedAgentId={selectedAgentId} filesAPI={filesAPI} userInfo={userInfo} />
       ) : (
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="text-center text-muted-foreground">
