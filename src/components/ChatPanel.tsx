@@ -3,7 +3,6 @@ import { Bot, Box, ChevronDown, ChevronUp, History, Info, Loader2, Plus, Send, S
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { getUniqueId } from '@/utils';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { useRegisterAgent } from '../hooks/useFiles';
@@ -236,7 +235,7 @@ function ChatPanelContent({
       },
       {
         metadata: {
-          unique_id: getUniqueId(),
+          user_id: _userInfo.user,
           selectedAgentId,
         },
       },
@@ -775,7 +774,9 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
 
   return (
     <div className="flex flex-col h-full border-l bg-background relative">
-      {isOpenHistory && <ThreadsHistoryPanel isOpen={isOpenHistory} onClose={() => setIsOpenHistory(false)} config={config} onThreadClick={onThreadClick} />}
+      {isOpenHistory && (
+        <ThreadsHistoryPanel isOpen={isOpenHistory} onClose={() => setIsOpenHistory(false)} config={config} onThreadClick={onThreadClick} userInfo={userInfo} />
+      )}
       {/* Header with Agent Selector and Controls */}
       <div className="flex flex-col gap-3 p-4 border-b">
         {/* Title and Controls */}

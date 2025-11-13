@@ -1,12 +1,11 @@
 import type { Thread } from '@langchain/langgraph-sdk';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { getUniqueId } from '@/utils';
 import { useLangGraph } from '../hooks/useLangGraph';
 import type { ChatConfig } from '../types/chat';
 import { Button } from './ui/button';
 
-export default function ThreadsHistoryPanel({ isOpen, onClose, config, onThreadClick }: IThreadsHistoryPanelProps) {
+export default function ThreadsHistoryPanel({ isOpen, onClose, config, onThreadClick, userInfo }: IThreadsHistoryPanelProps) {
   const stream = useLangGraph(config);
   const [threads, setThreads] = useState<Thread[]>([]);
 
@@ -21,7 +20,7 @@ export default function ThreadsHistoryPanel({ isOpen, onClose, config, onThreadC
       offset: 0,
       limit: 1000,
       metadata: {
-        unique_id: getUniqueId(),
+        user_id: userInfo.user,
       },
     });
     setThreads(threads);
@@ -77,4 +76,5 @@ interface IThreadsHistoryPanelProps {
   onClose: () => void;
   config: ChatConfig;
   onThreadClick: (thread: Thread<any>) => void;
+  userInfo: any;
 }

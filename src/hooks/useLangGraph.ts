@@ -1,6 +1,5 @@
 import type { Message } from '@langchain/langgraph-sdk';
 import { useStream } from '@langchain/langgraph-sdk/react';
-import { getUniqueId } from '@/utils';
 
 interface UseLangGraphOptions {
   apiUrl?: string;
@@ -58,12 +57,12 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     });
   };
 
-  const getThreads = async () => {
+  const getThreads = async (options: any) => {
     const threads = await stream.client.threads.search({
       offset: 0,
       limit: 1000,
       metadata: {
-        unique_id: getUniqueId(),
+        ...options,
       },
     });
     return threads;
@@ -73,7 +72,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     messages: stream.messages,
     isLoading: stream.isLoading,
     submit: submitWithMetadata,
-    getThreads: getThreads,
+    getThreads,
     threadId: options.threadId || null, // Return what we passed in
     client: (stream as any).client, // Expose client for thread creation
   };
