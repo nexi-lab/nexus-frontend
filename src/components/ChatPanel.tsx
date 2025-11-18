@@ -104,11 +104,13 @@ function ChatPanelContent({
   selectedAgentId,
   filesAPI,
   userInfo: _userInfo,
+  onThreadIdChange,
 }: {
   config: ChatConfig;
   selectedAgentId: string;
   filesAPI: any;
   userInfo: any;
+  onThreadIdChange?: (threadId: string) => void;
 }) {
   const [inputValue, setInputValue] = useState('');
   const [firstTokenReceived, setFirstTokenReceived] = useState(false);
@@ -126,7 +128,7 @@ function ChatPanelContent({
     assistantId: config.assistantId,
   });
 
-  const stream = useLangGraph(config);
+  const stream = useLangGraph({ ...config, onThreadIdChange });
   const messages = stream.messages || [];
   const isLoading = stream.isLoading;
   const threadId = stream.threadId;
@@ -681,6 +683,15 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     setChatKey((prev) => prev + 1);
   };
 
+  const handleThreadIdChange = (newThreadId: string) => {
+    setConfig((prev) => {
+      if (prev.threadId === newThreadId) {
+        return prev;
+      }
+      return { ...prev, threadId: newThreadId };
+    });
+  };
+
   const handlePauseSandbox = async () => {
     if (!config.sandboxId) return;
 
@@ -1029,7 +1040,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
 
       {/* Chat Content - key forces complete remount */}
       {selectedAgentId ? (
-        <ChatPanelContent key={chatKey} config={config} selectedAgentId={selectedAgentId} filesAPI={filesAPI} userInfo={userInfo} />
+        <ChatPanelContent key={chatKey} config={config} selectedAgentId={selectedAgentId} filesAPI={filesAPI} userInfo={userInfo} onThreadIdChange={handleThreadIdChange} />
       ) : (
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="text-center text-muted-foreground">

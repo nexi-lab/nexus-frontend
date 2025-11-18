@@ -1,5 +1,6 @@
 import type { Message } from '@langchain/langgraph-sdk';
 import { useStream } from '@langchain/langgraph-sdk/react';
+import { useEffect, useState } from 'react';
 
 interface UseLangGraphOptions {
   apiUrl?: string;
@@ -13,6 +14,7 @@ interface UseLangGraphOptions {
   sandboxId?: string; // Sandbox ID for code execution
   openedFilePath?: string; // Currently opened file path in the editor
   key?: number; // Add key to force recreation
+  onThreadIdChange?: (threadId: string) => void;
 }
 
 export type StateType = { messages: Message[] };
@@ -31,11 +33,23 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     openedFilePath: options.openedFilePath || 'NOT SET',
   });
 
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(options.threadId ?? null);
+
+  useEffect(() => {
+    setCurrentThreadId(options.threadId ?? null);
+  }, [options.threadId]);
+
+  const handleThreadIdChange = (newThreadId: string) => {
+    setCurrentThreadId(newThreadId);
+    options.onThreadIdChange?.(newThreadId);
+  };
+
   const stream = useTypedStream({
     apiUrl: options.apiUrl || '',
     apiKey: options.apiKey || undefined, // SDK handles auth internally
     assistantId: options.assistantId || '',
-    threadId: options.threadId, // Use provided thread ID
+    ...(currentThreadId != null ? { threadId: currentThreadId } : {}),
+    onThreadId: handleThreadIdChange,
     fetchStateHistory: false, // Don't fetch history to avoid errors
     // Don't add Nexus-specific headers - LangGraph server rejects them with 403
   });
@@ -73,7 +87,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     isLoading: stream.isLoading,
     submit: submitWithMetadata,
     getThreads,
-    threadId: options.threadId || null, // Return what we passed in
+    threadId: currentThreadId,
     client: (stream as any).client, // Expose client for thread creation
   };
 }
