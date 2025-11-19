@@ -10,6 +10,7 @@ export const fileKeys = {
   list: (path: string) => [...fileKeys.lists(), path] as const,
   file: (path: string) => [...fileKeys.all, 'file', path] as const,
   namespaces: () => [...fileKeys.all, 'namespaces'] as const,
+  mounts: () => [...fileKeys.all, 'mounts'] as const,
 };
 
 // Hook to get the filesAPI with the authenticated client
@@ -26,6 +27,17 @@ export function useNamespaces(enabled = true) {
     queryFn: () => filesAPI.getAvailableNamespaces(),
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes - namespaces don't change often
+  });
+}
+
+// Get all mounts (global, fetched once)
+export function useMounts(enabled = true) {
+  const filesAPI = useFilesAPI();
+  return useQuery({
+    queryKey: fileKeys.mounts(),
+    queryFn: () => filesAPI.listMounts(),
+    enabled,
+    staleTime: 30 * 1000, // 30 seconds - mounts don't change very often
   });
 }
 

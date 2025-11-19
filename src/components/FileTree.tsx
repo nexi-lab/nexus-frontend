@@ -1,6 +1,9 @@
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useFileList } from '../hooks/useFiles';
+import { toast } from 'sonner';
+import { enrichFileWithMount } from '../api/files';
+import { fileKeys, useFileList, useMounts } from '../hooks/useFiles';
 import { cn } from '../lib/utils';
 import type { FileInfo } from '../types/file';
 import { type ContextMenuAction, FileContextMenu } from './FileContextMenu';
@@ -10,6 +13,41 @@ import { InlineFileInput } from './InlineFileInput';
 function isParsedFile(fileName: string): boolean {
   // Pattern: *_parsed.{ext}.md (e.g., document_parsed.pdf.md, sheet_parsed.xlsx.md)
   return /_parsed\.(pdf|xlsx|xls|xlsm|xlsb|docx|doc|pptx|ppt)\.md$/i.test(fileName);
+}
+
+// Helper function to get folder/backend icon based on backend type
+function getFolderIcon(backendType?: string, isExpanded?: boolean) {
+  if (!backendType) {
+    // Default folder icons
+    return isExpanded ? (
+      <FolderOpen className="h-4 w-4 text-blue-500 flex-shrink-0" />
+    ) : (
+      <Folder className="h-4 w-4 text-blue-500 flex-shrink-0" />
+    );
+  }
+
+  // Mount point - use backend-specific icon
+  switch (backendType) {
+    case 'GCSConnectorBackend':
+    case 'GCSBackend':
+      return (
+        <span title={`Backend: ${backendType}`}>
+          <Cloud className="h-4 w-4 text-blue-400 flex-shrink-0" />
+        </span>
+      );
+    case 'LocalBackend':
+      return (
+        <span title={`Backend: ${backendType}`}>
+          <HardDrive className="h-4 w-4 text-gray-400 flex-shrink-0" />
+        </span>
+      );
+    default:
+      return (
+        <span title={`Backend: ${backendType}`}>
+          <Database className="h-4 w-4 text-purple-400 flex-shrink-0" />
+        </span>
+      );
+  }
 }
 
 interface FileTreeProps {
@@ -36,6 +74,8 @@ interface TreeNodeProps {
   creatingNewItem?: { type: 'file' | 'folder'; parentPath: string } | null;
   onCreateItem?: (path: string, type: 'file' | 'folder') => void;
   onCancelCreate?: () => void;
+  backendType?: string;
+  mounts?: import('../types/file').MountInfo[];
 }
 
 function TreeNode({
@@ -51,11 +91,38 @@ function TreeNode({
   creatingNewItem,
   onCreateItem,
   onCancelCreate,
+  backendType,
+  mounts,
 }: TreeNodeProps) {
+  const queryClient = useQueryClient();
   const [isExpanded, setIsExpanded] = useState(currentPath.startsWith(path) || path === '/');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Use regular file listing for all paths
-  const { data: files, isLoading } = useFileList(path, isExpanded);
+  const { data: rawFiles, isLoading } = useFileList(path, isExpanded);
+
+  // Handle sync mount - just refresh this specific directory
+  const handleSyncMount = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent expanding/collapsing the folder
+
+    setIsSyncing(true);
+    try {
+      // Invalidate only this specific directory's query
+      await queryClient.invalidateQueries({ queryKey: fileKeys.list(path) });
+      toast.success(`Refreshed ${path}`);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+      toast.error(`Failed to refresh ${path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Enrich files with mount information if mounts are available
+  const files = useMemo(() => {
+    if (!rawFiles || !mounts) return rawFiles;
+    return rawFiles.map(file => enrichFileWithMount(file, mounts));
+  }, [rawFiles, mounts]);
 
   const isActive = currentPath === path;
 
@@ -80,6 +147,7 @@ function TreeNode({
     path,
     name,
     isDirectory: true,
+    backendType,
   };
 
   return (
@@ -87,7 +155,7 @@ function TreeNode({
       <FileContextMenu file={dirFileInfo} onAction={(action, file) => onContextMenuAction?.(action, file)}>
         <div
           className={cn(
-            'flex items-center gap-1 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 rounded-md transition-colors',
+            'group flex items-center gap-1 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 rounded-md transition-colors',
             isActive && 'bg-muted font-medium',
           )}
           style={{ paddingLeft: `${level * 12 + 8}px` }}
@@ -105,8 +173,18 @@ function TreeNode({
           ) : (
             <span className="w-4" />
           )}
-          {isExpanded ? <FolderOpen className="h-4 w-4 text-blue-500 flex-shrink-0" /> : <Folder className="h-4 w-4 text-blue-500 flex-shrink-0" />}
+          {getFolderIcon(dirFileInfo.backendType, isExpanded)}
           <span className="truncate">{name}</span>
+          {backendType && backendType !== 'LocalBackend' && (
+            <button
+              onClick={handleSyncMount}
+              disabled={isSyncing}
+              className="ml-auto opacity-0 group-hover:opacity-100 hover:bg-muted p-1 rounded transition-opacity"
+              title="Sync mount"
+            >
+              <RefreshCw className={cn('h-3 w-3 text-muted-foreground', isSyncing && 'animate-spin')} />
+            </button>
+          )}
         </div>
       </FileContextMenu>
 
@@ -127,6 +205,8 @@ function TreeNode({
               creatingNewItem={creatingNewItem}
               onCreateItem={onCreateItem}
               onCancelCreate={onCancelCreate}
+              backendType={dir.backendType}
+              mounts={mounts}
             />
           ))}
 
@@ -172,6 +252,9 @@ export function FileTree({
   onCreateItem,
   onCancelCreate,
 }: FileTreeProps) {
+  // Fetch mounts once globally
+  const { data: mounts } = useMounts();
+
   // Build a set of all relevant directory paths from search results
   const relevantPaths = useMemo(() => {
     if (!searchResults || searchResults.length === 0) {
@@ -212,6 +295,7 @@ export function FileTree({
         creatingNewItem={creatingNewItem}
         onCreateItem={onCreateItem}
         onCancelCreate={onCancelCreate}
+        mounts={mounts}
       />
     </div>
   );

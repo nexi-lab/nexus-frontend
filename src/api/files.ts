@@ -1,5 +1,21 @@
-import type { FileInfo, GlobResult, GrepResult, ListResult } from '../types/file';
+import type { FileInfo, GlobResult, GrepResult, ListResult, MountInfo } from '../types/file';
 import type NexusAPIClient from './client';
+
+// Helper function to find the mount point for a given path
+// Only returns mount info if the path is EXACTLY a mount point (not files inside it)
+function findMountForPath(path: string, mounts: MountInfo[]): { mountPoint: string; backendType: string } | null {
+  for (const mount of mounts) {
+    // Only match if path is exactly the mount point
+    if (path === mount.mount_point) {
+      return {
+        mountPoint: mount.mount_point,
+        backendType: mount.backend_type,
+      };
+    }
+  }
+
+  return null;
+}
 
 // Helper function to transform backend file data to frontend FileInfo
 function transformFileInfo(file: any): FileInfo {
@@ -77,7 +93,7 @@ export function createFilesAPI(client: NexusAPIClient) {
       const result = await client.call<ListResult>('list', params);
 
       // Transform backend response to frontend FileInfo format
-      return result.files.map(transformFileInfo);
+      return result.files.map(file => transformFileInfo(file));
     },
 
     // Read file contents (returns Uint8Array for binary files)
@@ -184,5 +200,34 @@ export function createFilesAPI(client: NexusAPIClient) {
       const result = await client.call<{ namespaces: string[] }>('get_available_namespaces', {});
       return result.namespaces;
     },
+
+    // List all active mounts
+    async listMounts(): Promise<MountInfo[]> {
+      const result = await client.call<MountInfo[]>('list_mounts', {});
+      return result;
+    },
+
+    // Sync mount metadata from connector backend
+    async syncMount(mount_point: string, recursive: boolean = true, dry_run: boolean = false): Promise<{ files_scanned: number; files_updated: number; files_created: number; errors: number }> {
+      const result = await client.call<{ files_scanned: number; files_updated: number; files_created: number; errors: number }>('sync_mount', {
+        mount_point,
+        recursive,
+        dry_run,
+      });
+      return result;
+    },
   };
+}
+
+// Export helper function to enrich file info with mount data
+export function enrichFileWithMount(file: FileInfo, mounts: MountInfo[]): FileInfo {
+  const mountInfo = findMountForPath(file.path, mounts);
+  if (mountInfo) {
+    return {
+      ...file,
+      mountPoint: mountInfo.mountPoint,
+      backendType: mountInfo.backendType,
+    };
+  }
+  return file;
 }

@@ -7,6 +7,15 @@ export interface FileInfo {
   created?: string;
   modified?: string;
   accessed?: string;
+  mountPoint?: string;      // Mount point path (e.g., "/cloud/my-bucket")
+  backendType?: string;     // Backend type (e.g., "GCSConnectorBackend", "LocalBackend")
+}
+
+export interface MountInfo {
+  mount_point: string;
+  priority: number;
+  readonly: boolean;
+  backend_type: string;
 }
 
 export interface RPCRequest {
