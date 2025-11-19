@@ -2,7 +2,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { enrichFileWithMount } from '../api/files';
+import { createFilesAPI, enrichFileWithMount } from '../api/files';
+import { useAuth } from '../contexts/AuthContext';
 import { fileKeys, useFileList, useMounts } from '../hooks/useFiles';
 import { cn } from '../lib/utils';
 import type { FileInfo } from '../types/file';
@@ -95,24 +96,39 @@ function TreeNode({
   mounts,
 }: TreeNodeProps) {
   const queryClient = useQueryClient();
+  const { apiClient } = useAuth();
+  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [isExpanded, setIsExpanded] = useState(currentPath.startsWith(path) || path === '/');
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Use regular file listing for all paths
   const { data: rawFiles, isLoading } = useFileList(path, isExpanded);
 
-  // Handle sync mount - just refresh this specific directory
+  // Handle sync mount - call actual sync_mount API
   const handleSyncMount = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent expanding/collapsing the folder
 
     setIsSyncing(true);
     try {
-      // Invalidate only this specific directory's query
-      await queryClient.invalidateQueries({ queryKey: fileKeys.list(path) });
-      toast.success(`Refreshed ${path}`);
+      // Call the sync_mount API
+      const result = await filesAPI.syncMount(path, true, false);
+
+      console.log('Sync mount result:', result);
+
+      // Invalidate all file list queries for this path and subdirectories
+      // This will refresh the file tree to show newly synced files
+      await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+      await queryClient.invalidateQueries({ queryKey: fileKeys.mounts() });
+
+      // Handle different possible property names from API response
+      const filesScanned = result.files_scanned ?? (result as any).files_found ?? 0;
+      const filesCreated = result.files_created ?? (result as any).files_added ?? 0;
+      const filesUpdated = result.files_updated ?? 0;
+
+      toast.success(`Synced ${path}: ${filesScanned} files scanned, ${filesCreated} created, ${filesUpdated} updated`);
     } catch (error) {
-      console.error('Refresh failed:', error);
-      toast.error(`Failed to refresh ${path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Sync failed:', error);
+      toast.error(`Failed to sync ${path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSyncing(false);
     }

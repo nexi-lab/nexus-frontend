@@ -1,4 +1,4 @@
-import { Copy, Download, Edit, File, FileText, FolderPlus, History, Search, Shield, Trash2, Upload } from 'lucide-react';
+import { Cloud, Copy, Download, Edit, File, FileText, FolderPlus, History, Search, Shield, Trash2, Upload, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { FileInfo } from '../types/file';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from './ui/context-menu';
@@ -15,7 +15,9 @@ export type ContextMenuAction =
   | 'delete'
   | 'copy-path'
   | 'copy-relative-path'
-  | 'manage-permissions';
+  | 'manage-permissions'
+  | 'add-mount'
+  | 'remove-mount';
 
 interface FileContextMenuProps {
   children: ReactNode;
@@ -52,6 +54,17 @@ export function FileContextMenu({ children, file, onAction }: FileContextMenuPro
               <Upload className="mr-2 h-4 w-4" />
               Upload Files
             </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={() => handleAction('add-mount')}>
+              <Cloud className="mr-2 h-4 w-4" />
+              Add Mount Here
+            </ContextMenuItem>
+            {file.backendType && file.backendType !== 'LocalBackend' && (
+              <ContextMenuItem onClick={() => handleAction('remove-mount')}>
+                <XCircle className="mr-2 h-4 w-4" />
+                Remove Mount
+              </ContextMenuItem>
+            )}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => handleAction('rename')}>
               <Edit className="mr-2 h-4 w-4" />

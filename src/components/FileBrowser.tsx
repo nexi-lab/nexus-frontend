@@ -1,10 +1,11 @@
-import { Bot, Brain, FolderPlus, MessageSquare, Settings } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Bot, Brain, Cloud, FolderPlus, MessageSquare, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
-import { useCreateDirectory, useCreateWorkspace, useDeleteFile, useRegisterAgent, useUploadFile } from '../hooks/useFiles';
+import { fileKeys, useCreateDirectory, useCreateWorkspace, useDeleteFile, useRegisterAgent, useUploadFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
 import { AgentManagementDialog } from './AgentManagementDialog';
 import { Breadcrumb } from './Breadcrumb';
@@ -18,6 +19,7 @@ import { LeftPanel } from './LeftPanel';
 import { LoginDialog } from './LoginDialog';
 import { ManagePermissionsDialog } from './ManagePermissionsDialog';
 import { MemoryManagementDialog } from './MemoryManagementDialog';
+import { MountManagementDialog } from './MountManagementDialog';
 import { RenameDialog } from './RenameDialog';
 import { StoreMemoryDialog } from './StoreMemoryDialog';
 import { ThemeToggle } from './ThemeToggle';
@@ -26,6 +28,7 @@ import { WorkspaceManagementDialog } from './WorkspaceManagementDialog';
 
 export function FileBrowser() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isAuthenticated, logout, apiClient, userInfo } = useAuth();
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [currentPath, setCurrentPath] = useState('/');
@@ -37,6 +40,8 @@ export function FileBrowser() {
   const [memoryManagementDialogOpen, setMemoryManagementDialogOpen] = useState(false);
   const [storeMemoryDialogOpen, setStoreMemoryDialogOpen] = useState(false);
   const [registerAgentDialogOpen, setRegisterAgentDialogOpen] = useState(false);
+  const [mountManagementDialogOpen, setMountManagementDialogOpen] = useState(false);
+  const [mountTargetPath, setMountTargetPath] = useState<string | undefined>(undefined);
   const [renameFile, setRenameFile] = useState<FileInfo | null>(null);
   const [managePermissionsFile, setManagePermissionsFile] = useState<FileInfo | null>(null);
   const [versionHistoryFile, setVersionHistoryFile] = useState<FileInfo | null>(null);
@@ -217,6 +222,34 @@ export function FileBrowser() {
         setManagePermissionsFile(file);
         break;
 
+      case 'add-mount':
+        if (file.isDirectory) {
+          setMountTargetPath(file.path);
+          setMountManagementDialogOpen(true);
+        }
+        break;
+
+      case 'remove-mount':
+        if (file.isDirectory && file.path) {
+          if (confirm(`Are you sure you want to remove the mount at ${file.path}? This will also delete the mount point directory.`)) {
+            try {
+              // First remove the mount
+              await apiClient.call('remove_mount', { mount_point: file.path });
+
+              // Then delete the directory
+              await filesAPI.rmdir(file.path, true);
+
+              // Invalidate queries to refresh the UI
+              await queryClient.invalidateQueries({ queryKey: fileKeys.mounts() });
+              await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+            } catch (error) {
+              console.error('Failed to remove mount:', error);
+              alert(`Failed to remove mount: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+        }
+        break;
+
       default:
         console.log('Unhandled action:', action, file);
     }
@@ -250,6 +283,10 @@ export function FileBrowser() {
                 <Button variant="ghost" size="sm" onClick={() => setRegisterAgentDialogOpen(true)}>
                   <Bot className="h-4 w-4 mr-2" />
                   Agents
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setMountManagementDialogOpen(true)}>
+                  <Cloud className="h-4 w-4 mr-2" />
+                  Mounts
                 </Button>
                 {userInfo?.is_admin && (
                   <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
@@ -365,6 +402,15 @@ export function FileBrowser() {
         onOpenChange={setRegisterAgentDialogOpen}
         onRegisterAgent={handleRegisterAgent}
         onAgentSelect={handleAgentSelect}
+      />
+
+      <MountManagementDialog
+        open={mountManagementDialogOpen}
+        onOpenChange={(open) => {
+          setMountManagementDialogOpen(open);
+          if (!open) setMountTargetPath(undefined);
+        }}
+        initialMountPoint={mountTargetPath}
       />
 
       <RenameDialog open={!!renameFile} onOpenChange={(open) => !open && setRenameFile(null)} file={renameFile} />

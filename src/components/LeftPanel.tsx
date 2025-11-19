@@ -59,6 +59,8 @@ export function LeftPanel({
     try {
       // Invalidate all file list queries to force refetch
       await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+      // Invalidate mounts to refetch mount points and update cloud icons
+      await queryClient.invalidateQueries({ queryKey: fileKeys.mounts() });
     } finally {
       // Add a small delay for visual feedback
       setTimeout(() => setIsRefreshing(false), 500);
