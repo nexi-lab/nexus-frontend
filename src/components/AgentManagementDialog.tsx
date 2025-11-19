@@ -385,7 +385,7 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
     setAgentName('nexus_assistant');
     setDescription('A claude-code like general agent that connects to Nexus File System.');
     setPlatform('langgraph');
-    setEndpointUrl('https://nexus-dev-3028be15439a59638a13b8f1c4ed065d.us.langgraph.app');
+    setEndpointUrl('http://localhost:2024');
     setLanggraphAgentId('agent');
     setGenerateApiKey(false);
     setError(null);
