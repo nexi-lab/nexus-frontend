@@ -21,6 +21,7 @@ interface GCSConfig {
   bucket: string;
   project_id: string;
   prefix: string;
+  access_token: string;
 }
 
 export function MountManagementDialog({ open, onOpenChange, initialMountPoint }: MountManagementDialogProps) {
@@ -45,6 +46,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
     bucket: '',
     project_id: '',
     prefix: '',
+    access_token: '',
   });
 
   const createMountMutation = useMutation({
@@ -118,7 +120,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
     setDescription('');
     setPriority('10');
     setReadonly(false);
-    setGcsConfig({ bucket: '', project_id: '', prefix: '' });
+    setGcsConfig({ bucket: '', project_id: '', prefix: '', access_token: '' });
     onOpenChange(false);
   };
 
@@ -148,6 +150,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
         bucket: gcsConfig.bucket,
         project_id: gcsConfig.project_id,
         prefix: gcsConfig.prefix || '',
+        access_token: gcsConfig.access_token || '',
       };
     }
 
@@ -311,6 +314,22 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
                   />
                   <p className="text-xs text-muted-foreground">
                     Optional prefix to limit access to a specific folder in the bucket
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="accessToken" className="text-sm font-medium">
+                    Access Token (Optional)
+                  </label>
+                  <Input
+                    id="accessToken"
+                    type="password"
+                    placeholder="ya29...."
+                    value={gcsConfig.access_token}
+                    onChange={(e) => setGcsConfig({ ...gcsConfig, access_token: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    OAuth access token. If not provided, uses Application Default Credentials
                   </p>
                 </div>
               </>
