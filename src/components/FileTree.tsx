@@ -124,8 +124,9 @@ function TreeNode({
       const filesScanned = result.files_scanned ?? (result as any).files_found ?? 0;
       const filesCreated = result.files_created ?? (result as any).files_added ?? 0;
       const filesUpdated = result.files_updated ?? 0;
+      const filesDeleted = result.files_deleted ?? 0;
 
-      toast.success(`Synced ${path}: ${filesScanned} files scanned, ${filesCreated} created, ${filesUpdated} updated`);
+      toast.success(`Synced ${path}: ${filesScanned} files scanned, ${filesCreated} created, ${filesUpdated} updated, ${filesDeleted} deleted`);
     } catch (error) {
       console.error('Sync failed:', error);
       toast.error(`Failed to sync ${path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -242,13 +243,13 @@ function TreeNode({
           {fileItems.map((file) => (
             <FileContextMenu key={file.path} file={file} onAction={(action, file) => onContextMenuAction?.(action, file)}>
               <div
-                className="flex items-center gap-1 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 rounded-md transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 rounded-md transition-colors overflow-hidden"
                 style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
                 onClick={() => onFileClick?.(file)}
               >
-                <span className="w-4" />
+                <span className="w-4 flex-shrink-0" />
                 <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                <span className="truncate">{file.name}</span>
+                <span className="truncate min-w-0">{file.name}</span>
               </div>
             </FileContextMenu>
           ))}

@@ -208,8 +208,8 @@ export function createFilesAPI(client: NexusAPIClient) {
     },
 
     // Sync mount metadata from connector backend
-    async syncMount(mount_point: string, recursive: boolean = true, dry_run: boolean = false): Promise<{ files_scanned: number; files_updated: number; files_created: number; errors: number }> {
-      const result = await client.call<{ files_scanned: number; files_updated: number; files_created: number; errors: number }>('sync_mount', {
+    async syncMount(mount_point: string, recursive: boolean = true, dry_run: boolean = false): Promise<{ files_scanned: number; files_updated: number; files_created: number; files_deleted: number; errors: number }> {
+      const result = await client.call<{ files_scanned: number; files_updated: number; files_created: number; files_deleted: number; errors: number }>('sync_mount', {
         mount_point,
         recursive,
         dry_run,

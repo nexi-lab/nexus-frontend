@@ -92,14 +92,16 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [showParsedContent, setShowParsedContent] = useState(false); // Toggle between raw and parsed content (default: raw)
 
   // Check if file is editable
   const isEditable = fileType === 'text' || fileType === 'markdown';
 
-  // Reset editing state when file changes
+  // Reset editing state and toggle when file changes
   useEffect(() => {
     setIsEditing(false);
     setEditContent('');
+    setShowParsedContent(false); // Default to showing raw content
   }, [file?.path]);
 
   // Update edit content when file content loads
@@ -320,8 +322,8 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         );
 
       case 'pdf':
-        // If we have parsed markdown content, show that instead of PDF viewer
-        if (parsedMdContent && !parsedMdError) {
+        // If we have parsed markdown content and user wants to see it, show that instead of PDF viewer
+        if (parsedMdContent && !parsedMdError && showParsedContent) {
           return (
             <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
               <ReactMarkdown
@@ -376,58 +378,63 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         return <PDFViewer fileData={contentBytes} onDownload={handleDownload} />;
 
       case 'excel':
-        // If we have parsed markdown content, show that instead
-        if (parsedMdContent && !parsedMdError) {
+        // If we have parsed markdown content and user wants to see it, show markdown
+        if (parsedMdContent && !parsedMdError && showParsedContent) {
           return (
-            <ExcelViewer contentBytes={contentBytes} />
-            // <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
-            //   <ReactMarkdown
-            //     remarkPlugins={[remarkGfm]}
-            //     components={{
-            //       table: ({ node: _node, ...props }) => (
-            //         <div
-            //           style={{
-            //             overflowX: 'auto',
-            //             overflowY: 'auto',
-            //             maxHeight: '70vh',
-            //             border: '2px solid #3b82f6',
-            //             borderRadius: '8px',
-            //             padding: '1rem',
-            //             background: 'white',
-            //             marginBottom: '1rem',
-            //           }}
-            //         >
-            //           <table {...props} style={{ width: 'max-content', minWidth: '100%' }} />
-            //         </div>
-            //       ),
-            //       th: ({ node: _node, ...props }) => (
-            //         <th {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem', background: '#f9fafb', fontWeight: 600 }} />
-            //       ),
-            //       td: ({ node: _node, ...props }) => <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />,
-            //     }}
-            //   >
-            //     {parsedMdContent}
-            //   </ReactMarkdown>
-            // </div>
-          );
-        }
-
-        // Loading state
-        if (parsedMdLoading) {
-          return (
-            <div className="flex flex-col items-center justify-center h-full gap-4">
-              <Loader2 className="h-12 w-12 text-primary animate-spin" />
-              <p className="text-lg font-medium">Loading Excel content...</p>
+            <div className="prose prose-sm md:prose-base lg:prose-lg dark:prose-invert max-w-none p-6 bg-white dark:bg-muted rounded-lg overflow-auto h-full">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  table: ({ node: _node, ...props }) => (
+                    <div
+                      style={{
+                        overflowX: 'auto',
+                        overflowY: 'auto',
+                        maxHeight: '70vh',
+                        border: '2px solid #3b82f6',
+                        borderRadius: '8px',
+                        padding: '1rem',
+                        background: 'white',
+                        marginBottom: '1rem',
+                      }}
+                    >
+                      <table {...props} style={{ width: 'max-content', minWidth: '100%' }} />
+                    </div>
+                  ),
+                  th: ({ node: _node, ...props }) => (
+                    <th {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem', background: '#f9fafb', fontWeight: 600 }} />
+                  ),
+                  td: ({ node: _node, ...props }) => <td {...props} style={{ whiteSpace: 'nowrap', padding: '0.5rem 1rem' }} />,
+                }}
+              >
+                {parsedMdContent}
+              </ReactMarkdown>
             </div>
           );
         }
 
-        // No parsed content available - show download message
+        // Loading state for parsed content
+        if (parsedMdLoading && showParsedContent) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+              <p className="text-lg font-medium">Loading parsed content...</p>
+            </div>
+          );
+        }
+
+        // User wants raw Excel view (Univer) or no parsed content available
+        // Show ExcelViewer for raw spreadsheet display
+        if (contentBytes) {
+          return <ExcelViewer contentBytes={contentBytes} />;
+        }
+
+        // Fallback - no content available
         return (
           <div className="p-8 text-center bg-muted/20 rounded-lg h-full flex flex-col items-center justify-center">
             <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <p className="text-lg font-medium mb-2">Excel File</p>
-            <p className="text-muted-foreground mb-4">{parsedMdError ? 'No parsed content available.' : 'Preview not available.'}</p>
+            <p className="text-muted-foreground mb-4">Unable to load file content.</p>
             <Button onClick={handleDownload}>
               <Download className="h-4 w-4 mr-2" />
               Download File
@@ -530,19 +537,37 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
       {/* File Info */}
       {!file.isDirectory && (
         <div className="border-b p-3 bg-muted/30">
-          <div className="flex gap-6 text-xs text-muted-foreground">
+          <div className="flex gap-6 text-xs text-muted-foreground items-center">
             <div>
               <span className="font-medium">Path:</span> <span className="font-mono">{filePath}</span>
             </div>
             <div>
               <span className="font-medium">Type:</span> <span className="capitalize">{fileType}</span>
-              {hasParsedMarkdown && parsedMdContent && !parsedMdError && (
-                <span className="ml-2 text-green-600 dark:text-green-400">(showing parsed content)</span>
-              )}
             </div>
             {file.size && (
               <div>
                 <span className="font-medium">Size:</span> <span>{file.size} bytes</span>
+              </div>
+            )}
+            {hasParsedMarkdown && parsedMdContent && !parsedMdError && (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="font-medium">View:</span>
+                <Button
+                  variant={showParsedContent ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowParsedContent(true)}
+                  className="h-7 px-3 text-xs"
+                >
+                  Parsed
+                </Button>
+                <Button
+                  variant={!showParsedContent ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowParsedContent(false)}
+                  className="h-7 px-3 text-xs"
+                >
+                  Raw
+                </Button>
               </div>
             )}
           </div>

@@ -373,6 +373,8 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [sandboxDialogOpen, setSandboxDialogOpen] = useState(false);
   const [isOpenHistory, setIsOpenHistory] = useState(false);
+  const [sandboxConnecting, setSandboxConnecting] = useState(false);
+  const [sandboxConnectStatus, setSandboxConnectStatus] = useState<string>('');
 
   // Load agents when panel opens
   useEffect(() => {
@@ -747,6 +749,98 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     }
   };
 
+  const handleStartSandbox = async () => {
+    // Check if we have a selected agent
+    if (!selectedAgentId) {
+      alert('Please select an agent first.');
+      return;
+    }
+
+    setSandboxConnecting(true);
+    setSandboxConnectStatus('Initializing sandbox...');
+
+    try {
+      // Use get_or_create pattern with status verification (same as Agent Management)
+      // Use selectedAgentId as sandbox name (exactly like Agent Management uses agentId)
+      // Format: <user_id>,<agent_name>
+      const sandboxName = selectedAgentId;
+
+      // Select provider based on whether Nexus is running locally
+      const baseURL = apiClient.getBaseURL();
+      const isLocalhost = baseURL.includes('localhost') || baseURL.includes('127.0.0.1');
+      const provider = isLocalhost ? 'docker' : 'e2b';
+
+      console.log(`[ChatPanel] Getting or creating sandbox with name: ${sandboxName}, provider: ${provider}`);
+      setSandboxConnectStatus(`Creating sandbox with ${provider} provider...`);
+
+      // Get or create sandbox with status verification
+      const sandbox = await apiClient.sandboxGetOrCreate({
+        name: sandboxName,
+        ttl_minutes: 60,
+        provider,
+        verify_status: true, // Verify status with provider
+      });
+
+      const sandboxId = sandbox.sandbox_id;
+      console.log(`[ChatPanel] Got sandbox: ${sandboxId}`);
+      setSandboxConnectStatus('Mounting Nexus filesystem...');
+
+      // Mount Nexus filesystem in the sandbox - this is CRITICAL
+      console.log(`[ChatPanel] Mounting Nexus in sandbox ${sandboxId}...`);
+      const mountResult = await apiClient.sandboxConnect({
+        sandbox_id: sandboxId,
+        provider: sandbox.provider,
+        mount_path: '/mnt/nexus',
+        nexus_url: apiClient.getBaseURL(),
+        nexus_api_key: config.nexusApiKey || config.apiKey || undefined,
+      });
+
+      // Check if mount was successful
+      if (!mountResult.success) {
+        console.error(`[ChatPanel] Failed to mount Nexus in sandbox ${sandboxId}`);
+        setSandboxConnectStatus('Mount failed, cleaning up...');
+
+        // Clean up: stop the sandbox since mount failed
+        try {
+          console.log(`[ChatPanel] Stopping sandbox ${sandboxId} due to mount failure...`);
+          await apiClient.sandboxStop(sandboxId);
+          console.log(`[ChatPanel] Sandbox ${sandboxId} stopped`);
+        } catch (stopErr) {
+          console.error('[ChatPanel] Failed to stop sandbox after mount failure:', stopErr);
+        }
+
+        throw new Error('Failed to mount Nexus filesystem in sandbox');
+      }
+
+      console.log(`[ChatPanel] Successfully mounted Nexus at ${mountResult.mount_path}`);
+      setSandboxConnectStatus('Connected successfully!');
+
+      // Update config with new sandbox info
+      setConfig((prev) => ({
+        ...prev,
+        sandboxId: sandbox.sandbox_id,
+        sandboxStatus: (sandbox.status === 'running' || sandbox.status === 'paused' || sandbox.status === 'stopped' || sandbox.status === 'unknown'
+          ? sandbox.status
+          : 'unknown') as 'running' | 'paused' | 'stopped' | 'unknown',
+        sandboxProvider: sandbox.provider,
+        sandboxExpiresAt: sandbox.expires_at || undefined,
+      }));
+
+      console.log(`[ChatPanel] Successfully got/created sandbox ${sandboxId}`);
+
+      // Show success message for 2 seconds then close dialog
+      setTimeout(() => {
+        setSandboxConnecting(false);
+        setSandboxConnectStatus('');
+        setSandboxDialogOpen(false);
+      }, 2000);
+    } catch (err) {
+      console.error('[ChatPanel] Failed to get/create sandbox:', err);
+      setSandboxConnectStatus('Failed: ' + (err instanceof Error ? err.message : String(err)));
+      setSandboxConnecting(false);
+    }
+  };
+
   const handleRegisterAgent = async (
     agentId: string,
     name: string,
@@ -950,23 +1044,48 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
                 </>
               )}
             </div>
-            {!config.sandboxId && (
+            {!config.sandboxId && !sandboxConnecting && (
               <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
-                To use a sandbox, click the "Start Sandbox" button in the Agent Management dialog.
+                To use a sandbox, click the "Start Sandbox" button below to create a new sandbox environment.
               </div>
             )}
-            {config.sandboxId && config.sandboxStatus === 'stopped' && (
+            {sandboxConnecting && (
+              <div className="text-sm bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <div>
+                    <p className="font-medium text-blue-900 dark:text-blue-100">{sandboxConnectStatus}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {config.sandboxId && config.sandboxStatus === 'stopped' && !sandboxConnecting && (
               <div className="text-sm text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
                 This sandbox has been stopped. Restart it from the Agent Management dialog.
               </div>
             )}
-            {config.sandboxId && config.sandboxStatus === 'paused' && (
+            {config.sandboxId && config.sandboxStatus === 'paused' && !sandboxConnecting && (
               <div className="text-sm text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
                 This sandbox is paused. Resume it to continue using it.
               </div>
             )}
           </div>
-          {config.sandboxId && (
+          {!config.sandboxId && !sandboxConnecting ? (
+            <DialogFooter>
+              <Button onClick={handleStartSandbox}>
+                Start Sandbox
+              </Button>
+            </DialogFooter>
+          ) : sandboxConnecting ? (
+            <DialogFooter>
+              <Button disabled>
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Connecting...</span>
+                </div>
+              </Button>
+            </DialogFooter>
+          ) : (
             <DialogFooter className="flex gap-2">
               {config.sandboxStatus === 'running' && (
                 <Button variant="outline" onClick={handlePauseSandbox}>
