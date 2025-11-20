@@ -367,6 +367,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
         {/* Tabs */}
         <div className="flex border-b">
           <button
+            type='button'
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'list' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -375,6 +376,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
             Namespaces ({userMemories.length})
           </button>
           <button
+            type='button'
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'stored' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -383,6 +385,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
             Stored Memories ({storedMemories.length})
           </button>
           <button
+            type='button'
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'create' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -479,6 +482,7 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
                               {memory.state === 'active' ? 'Approved' : 'Pending'}
                             </span>
                             <button
+                             type='button'
                               onClick={() => memory.state === 'active' ? handleDeactivateMemory(memory.memory_id) : handleApproveMemory(memory.memory_id)}
                               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                                 memory.state === 'active'

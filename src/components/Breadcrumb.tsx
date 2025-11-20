@@ -10,7 +10,7 @@ export function Breadcrumb({ path, onPathChange }: BreadcrumbProps) {
 
   return (
     <div className="flex items-center gap-1 text-sm text-muted-foreground">
-      <button className="flex items-center gap-1 hover:text-foreground transition-colors p-1 rounded hover:bg-muted" onClick={() => onPathChange('/')}>
+      <button type='button' className="flex items-center gap-1 hover:text-foreground transition-colors p-1 rounded hover:bg-muted" onClick={() => onPathChange('/')}>
         <Home className="h-4 w-4" />
       </button>
 
@@ -22,6 +22,7 @@ export function Breadcrumb({ path, onPathChange }: BreadcrumbProps) {
           <div key={fullPath} className="flex items-center gap-1">
             <ChevronRight className="h-4 w-4" />
             <button
+              type='button'
               className={`hover:text-foreground transition-colors p-1 rounded hover:bg-muted ${isLast ? 'text-foreground font-medium' : ''}`}
               onClick={() => onPathChange(fullPath)}
             >

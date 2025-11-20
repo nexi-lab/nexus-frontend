@@ -114,6 +114,7 @@ export function LeftPanel({
       {/* Tab Header */}
       <div className="border-b bg-background/95 flex">
         <button
+          type='button'
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
             activeTab === 'explorer'
               ? 'bg-background border-b-2 border-primary text-foreground'
@@ -124,7 +125,8 @@ export function LeftPanel({
           <FolderTree className="h-4 w-4" />
           Explorer
         </button>
-        <button
+        <button 
+          type='button'
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
             activeTab === 'search' ? 'bg-background border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
           }`}
@@ -142,7 +144,8 @@ export function LeftPanel({
             {/* Refresh button for explorer */}
             <div className="flex items-center justify-between px-3 py-2 border-b bg-background/50">
               <span className="text-xs font-medium text-muted-foreground">Files</span>
-              <button
+              <button  
+                type='button'
                 onClick={handleRefreshFileTree}
                 disabled={isRefreshing}
                 className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50"
@@ -178,14 +181,14 @@ export function LeftPanel({
           <Brain className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">Memories</span>
           {loadingMemories && <span className="text-xs text-muted-foreground">(loading...)</span>}
-          <button onClick={onOpenMemoryDialog} className="ml-auto p-1 hover:bg-muted rounded transition-colors" title="Add Memory">
+          <button type='button' onClick={onOpenMemoryDialog} className="ml-auto p-1 hover:bg-muted rounded transition-colors" title="Add Memory">
             <Brain className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
           </button>
         </div>
         <div className="flex-1 overflow-auto">
           {/* Org (Tenant) Group */}
           <div className="border-b">
-            <button onClick={() => toggleGroup('org')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
+            <button type='button' onClick={() => toggleGroup('org')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
               {expandedGroups.org ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
               <Building2 className="h-3 w-3 text-blue-500" />
               <span className="text-xs font-medium">Organization</span>
@@ -209,7 +212,7 @@ export function LeftPanel({
 
           {/* User Group */}
           <div className="border-b">
-            <button onClick={() => toggleGroup('user')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
+            <button type='button' onClick={() => toggleGroup('user')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
               {expandedGroups.user ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
               <User className="h-3 w-3 text-green-500" />
               <span className="text-xs font-medium">User</span>
@@ -233,7 +236,7 @@ export function LeftPanel({
 
           {/* Agent Group */}
           <div>
-            <button onClick={() => toggleGroup('agent')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
+            <button type='button' onClick={() => toggleGroup('agent')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
               {expandedGroups.agent ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
               <Bot className="h-3 w-3 text-purple-500" />
               <span className="text-xs font-medium">Agent</span>

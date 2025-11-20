@@ -115,7 +115,7 @@ export function SearchBar({ currentPath, onFileSelect, onContextMenuAction }: Se
             className="pl-10 pr-10 text-sm"
           />
           {query && (
-            <button onClick={handleClearClick} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button type='button' onClick={handleClearClick} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           )}
@@ -123,6 +123,7 @@ export function SearchBar({ currentPath, onFileSelect, onContextMenuAction }: Se
 
         <div className="flex gap-1">
           <button
+            type='button' 
             className={`flex-1 px-2 py-1 text-xs rounded transition-colors ${
               searchType === 'glob' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
             }`}
@@ -131,6 +132,7 @@ export function SearchBar({ currentPath, onFileSelect, onContextMenuAction }: Se
             Name
           </button>
           <button
+            type='button'
             className={`flex-1 px-2 py-1 text-xs rounded transition-colors ${
               searchType === 'grep' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
             }`}
