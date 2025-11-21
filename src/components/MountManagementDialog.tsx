@@ -8,6 +8,7 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import OAuthSetupDialog from './OAuthSetupDialog';
 
 type BackendType = 'gcs_connector' | 's3' | 'gdrive_connector' | 'gmail';
 
@@ -22,6 +23,12 @@ interface GCSConfig {
   project_id: string;
   prefix: string;
   access_token: string;
+}
+
+interface GoogleDriveConfig {
+  user_email: string;
+  root_folder: string;
+  token_manager_db: string;
 }
 
 export function MountManagementDialog({ open, onOpenChange, initialMountPoint }: MountManagementDialogProps) {
@@ -48,6 +55,16 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
     prefix: '',
     access_token: '',
   });
+
+  // Google Drive specific config
+  const [gdriveConfig, setGdriveConfig] = useState<GoogleDriveConfig>({
+    user_email: '',
+    root_folder: 'nexus-data',
+    token_manager_db: '~/.nexus/nexus.db',
+  });
+
+  // OAuth setup dialog
+  const [oauthDialogOpen, setOauthDialogOpen] = useState(false);
 
   const createMountMutation = useMutation({
     mutationFn: async (params: {
@@ -121,6 +138,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
     setPriority('10');
     setReadonly(false);
     setGcsConfig({ bucket: '', project_id: '', prefix: '', access_token: '' });
+    setGdriveConfig({ user_email: '', root_folder: 'nexus-data', token_manager_db: '~/.nexus/nexus.db' });
     onOpenChange(false);
   };
 
@@ -151,6 +169,20 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
         project_id: gcsConfig.project_id,
         prefix: gcsConfig.prefix || '',
         access_token: gcsConfig.access_token || '',
+      };
+    } else if (selectedBackend === 'gdrive_connector') {
+      if (!gdriveConfig.user_email) {
+        toast.error('User email is required for Google Drive');
+        return;
+      }
+      if (!gdriveConfig.token_manager_db) {
+        toast.error('Token Manager DB path is required for Google Drive');
+        return;
+      }
+      backendConfig = {
+        token_manager_db: gdriveConfig.token_manager_db,
+        root_folder: gdriveConfig.root_folder || 'nexus-data',
+        user_email: gdriveConfig.user_email,
       };
     }
 
@@ -185,7 +217,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
       name: 'Google Drive',
       icon: <Database className="h-6 w-6 text-green-500" />,
       description: 'Connect to Google Drive',
-      available: false,
+      available: true,
     },
     {
       type: 'gmail' as BackendType,
@@ -335,6 +367,77 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
               </>
             )}
 
+            {/* Google Drive specific config */}
+            {selectedBackend === 'gdrive_connector' && (
+              <>
+                <div className="rounded-md bg-blue-50 dark:bg-blue-950 p-4 border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                    OAuth Setup Required
+                  </p>
+                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                    Google Drive requires OAuth authentication. Click the button below to setup OAuth credentials
+                    if you haven't already.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setOauthDialogOpen(true)}
+                    className="w-full"
+                  >
+                    Setup OAuth Credentials
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="userEmail" className="text-sm font-medium">
+                    Google Account Email <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    id="userEmail"
+                    type="email"
+                    placeholder="your-email@gmail.com"
+                    value={gdriveConfig.user_email}
+                    onChange={(e) => setGdriveConfig({ ...gdriveConfig, user_email: e.target.value })}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The Google account that has been authorized via OAuth
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="tokenManagerDb" className="text-sm font-medium">
+                    Token Manager DB Path <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    id="tokenManagerDb"
+                    placeholder="~/.nexus/nexus.db"
+                    value={gdriveConfig.token_manager_db}
+                    onChange={(e) => setGdriveConfig({ ...gdriveConfig, token_manager_db: e.target.value })}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Path to Nexus database containing OAuth tokens (default: ~/.nexus/nexus.db)
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="rootFolder" className="text-sm font-medium">
+                    Root Folder (Optional)
+                  </label>
+                  <Input
+                    id="rootFolder"
+                    placeholder="nexus-data"
+                    value={gdriveConfig.root_folder}
+                    onChange={(e) => setGdriveConfig({ ...gdriveConfig, root_folder: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Root folder name in Google Drive (default: nexus-data)
+                  </p>
+                </div>
+              </>
+            )}
+
             {/* Advanced options */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -379,6 +482,17 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
           </form>
         )}
       </DialogContent>
+
+      {/* OAuth Setup Dialog */}
+      <OAuthSetupDialog
+        open={oauthDialogOpen}
+        onOpenChange={setOauthDialogOpen}
+        onSuccess={(userEmail) => {
+          // Auto-fill the user email in the form
+          setGdriveConfig({ ...gdriveConfig, user_email: userEmail });
+          toast.success('OAuth credentials setup completed. You can now create the mount.');
+        }}
+      />
     </Dialog>
   );
 }

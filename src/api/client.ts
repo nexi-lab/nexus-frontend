@@ -633,6 +633,112 @@ class NexusAPIClient {
   }> {
     return await this.call('update_memory', params);
   }
+
+  // ===== OAuth Methods =====
+
+  /**
+   * Get OAuth authorization URL for Google Drive.
+   *
+   * @param redirectUri - OAuth redirect URI (default: http://localhost:5173/oauth/callback)
+   * @returns Authorization URL and state token
+   */
+  async oauthGetDriveAuthUrl(redirectUri?: string): Promise<{
+    url: string;
+    state: string;
+  }> {
+    return await this.call('oauth_get_drive_auth_url', {
+      redirect_uri: redirectUri || 'http://localhost:5173/oauth/callback',
+    });
+  }
+
+  /**
+   * Exchange OAuth authorization code for tokens and store credentials.
+   *
+   * @param provider - OAuth provider name (e.g., "google")
+   * @param code - Authorization code from OAuth callback
+   * @param userEmail - User email address for credential storage
+   * @param state - CSRF state token (optional, for validation)
+   * @param redirectUri - OAuth redirect URI (must match authorization request)
+   * @returns Credential information
+   */
+  async oauthExchangeCode(params: {
+    provider: string;
+    code: string;
+    user_email: string;
+    state?: string;
+    redirect_uri?: string;
+  }): Promise<{
+    credential_id: string;
+    user_email: string;
+    expires_at: string | null;
+    success: boolean;
+  }> {
+    return await this.call('oauth_exchange_code', {
+      provider: params.provider,
+      code: params.code,
+      user_email: params.user_email,
+      state: params.state,
+      redirect_uri: params.redirect_uri || 'http://localhost:5173/oauth/callback',
+    });
+  }
+
+  /**
+   * List all OAuth credentials for the current user.
+   *
+   * @param provider - Optional provider filter (e.g., "google")
+   * @param includeRevoked - Include revoked credentials (default: false)
+   * @returns List of OAuth credentials
+   */
+  async oauthListCredentials(params?: {
+    provider?: string;
+    include_revoked?: boolean;
+  }): Promise<Array<{
+    credential_id: string;
+    provider: string;
+    user_email: string;
+    scopes: string[];
+    expires_at: string | null;
+    created_at: string | null;
+    last_used_at: string | null;
+    revoked: boolean;
+  }>> {
+    return await this.call('oauth_list_credentials', params || {});
+  }
+
+  /**
+   * Revoke an OAuth credential.
+   *
+   * @param provider - OAuth provider name (e.g., "google")
+   * @param userEmail - User email address
+   * @returns Success status
+   */
+  async oauthRevokeCredential(params: {
+    provider: string;
+    user_email: string;
+  }): Promise<{
+    success: boolean;
+  }> {
+    return await this.call('oauth_revoke_credential', params);
+  }
+
+  /**
+   * Test if an OAuth credential is valid and can be refreshed.
+   *
+   * @param provider - OAuth provider name (e.g., "google")
+   * @param userEmail - User email address
+   * @returns Credential validity status
+   */
+  async oauthTestCredential(params: {
+    provider: string;
+    user_email: string;
+  }): Promise<{
+    valid: boolean;
+    refreshed?: boolean;
+    expires_at?: string;
+    error?: string;
+  }> {
+    return await this.call('oauth_test_credential', params);
+  }
 }
 
 // Default client instance
