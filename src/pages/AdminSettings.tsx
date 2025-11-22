@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { useAuth } from '../contexts/AuthContext';
+import OAuthStatusPanel from '../components/OAuthStatusPanel';
 
 interface ApiKey {
   key_id: string;
@@ -270,6 +271,9 @@ export function AdminSettings() {
       <main className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto">
           {error && <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg mb-4">{error}</div>}
+
+          {/* OAuth Status Panel */}
+          <OAuthStatusPanel className="mb-6" />
 
           {/* Filter Bar */}
           <div className="bg-white dark:bg-muted rounded-lg shadow p-4 mb-4">
