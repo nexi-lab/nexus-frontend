@@ -44,7 +44,7 @@ export function ThemeToggle() {
           />
 
           {/* Dropdown Menu */}
-          <div className="absolute right-0 top-full mt-2 z-50 min-w-[140px] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+          <div className="absolute right-0 top-full mt-2 z-999 min-w-[140px] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
             {themeOptions.map((option) => {
               const Icon = option.icon;
               const isActive = theme === option.value;
