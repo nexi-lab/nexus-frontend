@@ -225,7 +225,7 @@ export function FileBrowser() {
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="relative z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4 flex-1">
             <img src="/nexus-logo.png" alt="Nexus Logo" className="h-10 w-10" />
