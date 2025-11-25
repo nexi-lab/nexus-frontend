@@ -1,6 +1,7 @@
 import { Bot, Check, Copy, Eye, EyeOff, Info } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { copyToClipboard } from '../utils';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
@@ -202,7 +203,7 @@ export function RegisterAgentDialog({ open, onOpenChange, onRegisterAgent }: Reg
     if (!newApiKey) return;
 
     try {
-      await navigator.clipboard.writeText(newApiKey);
+      await copyToClipboard(newApiKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {

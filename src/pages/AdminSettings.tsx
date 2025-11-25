@@ -2,6 +2,7 @@ import { ArrowLeft, Calendar, Check, Copy, Edit, Eye, EyeOff, Filter, Key, Plus,
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import { copyToClipboard } from '../utils';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -190,7 +191,7 @@ export function AdminSettings() {
     if (!newApiKey) return;
 
     try {
-      await navigator.clipboard.writeText(newApiKey);
+      await copyToClipboard(newApiKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {

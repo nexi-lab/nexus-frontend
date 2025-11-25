@@ -7,6 +7,7 @@ import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { fileKeys, useCreateDirectory, useCreateWorkspace, useDeleteFile, useRegisterAgent, useUploadFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
+import { copyToClipboard } from '../utils';
 import { AgentManagementDialog } from './AgentManagementDialog';
 import { Breadcrumb } from './Breadcrumb';
 import { ChatPanel } from './ChatPanel';
@@ -181,7 +182,7 @@ export function FileBrowser() {
 
       case 'copy-path':
         try {
-          await navigator.clipboard.writeText(file.path);
+          await copyToClipboard(file.path);
           // Could add a toast notification here
           console.log('Path copied to clipboard:', file.path);
         } catch (error) {

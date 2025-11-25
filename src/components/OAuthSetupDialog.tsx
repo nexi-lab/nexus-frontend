@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Copy, ExternalLink, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { copyToClipboard } from '@/utils';
 
 interface OAuthSetupDialogProps {
   open: boolean;
@@ -183,9 +184,14 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess }: OAut
     }
   };
 
-  const handleCopyUrl = () => {
-    navigator.clipboard.writeText(authUrl);
-    toast.success('Authorization URL copied to clipboard');
+  const handleCopyUrl = async () => {
+    try {
+      await copyToClipboard(authUrl);
+      toast.success('Authorization URL copied to clipboard');
+    } catch (err) {
+      console.error('Failed to copy URL:', err);
+      toast.error('Failed to copy URL to clipboard');
+    }
   };
 
   const handleOpenUrl = () => {
