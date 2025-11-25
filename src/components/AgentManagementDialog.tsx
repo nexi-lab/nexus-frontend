@@ -145,9 +145,7 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
       const sandboxName = agentId;
 
       // Select provider based on whether Nexus is running locally
-      const baseURL = apiClient.getBaseURL();
-      const isLocalhost = baseURL.includes('localhost') || baseURL.includes('127.0.0.1');
-      const provider = isLocalhost ? 'docker' : 'e2b';
+      const provider = 'docker'
 
       console.log(`Getting or creating sandbox with name: ${sandboxName}, provider: ${provider}`);
 
