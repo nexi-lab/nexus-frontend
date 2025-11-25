@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Bot, Brain, Cloud, FolderPlus, MessageSquare, Settings } from 'lucide-react';
+import { Bot, Brain, Cloud, FolderPlus, Link2, MessageSquare, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
@@ -293,6 +293,10 @@ export function FileBrowser() {
                 <Button variant="ghost" size="sm" onClick={() => setRegisterAgentDialogOpen(true)}>
                   <Bot className="h-4 w-4 mr-2" />
                   Agents
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/integrations')}>
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Integrations
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setMountManagementDialogOpen(true)}>
                   <Cloud className="h-4 w-4 mr-2" />

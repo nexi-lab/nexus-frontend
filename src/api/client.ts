@@ -637,6 +637,22 @@ class NexusAPIClient {
   // ===== OAuth Methods =====
 
   /**
+   * List all available OAuth providers from configuration.
+   *
+   * @returns List of provider information
+   */
+  async oauthListProviders(): Promise<Array<{
+    name: string;
+    display_name: string;
+    scopes: string[];
+    requires_pkce: boolean;
+    icon_url?: string;
+    metadata: Record<string, any>;
+  }>> {
+    return await this.call('oauth_list_providers', {});
+  }
+
+  /**
    * Get OAuth authorization URL for Google Drive.
    *
    * @param redirectUri - OAuth redirect URI (default: http://localhost:5173/oauth/callback)
@@ -646,7 +662,40 @@ class NexusAPIClient {
     url: string;
     state: string;
   }> {
-    return await this.call('oauth_get_drive_auth_url', {
+    return await this.call('oauth_get_auth_url', {
+      provider: 'google-drive',
+      redirect_uri: redirectUri || 'http://localhost:5173/oauth/callback',
+    });
+  }
+
+  /**
+   * Get OAuth authorization URL for Gmail.
+   *
+   * @param redirectUri - OAuth redirect URI (default: http://localhost:5173/oauth/callback)
+   * @returns Authorization URL and state token
+   */
+  async oauthGetGmailAuthUrl(redirectUri?: string): Promise<{
+    url: string;
+    state: string;
+  }> {
+    return await this.call('oauth_get_auth_url', {
+      provider: 'gmail',
+      redirect_uri: redirectUri || 'http://localhost:5173/oauth/callback',
+    });
+  }
+
+  /**
+   * Get OAuth authorization URL for Google Cloud Storage.
+   *
+   * @param redirectUri - OAuth redirect URI (default: http://localhost:5173/oauth/callback)
+   * @returns Authorization URL and state token
+   */
+  async oauthGetCloudStorageAuthUrl(redirectUri?: string): Promise<{
+    url: string;
+    state: string;
+  }> {
+    return await this.call('oauth_get_auth_url', {
+      provider: 'google-cloud-storage',
       redirect_uri: redirectUri || 'http://localhost:5173/oauth/callback',
     });
   }
@@ -664,7 +713,7 @@ class NexusAPIClient {
   async oauthExchangeCode(params: {
     provider: string;
     code: string;
-    user_email: string;
+    user_email?: string; // Optional: will be fetched from provider if not provided
     state?: string;
     redirect_uri?: string;
   }): Promise<{
@@ -676,7 +725,7 @@ class NexusAPIClient {
     return await this.call('oauth_exchange_code', {
       provider: params.provider,
       code: params.code,
-      user_email: params.user_email,
+      ...(params.user_email && { user_email: params.user_email }),
       state: params.state,
       redirect_uri: params.redirect_uri || 'http://localhost:5173/oauth/callback',
     });

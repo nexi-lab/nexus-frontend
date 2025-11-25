@@ -5,6 +5,7 @@ import { FileBrowser } from './components/FileBrowser';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AdminSettings } from './pages/AdminSettings';
+import { Integrations } from './pages/Integrations';
 import OAuthCallback from './pages/OAuthCallback';
 import './index.css';
 import { Toaster } from 'sonner';
@@ -41,6 +42,7 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<FileBrowser />} />
               <Route path="/admin" element={<AdminSettings />} />
+              <Route path="/integrations" element={<Integrations />} />
               <Route path="/oauth/callback" element={<OAuthCallback />} />
             </Routes>
           </BrowserRouter>

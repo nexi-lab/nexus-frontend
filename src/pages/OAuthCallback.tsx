@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { apiClient } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [message, setMessage] = useState('Processing OAuth callback...');
 
@@ -17,7 +19,7 @@ export default function OAuthCallback() {
     if (error) {
       setStatus('error');
       setMessage(`OAuth error: ${error}`);
-      setTimeout(() => navigate('/'), 3000);
+      setTimeout(() => navigate('/integrations'), 3000);
       return;
     }
 
@@ -25,22 +27,59 @@ export default function OAuthCallback() {
     if (!code || !state) {
       setStatus('error');
       setMessage('Missing authorization code or state parameter');
-      setTimeout(() => navigate('/'), 3000);
+      setTimeout(() => navigate('/integrations'), 3000);
       return;
     }
 
-    // Store the code and state in sessionStorage for the OAuth dialog to pick up
-    sessionStorage.setItem('oauth_code', code);
-    sessionStorage.setItem('oauth_state', state);
+    // Get provider from sessionStorage (stored when auth URL was generated)
+    const provider = sessionStorage.getItem('oauth_provider');
+    if (!provider) {
+      setStatus('error');
+      setMessage('Missing provider information. Please try connecting again.');
+      setTimeout(() => navigate('/integrations'), 3000);
+      return;
+    }
 
-    setStatus('success');
-    setMessage('Authorization successful! Redirecting...');
+    // Automatically exchange the code and store credentials
+    const exchangeCode = async () => {
+      try {
+        setStatus('processing');
+        setMessage('Exchanging authorization code...');
 
-    // Redirect back to the main app after a short delay
-    setTimeout(() => {
-      navigate('/', { state: { oauthCallback: true } });
-    }, 1500);
-  }, [searchParams, navigate]);
+        // Exchange code - email will be fetched automatically from provider
+        const result = await apiClient.oauthExchangeCode({
+          provider,
+          code,
+          state,
+          // user_email is optional - backend will fetch it from provider
+        });
+
+        if (result.success) {
+          // Clear sessionStorage
+          sessionStorage.removeItem('oauth_code');
+          sessionStorage.removeItem('oauth_state');
+          sessionStorage.removeItem('oauth_provider');
+
+          setStatus('success');
+          setMessage(`Successfully connected! Redirecting to integrations...`);
+
+          // Redirect to integrations page after a short delay
+          setTimeout(() => {
+            navigate('/integrations?oauth_callback=true');
+          }, 1500);
+        } else {
+          throw new Error('Failed to exchange authorization code');
+        }
+      } catch (error: any) {
+        console.error('Failed to exchange OAuth code:', error);
+        setStatus('error');
+        setMessage(`Failed to complete setup: ${error.message || 'Unknown error'}`);
+        setTimeout(() => navigate('/integrations'), 3000);
+      }
+    };
+
+    exchangeCode();
+  }, [searchParams, navigate, apiClient]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
