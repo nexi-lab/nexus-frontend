@@ -745,6 +745,7 @@ class NexusAPIClient {
     credential_id: string;
     provider: string;
     user_email: string;
+    user_id?: string | null; // Nexus user identity (for permission checks)
     scopes: string[];
     expires_at: string | null;
     created_at: string | null;

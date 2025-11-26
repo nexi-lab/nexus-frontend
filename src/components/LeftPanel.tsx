@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Bot, Brain, Building2, ChevronDown, ChevronRight, FolderTree, RefreshCw, Search, User } from 'lucide-react';
+import { Bot, Brain, Building2, ChevronDown, ChevronRight, Files, RefreshCw, Search, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { fileKeys } from '../hooks/useFiles';
@@ -123,7 +123,7 @@ export function LeftPanel({
           }`}
           onClick={() => setActiveTab('explorer')}
         >
-          <FolderTree className="h-4 w-4" />
+          <Files className="h-4 w-4" />
           Explorer
         </button>
         <button

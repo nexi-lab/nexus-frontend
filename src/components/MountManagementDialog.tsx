@@ -1,6 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Cloud, Database, HardDrive, Mail } from 'lucide-react';
-import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Cloud, Database, Folder, HardDrive, Mail, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { fileKeys } from '../hooks/useFiles';
@@ -8,7 +9,14 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import OAuthSetupDialog from './OAuthSetupDialog';
+
+// Custom icon for cloud storage services (Google Drive, OneDrive, etc.)
+const CloudFolderIcon = ({ className }: { className?: string }) => (
+  <div className="relative inline-block">
+    <Folder className={className} />
+    <Cloud className={`${className} absolute -top-1 -right-1 h-3 w-3`} />
+  </div>
+);
 
 type BackendType = 'gcs_connector' | 's3' | 'gdrive_connector' | 'gmail';
 
@@ -16,6 +24,7 @@ interface MountManagementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialMountPoint?: string;
+  onSuccess?: () => void;
 }
 
 interface GCSConfig {
@@ -31,11 +40,41 @@ interface GoogleDriveConfig {
   token_manager_db: string;
 }
 
-export function MountManagementDialog({ open, onOpenChange, initialMountPoint }: MountManagementDialogProps) {
-  const { apiClient } = useAuth();
+export function MountManagementDialog({ open, onOpenChange, initialMountPoint, onSuccess }: MountManagementDialogProps) {
+  const { apiClient, userInfo } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<'select' | 'configure'>(initialMountPoint ? 'configure' : 'select');
   const [selectedBackend, setSelectedBackend] = useState<BackendType>('gcs_connector');
+  
+  // Get current user's user_id (preferred) or user (fallback)
+  const currentUserId = userInfo?.subject_id || userInfo?.user || null;
+  
+  // Check for Google Drive OAuth credentials
+  const { data: gdriveCredentials = [] } = useQuery({
+    queryKey: ['oauth_credentials', 'google-drive'],
+    queryFn: async () => {
+      try {
+        return await apiClient.oauthListCredentials({ 
+          provider: 'google-drive',
+          include_revoked: false 
+        });
+      } catch (error) {
+        console.error('Failed to load Google Drive credentials:', error);
+        return [];
+      }
+    },
+    enabled: open && selectedBackend === 'gdrive_connector',
+  });
+  
+  // Find active Google Drive credential for current user
+  const activeGdriveCredential = gdriveCredentials.find((cred) => {
+    if (cred.revoked) return false;
+    if (cred.user_id) {
+      return cred.user_id === currentUserId;
+    }
+    return cred.user_email === currentUserId;
+  });
 
   // Form state
   const [mountName, setMountName] = useState('');
@@ -62,9 +101,17 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
     root_folder: 'nexus-data',
     token_manager_db: '~/.nexus/nexus.db',
   });
+  
+  // Auto-fill user_email from OAuth credential when available
+  useEffect(() => {
+    if (selectedBackend === 'gdrive_connector' && activeGdriveCredential) {
+      setGdriveConfig((prev) => ({
+        ...prev,
+        user_email: activeGdriveCredential.user_email,
+      }));
+    }
+  }, [selectedBackend, activeGdriveCredential]);
 
-  // OAuth setup dialog
-  const [oauthDialogOpen, setOauthDialogOpen] = useState(false);
 
   const createMountMutation = useMutation({
     mutationFn: async (params: {
@@ -123,7 +170,12 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
       // Invalidate mounts and file lists to refresh the UI
       await queryClient.invalidateQueries({ queryKey: fileKeys.mounts() });
       await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+      await queryClient.invalidateQueries({ queryKey: ['saved_mounts'] });
       handleClose();
+      // Call onSuccess callback if provided (for parent component to refresh)
+      if (onSuccess) {
+        onSuccess();
+      }
     },
     onError: (error: any) => {
       console.error('Failed to create mount:', error);
@@ -142,7 +194,38 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
     onOpenChange(false);
   };
 
-  const handleBackendSelect = (backend: BackendType) => {
+  const handleBackendSelect = async (backend: BackendType) => {
+    // For Google Drive, check if OAuth credentials exist
+    if (backend === 'gdrive_connector') {
+      try {
+        const credentials = await apiClient.oauthListCredentials({ 
+          provider: 'google-drive',
+          include_revoked: false 
+        });
+        
+        // Find active credential for current user
+        const activeCredential = credentials.find((cred) => {
+          if (cred.revoked) return false;
+          if (cred.user_id) {
+            return cred.user_id === currentUserId;
+          }
+          return cred.user_email === currentUserId;
+        });
+        
+        if (!activeCredential) {
+          // No OAuth credential - redirect to integrations page
+          toast.info('Please connect Google Drive in Integrations first');
+          onOpenChange(false);
+          navigate('/integrations');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to check Google Drive credentials:', error);
+        toast.error('Failed to check OAuth credentials. Please try again.');
+        return;
+      }
+    }
+    
     setSelectedBackend(backend);
     setStep('configure');
   };
@@ -171,18 +254,18 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
         access_token: gcsConfig.access_token || '',
       };
     } else if (selectedBackend === 'gdrive_connector') {
-      if (!gdriveConfig.user_email) {
-        toast.error('User email is required for Google Drive');
+      // Check if OAuth credential exists
+      if (!activeGdriveCredential) {
+        toast.error('Google Drive OAuth credential not found. Please connect in Integrations first.');
         return;
       }
-      if (!gdriveConfig.token_manager_db) {
-        toast.error('Token Manager DB path is required for Google Drive');
-        return;
-      }
+      
+      // Use default token_manager_db path and OAuth credential email
       backendConfig = {
-        token_manager_db: gdriveConfig.token_manager_db,
+        token_manager_db: '~/.nexus/nexus.db', // Default path
         root_folder: gdriveConfig.root_folder || 'nexus-data',
-        user_email: gdriveConfig.user_email,
+        user_email: activeGdriveCredential.user_email,
+        provider: 'google-drive', // Specify the provider name for the connector
       };
     }
 
@@ -215,7 +298,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
     {
       type: 'gdrive_connector' as BackendType,
       name: 'Google Drive',
-      icon: <Database className="h-6 w-6 text-green-500" />,
+      icon: <CloudFolderIcon className="h-6 w-6 text-green-500" />,
       description: 'Connect to Google Drive',
       available: true,
     },
@@ -370,71 +453,54 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
             {/* Google Drive specific config */}
             {selectedBackend === 'gdrive_connector' && (
               <>
-                <div className="rounded-md bg-blue-50 dark:bg-blue-950 p-4 border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                    OAuth Setup Required
-                  </p>
-                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                    Google Drive requires OAuth authentication. Click the button below to setup OAuth credentials
-                    if you haven't already.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setOauthDialogOpen(true)}
-                    className="w-full"
-                  >
-                    Setup OAuth Credentials
-                  </Button>
-                </div>
+                {activeGdriveCredential ? (
+                  <>
+                    <div className="rounded-md bg-green-50 dark:bg-green-950 p-4 border border-green-200 dark:border-green-800">
+                      <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                        ✓ OAuth Connected
+                      </p>
+                      <p className="text-xs text-green-800 dark:text-green-200">
+                        Using credentials for {activeGdriveCredential.user_email}
+                      </p>
+                    </div>
 
-                <div className="space-y-2">
-                  <label htmlFor="userEmail" className="text-sm font-medium">
-                    Google Account Email <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    id="userEmail"
-                    type="email"
-                    placeholder="your-email@gmail.com"
-                    value={gdriveConfig.user_email}
-                    onChange={(e) => setGdriveConfig({ ...gdriveConfig, user_email: e.target.value })}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    The Google account that has been authorized via OAuth
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="tokenManagerDb" className="text-sm font-medium">
-                    Token Manager DB Path <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    id="tokenManagerDb"
-                    placeholder="~/.nexus/nexus.db"
-                    value={gdriveConfig.token_manager_db}
-                    onChange={(e) => setGdriveConfig({ ...gdriveConfig, token_manager_db: e.target.value })}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Path to Nexus database containing OAuth tokens (default: ~/.nexus/nexus.db)
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="rootFolder" className="text-sm font-medium">
-                    Root Folder (Optional)
-                  </label>
-                  <Input
-                    id="rootFolder"
-                    placeholder="nexus-data"
-                    value={gdriveConfig.root_folder}
-                    onChange={(e) => setGdriveConfig({ ...gdriveConfig, root_folder: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Root folder name in Google Drive (default: nexus-data)
-                  </p>
-                </div>
+                    <div className="space-y-2">
+                      <label htmlFor="rootFolder" className="text-sm font-medium">
+                        Root Folder <span className="text-muted-foreground">(Optional)</span>
+                      </label>
+                      <Input
+                        id="rootFolder"
+                        placeholder="nexus-data"
+                        value={gdriveConfig.root_folder}
+                        onChange={(e) => setGdriveConfig({ ...gdriveConfig, root_folder: e.target.value })}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Root folder name in Google Drive (default: nexus-data)
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 p-4 border border-yellow-200 dark:border-yellow-800">
+                    <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100 mb-2">
+                        OAuth Setup Required
+                      </p>
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
+                        Google Drive requires OAuth authentication. Please connect Google Drive in the Integrations page first.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          onOpenChange(false);
+                          navigate('/integrations');
+                        }}
+                        className="w-full"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Go to Integrations
+                      </Button>
+                    </div>
+                )}
               </>
             )}
 
@@ -483,16 +549,6 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint }:
         )}
       </DialogContent>
 
-      {/* OAuth Setup Dialog */}
-      <OAuthSetupDialog
-        open={oauthDialogOpen}
-        onOpenChange={setOauthDialogOpen}
-        onSuccess={(userEmail) => {
-          // Auto-fill the user email in the form
-          setGdriveConfig({ ...gdriveConfig, user_email: userEmail });
-          toast.success('OAuth credentials setup completed. You can now create the mount.');
-        }}
-      />
     </Dialog>
   );
 }

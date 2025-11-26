@@ -298,7 +298,7 @@ export function FileBrowser() {
                   <Link2 className="h-4 w-4 mr-2" />
                   Integrations
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setMountManagementDialogOpen(true)}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/mounts')}>
                   <Cloud className="h-4 w-4 mr-2" />
                   Mounts
                 </Button>

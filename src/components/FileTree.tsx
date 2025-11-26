@@ -10,6 +10,14 @@ import type { FileInfo } from '../types/file';
 import { type ContextMenuAction, FileContextMenu } from './FileContextMenu';
 import { InlineFileInput } from './InlineFileInput';
 
+// Custom icon for Google Drive (folder with cloud)
+const FolderCloudIcon = ({ className }: { className?: string }) => (
+  <div className={`relative ${className}`}>
+    <Folder className="h-4 w-4 text-green-500" />
+    <Cloud className="h-3 w-3 absolute -bottom-0.5 -right-0.5 text-blue-400" />
+  </div>
+);
+
 // Helper function to check if a file is a parsed markdown file
 function isParsedFile(fileName: string): boolean {
   // Pattern: *_parsed.{ext}.md (e.g., document_parsed.pdf.md, sheet_parsed.xlsx.md)
@@ -28,27 +36,41 @@ function getFolderIcon(backendType?: string, isExpanded?: boolean) {
   }
 
   // Mount point - use backend-specific icon
-  switch (backendType) {
-    case 'GCSConnectorBackend':
-    case 'GCSBackend':
-      return (
-        <span title={`Backend: ${backendType}`}>
-          <Cloud className="h-4 w-4 text-blue-400 flex-shrink-0" />
-        </span>
-      );
-    case 'LocalBackend':
-      return (
-        <span title={`Backend: ${backendType}`}>
-          <HardDrive className="h-4 w-4 text-gray-400 flex-shrink-0" />
-        </span>
-      );
-    default:
-      return (
-        <span title={`Backend: ${backendType}`}>
-          <Database className="h-4 w-4 text-purple-400 flex-shrink-0" />
-        </span>
-      );
+  // Normalize backend type for comparison (case-insensitive, handle variations)
+  const normalizedBackendType = backendType.toLowerCase();
+  
+  if (normalizedBackendType.includes('gcs') || normalizedBackendType === 'gcs_connector') {
+    return (
+      <span title={`Backend: ${backendType}`}>
+        <Cloud className="h-4 w-4 text-blue-400 flex-shrink-0" />
+      </span>
+    );
   }
+  
+  if (normalizedBackendType.includes('gdrive') || 
+      normalizedBackendType === 'gdrive_connector' ||
+      normalizedBackendType === 'googledriveconnectorbackend') {
+    return (
+      <span title={`Backend: ${backendType}`}>
+        <FolderCloudIcon className="h-4 w-4 flex-shrink-0" />
+      </span>
+    );
+  }
+  
+  if (normalizedBackendType.includes('local')) {
+    return (
+      <span title={`Backend: ${backendType}`}>
+        <HardDrive className="h-4 w-4 text-gray-400 flex-shrink-0" />
+      </span>
+    );
+  }
+  
+  // Default fallback
+  return (
+    <span title={`Backend: ${backendType}`}>
+      <Database className="h-4 w-4 text-purple-400 flex-shrink-0" />
+    </span>
+  );
 }
 
 interface FileTreeProps {
@@ -181,14 +203,11 @@ function TreeNode({
             onPathChange(path);
           }}
         >
-          {directories.length > 0 ? (
-            isExpanded ? (
-              <ChevronDown className="h-4 w-4 flex-shrink-0" />
-            ) : (
-              <ChevronRight className="h-4 w-4 flex-shrink-0" />
-            )
+          {/* Always show arrow for directories, even if children haven't loaded yet */}
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4 flex-shrink-0" />
           ) : (
-            <span className="w-4" />
+            <ChevronRight className="h-4 w-4 flex-shrink-0" />
           )}
           {getFolderIcon(dirFileInfo.backendType, isExpanded)}
           <span className="truncate">{name}</span>

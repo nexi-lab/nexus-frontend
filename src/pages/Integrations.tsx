@@ -1,4 +1,4 @@
-import { ArrowLeft, Link2, Plus, Loader2, CheckCircle2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Link2, Plus, Loader2, CheckCircle2, Trash2, Play } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
@@ -19,6 +19,7 @@ interface OAuthCredential {
   credential_id: string;
   provider: string;
   user_email: string;
+  user_id?: string | null; // Nexus user identity (for permission checks)
   scopes: string[];
   expires_at: string | null;
   created_at: string | null;
@@ -28,12 +29,16 @@ interface OAuthCredential {
 
 export function Integrations() {
   const navigate = useNavigate();
-  const { apiClient } = useAuth();
+  const { apiClient, userInfo } = useAuth();
   const [selectedProvider, setSelectedProvider] = useState<string>('');
   const [oauthDialogOpen, setOauthDialogOpen] = useState(false);
   const [providers, setProviders] = useState<OAuthProvider[]>([]);
   const [credentials, setCredentials] = useState<OAuthCredential[]>([]);
   const [loading, setLoading] = useState(true);
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+
+  // Get current user's user_id (preferred) or user (fallback)
+  const currentUserId = userInfo?.subject_id || userInfo?.user || null;
 
   useEffect(() => {
     loadProvidersAndCredentials();
@@ -57,6 +62,8 @@ export function Integrations() {
         apiClient.oauthListCredentials({ include_revoked: false }),
       ]);
       setProviders(providersData || []);
+      // Backend already filters credentials by user_id from context (API key)
+      // So we can trust the returned credentials belong to the current user
       setCredentials(credentialsData || []);
     } catch (error: any) {
       console.error('Failed to load providers:', error);
@@ -66,23 +73,18 @@ export function Integrations() {
     }
   };
 
-  const isProviderConnected = (providerName: string): boolean => {
-    return credentials.some(
-      (cred) => cred.provider === providerName && !cred.revoked
-    );
-  };
-
-  const getConnectedEmail = (providerName: string): string | null => {
-    const cred = credentials.find(
-      (cred) => cred.provider === providerName && !cred.revoked
-    );
-    return cred?.user_email || null;
-  };
-
   const getConnectedCredential = (providerName: string): OAuthCredential | null => {
-    return credentials.find(
-      (cred) => cred.provider === providerName && !cred.revoked
-    ) || null;
+    if (!currentUserId) return null;
+    return (
+      credentials.find((cred) => {
+        if (cred.provider !== providerName || cred.revoked) return false;
+        // Match by user_id (preferred) or user_email (fallback)
+        if (cred.user_id) {
+          return cred.user_id === currentUserId;
+        }
+        return cred.user_email === currentUserId;
+      }) || null
+    );
   };
 
   const handleConnectProvider = async (providerName: string) => {
@@ -139,6 +141,48 @@ export function Integrations() {
     }
   };
 
+  const handleTestCredential = async (providerName: string) => {
+    const credential = getConnectedCredential(providerName);
+    if (!credential) {
+      toast.error('No credential found to test');
+      return;
+    }
+
+    try {
+      setTestingProvider(providerName);
+      toast.info(`Testing credential for ${providerName}...`);
+      
+      const result = await apiClient.oauthTestCredential({
+        provider: providerName,
+        user_email: credential.user_email,
+      });
+      
+      if (result.valid) {
+        toast.success(
+          `Credential is valid${result.refreshed ? ' (token was refreshed)' : ''}`,
+          {
+            description: result.expires_at
+              ? `Expires: ${new Date(result.expires_at).toLocaleString()}`
+              : undefined,
+          }
+        );
+        // Reload credentials to update expiration info
+        await loadProvidersAndCredentials();
+      } else {
+        toast.error(
+          `Credential is invalid`,
+          {
+            description: result.error || 'The credential could not be validated',
+          }
+        );
+      }
+    } catch (error: any) {
+      toast.error(`Failed to test credential: ${error.message}`);
+    } finally {
+      setTestingProvider(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
@@ -185,11 +229,11 @@ export function Integrations() {
                   <p className="text-sm text-muted-foreground">No integrations available</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {providers.map((provider) => {
-                    const isConnected = isProviderConnected(provider.name);
-                    const connectedEmail = getConnectedEmail(provider.name);
                     const credential = getConnectedCredential(provider.name);
+                    const isConnected = !!credential;
+                    const connectedEmail = credential?.user_email || null;
                     const isExpired = credential?.expires_at
                       ? new Date(credential.expires_at) < new Date()
                       : false;
@@ -230,13 +274,13 @@ export function Integrations() {
                             >
                               <CheckCircle2 className="h-3 w-3" />
                               {isExpired ? 'Expired' : 'Connected'}
-                            </span>
+                        </span>
                           ) : (
                             <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0">
                               Not Connected
-                            </span>
-                          )}
-                        </div>
+                        </span>
+                      )}
+                    </div>
                         {connectedEmail && (
                           <div className="mb-2">
                             <p className="text-xs text-muted-foreground truncate">
@@ -258,45 +302,71 @@ export function Integrations() {
                           </div>
                         )}
                         {provider.requires_pkce && !isConnected && (
-                          <p className="text-xs text-muted-foreground mb-2">
+                          <p className="text-xs text-muted-foreground mb-3">
                             Requires PKCE authentication
                           </p>
                         )}
-                        <div className="flex gap-2">
-                          {isConnected && !isExpired && (
+                        <div className="flex items-center gap-2">
+                          {isConnected && !isExpired ? (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => handleTestCredential(provider.name)}
+                                disabled={loading || testingProvider === provider.name}
+                              >
+                                {testingProvider === provider.name ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Testing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="h-4 w-4 mr-2" />
+                                    Test Connection
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDisconnectProvider(provider.name)}
+                                disabled={loading || testingProvider === provider.name}
+                                title="Disconnect"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
                             <Button
-                              variant="outline"
+                              variant="default"
                               size="sm"
-                              className="flex-1"
-                              onClick={() => handleDisconnectProvider(provider.name)}
+                              className="w-full"
+                              onClick={() => handleConnectProvider(provider.name)}
+                              disabled={loading}
                             >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Disconnect
+                              <Plus className="h-4 w-4 mr-2" />
+                              Connect
                             </Button>
                           )}
-                          <Button
-                            variant={isConnected && !isExpired ? "outline" : "default"}
-                            size="sm"
-                            className={isConnected && !isExpired ? "flex-1" : "w-full"}
-                            onClick={() => handleConnectProvider(provider.name)}
-                          >
-                            {isConnected && !isExpired ? (
-                              <>
-                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                Reconnect
-                              </>
-                            ) : (
-                              <>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Connect
-                              </>
-                            )}
-                          </Button>
+                          {isConnected && isExpired && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => handleConnectProvider(provider.name)}
+                              disabled={loading}
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-2" />
+                              Reconnect
+                            </Button>
+                          )}
                         </div>
-                      </div>
+                  </div>
                     );
                   })}
-                </div>
+              </div>
               )}
             </div>
           </div>

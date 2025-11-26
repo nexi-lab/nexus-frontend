@@ -207,12 +207,56 @@ export function createFilesAPI(client: NexusAPIClient) {
       return result;
     },
 
+    // List all saved mount configurations (from database)
+    async listSavedMounts(): Promise<Array<{
+      mount_point: string;
+      backend_type: string;
+      backend_config: Record<string, any>;
+      priority: number;
+      readonly: boolean;
+      description?: string;
+      owner_user_id?: string;
+      tenant_id?: string;
+      created_at?: string;
+      updated_at?: string;
+    }>> {
+      const result = await client.call<Array<{
+        mount_point: string;
+        backend_type: string;
+        backend_config: Record<string, any>;
+        priority: number;
+        readonly: boolean;
+        description?: string;
+        owner_user_id?: string;
+        tenant_id?: string;
+        created_at?: string;
+        updated_at?: string;
+      }>>('list_saved_mounts', {});
+      return result;
+    },
+
+    // Load and activate a saved mount
+    async loadMount(mount_point: string): Promise<string> {
+      const result = await client.call<string>('load_mount', {
+        mount_point,
+      });
+      return result;
+    },
+
     // Sync mount metadata from connector backend
     async syncMount(mount_point: string, recursive: boolean = true, dry_run: boolean = false): Promise<{ files_scanned: number; files_updated: number; files_created: number; files_deleted: number; errors: number }> {
       const result = await client.call<{ files_scanned: number; files_updated: number; files_created: number; files_deleted: number; errors: number }>('sync_mount', {
         mount_point,
         recursive,
         dry_run,
+      });
+      return result;
+    },
+
+    // Delete a saved mount configuration
+    async deleteSavedMount(mount_point: string): Promise<boolean> {
+      const result = await client.call<boolean>('delete_saved_mount', {
+        mount_point,
       });
       return result;
     },
