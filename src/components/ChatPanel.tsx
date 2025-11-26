@@ -92,8 +92,12 @@ function MessageBubble({ message, allMessages }: { message: Message; allMessages
           </div>
         )}
 
-        {/* Tool Calls */}
-        {hasToolCalls && <ToolCalls toolCalls={aiMessage.tool_calls} messages={allMessages} />}
+        {/* Tool Calls - full width, break out of max-w constraint */}
+        {hasToolCalls && (
+          <div className="w-full max-w-none -mx-4 px-4">
+            <ToolCalls toolCalls={aiMessage.tool_calls} messages={allMessages} />
+          </div>
+        )}
       </div>
     </div>
   );
