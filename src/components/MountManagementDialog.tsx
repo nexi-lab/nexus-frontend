@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Cloud, Database, Folder, HardDrive, Mail, ExternalLink } from 'lucide-react';
+import { Cloud, Folder, HardDrive, Mail, ExternalLink } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
