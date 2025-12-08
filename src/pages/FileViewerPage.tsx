@@ -29,7 +29,7 @@ export function FileViewerPage() {
   // Convert bytes to string for text display
   const content = bytesToString(contentBytes);
 
-  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'unknown'>('unknown');
+  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'html' | 'unknown'>('unknown');
 
   useEffect(() => {
     const ext = fileName.split('.').pop()?.toLowerCase();
@@ -47,8 +47,10 @@ export function FileViewerPage() {
       setFileType('markdown');
     } else if (['json', 'jsonl'].includes(ext)) {
       setFileType('json');
+    } else if (['html', 'htm'].includes(ext)) {
+      setFileType('html');
     } else if (
-      ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'rb', 'php', 'html', 'css', 'scss', 'sql', 'sh', 'yaml', 'yml', 'xml'].includes(ext)
+      ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'rb', 'php', 'css', 'scss', 'sql', 'sh', 'yaml', 'yml', 'xml'].includes(ext)
     ) {
       setFileType('code');
     } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
@@ -101,6 +103,8 @@ export function FileViewerPage() {
         return <FileJson className="h-6 w-6" />;
       case 'video':
         return <Film className="h-6 w-6" />;
+      case 'html':
+        return <Code className="h-6 w-6" />;
       default:
         return <FileText className="h-6 w-6" />;
     }
@@ -158,6 +162,18 @@ export function FileViewerPage() {
           <pre className="p-6 bg-muted rounded-lg overflow-auto max-h-[70vh] text-sm font-mono">
             <code>{content}</code>
           </pre>
+        );
+
+      case 'html':
+        return (
+          <div className="w-full h-[70vh] bg-white dark:bg-muted rounded-lg overflow-hidden">
+            <iframe
+              srcDoc={content}
+              className="w-full h-full border-0"
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+              title={fileName}
+            />
+          </div>
         );
 
       case 'pdf':

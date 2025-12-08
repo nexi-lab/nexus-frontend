@@ -24,6 +24,11 @@ function isParsedFile(fileName: string): boolean {
   return /_parsed\.(pdf|xlsx|xls|xlsm|xlsb|docx|doc|pptx|ppt)\.md$/i.test(fileName);
 }
 
+// Helper function to check if a file starts with a dot (hidden file)
+function isDotFile(fileName: string): boolean {
+  return fileName.startsWith('.');
+}
+
 // Helper function to get folder/backend icon based on backend type
 function getFolderIcon(backendType?: string, isExpanded?: boolean) {
   if (!backendType) {
@@ -167,7 +172,7 @@ function TreeNode({
 
   // Filter directories and files based on search results
   const directories = useMemo(() => {
-    const allDirs = files?.filter((f) => f.isDirectory) || [];
+    const allDirs = files?.filter((f) => f.isDirectory && !isDotFile(f.name)) || [];
 
     // If no search is active, show all directories
     if (!searchResults || !relevantPaths) {
@@ -179,7 +184,7 @@ function TreeNode({
   }, [files, searchResults, relevantPaths]);
 
   const fileItems = useMemo(() => {
-    return files?.filter((f) => !f.isDirectory && !isParsedFile(f.name)) || [];
+    return files?.filter((f) => !f.isDirectory && !isParsedFile(f.name) && !isDotFile(f.name)) || [];
   }, [files]);
 
   const dirFileInfo: FileInfo = {

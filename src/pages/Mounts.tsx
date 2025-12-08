@@ -41,14 +41,14 @@ const BACKEND_ICONS: Record<string, React.ReactNode> = {
   gcs_connector: <Cloud className="h-5 w-5 text-blue-500" />,
   s3: <HardDrive className="h-5 w-5 text-orange-500" />,
   gdrive_connector: <CloudFolderIcon className="h-5 w-5 text-green-500" />,
-  gmail: <Mail className="h-5 w-5 text-red-500" />,
+  gmail_connector: <Mail className="h-5 w-5 text-red-500" />,
 };
 
 const BACKEND_NAMES: Record<string, string> = {
   gcs_connector: 'Google Cloud Storage',
   s3: 'Amazon S3',
   gdrive_connector: 'Google Drive',
-  gmail: 'Gmail',
+  gmail_connector: 'Gmail',
 };
 
 export function Mounts() {

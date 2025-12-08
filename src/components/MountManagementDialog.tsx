@@ -18,7 +18,7 @@ const CloudFolderIcon = ({ className }: { className?: string }) => (
   </div>
 );
 
-type BackendType = 'gcs_connector' | 's3' | 'gdrive_connector' | 'gmail';
+type BackendType = 'gcs_connector' | 's3' | 'gdrive_connector' | 'gmail_connector';
 
 interface MountManagementDialogProps {
   open: boolean;
@@ -37,6 +37,12 @@ interface GCSConfig {
 interface GoogleDriveConfig {
   user_email: string;
   root_folder: string;
+  token_manager_db: string;
+}
+
+interface GmailConfig {
+  user_email: string;
+  sync_from_date: string;
   token_manager_db: string;
 }
 
@@ -76,6 +82,32 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
     return cred.user_email === currentUserId;
   });
 
+  // Check for Gmail OAuth credentials
+  const { data: gmailCredentials = [] } = useQuery({
+    queryKey: ['oauth_credentials', 'gmail'],
+    queryFn: async () => {
+      try {
+        return await apiClient.oauthListCredentials({ 
+          provider: 'gmail',
+          include_revoked: false 
+        });
+      } catch (error) {
+        console.error('Failed to load Gmail credentials:', error);
+        return [];
+      }
+    },
+    enabled: open && selectedBackend === 'gmail_connector',
+  });
+  
+  // Find active Gmail credential for current user
+  const activeGmailCredential = gmailCredentials.find((cred) => {
+    if (cred.revoked) return false;
+    if (cred.user_id) {
+      return cred.user_id === currentUserId;
+    }
+    return cred.user_email === currentUserId;
+  });
+
   // Form state
   const [mountName, setMountName] = useState('');
   const [description, setDescription] = useState('');
@@ -102,6 +134,13 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
     token_manager_db: '~/.nexus/nexus.db',
   });
   
+  // Gmail specific config
+  const [gmailConfig, setGmailConfig] = useState<GmailConfig>({
+    user_email: '',
+    sync_from_date: '', // ISO format: YYYY-MM-DD
+    token_manager_db: '~/.nexus/nexus.db',
+  });
+  
   // Auto-fill user_email from OAuth credential when available
   useEffect(() => {
     if (selectedBackend === 'gdrive_connector' && activeGdriveCredential) {
@@ -110,7 +149,13 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
         user_email: activeGdriveCredential.user_email,
       }));
     }
-  }, [selectedBackend, activeGdriveCredential]);
+    if (selectedBackend === 'gmail_connector' && activeGmailCredential) {
+      setGmailConfig((prev) => ({
+        ...prev,
+        user_email: activeGmailCredential.user_email,
+      }));
+    }
+  }, [selectedBackend, activeGdriveCredential, activeGmailCredential]);
 
 
   const createMountMutation = useMutation({
@@ -241,6 +286,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
 
     // Build backend config based on selected backend
     let backendConfig: Record<string, any> = {};
+    let backendType = selectedBackend; // Use separate variable for backend_type
 
     if (selectedBackend === 'gcs_connector') {
       if (!gcsConfig.bucket || !gcsConfig.project_id) {
@@ -267,12 +313,27 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
         user_email: activeGdriveCredential.user_email,
         provider: 'google-drive', // Specify the provider name for the connector
       };
+    } else if (selectedBackend === 'gmail_connector') {
+      // Check if OAuth credential exists
+      if (!activeGmailCredential) {
+        toast.error('Gmail OAuth credential not found. Please connect in Integrations first.');
+        return;
+      }
+      
+      // Use default token_manager_db path and OAuth credential email
+      backendConfig = {
+        token_manager_db: '~/.nexus/nexus.db', // Default path
+        user_email: activeGmailCredential.user_email,
+        sync_from_date: gmailConfig.sync_from_date || undefined, // Optional - defaults to 30 days ago
+        provider: 'gmail', // Specify the provider name for the connector
+      };
+      backendType = 'gmail_connector';
     }
 
     // Submit the mount
     createMountMutation.mutate({
       mount_point: fullMountPoint,
-      backend_type: selectedBackend,
+      backend_type: backendType,
       backend_config: backendConfig,
       priority: parseInt(priority) || 10,
       readonly,
@@ -303,11 +364,11 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
       available: true,
     },
     {
-      type: 'gmail' as BackendType,
+      type: 'gmail_connector' as BackendType,
       name: 'Gmail',
       icon: <Mail className="h-6 w-6 text-red-500" />,
-      description: 'Connect to Gmail',
-      available: false,
+      description: 'Sync emails from Gmail',
+      available: true,
     },
   ];
 
@@ -500,6 +561,60 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
                         Go to Integrations
                       </Button>
                     </div>
+                )}
+              </>
+            )}
+
+            {/* Gmail specific config */}
+            {selectedBackend === 'gmail_connector' && (
+              <>
+                {activeGmailCredential ? (
+                  <>
+                    <div className="rounded-md bg-green-50 dark:bg-green-950 p-4 border border-green-200 dark:border-green-800">
+                      <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                        ✓ OAuth Connected
+                      </p>
+                      <p className="text-xs text-green-800 dark:text-green-200">
+                        Using credentials for {activeGmailCredential.user_email}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="syncFromDate" className="text-sm font-medium">
+                        Sync From Date <span className="text-muted-foreground">(Optional)</span>
+                      </label>
+                      <Input
+                        id="syncFromDate"
+                        type="date"
+                        value={gmailConfig.sync_from_date}
+                        onChange={(e) => setGmailConfig({ ...gmailConfig, sync_from_date: e.target.value })}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Start date for syncing emails (YYYY-MM-DD). If not specified, syncs from 30 days ago.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-md bg-yellow-50 dark:bg-yellow-950 p-4 border border-yellow-200 dark:border-yellow-800">
+                    <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100 mb-2">
+                        OAuth Setup Required
+                      </p>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
+                        Gmail requires OAuth authentication. Please connect Gmail in the Integrations page first.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        onOpenChange(false);
+                        navigate('/integrations');
+                      }}
+                      className="w-full"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Go to Integrations
+                    </Button>
+                  </div>
                 )}
               </>
             )}

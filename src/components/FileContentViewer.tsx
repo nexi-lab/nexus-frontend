@@ -88,7 +88,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
   const content = bytesToString(contentBytes);
   const parsedMdContent = bytesToString(parsedMdBytes);
 
-  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'excel' | 'unknown'>('unknown');
+  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'excel' | 'html' | 'unknown'>('unknown');
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
@@ -134,8 +134,10 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
       setFileType('markdown');
     } else if (['json', 'jsonl'].includes(ext)) {
       setFileType('json');
+    } else if (['html', 'htm'].includes(ext)) {
+      setFileType('html');
     } else if (
-      ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'rb', 'php', 'html', 'css', 'scss', 'sql', 'sh', 'yaml', 'yml', 'xml'].includes(ext)
+      ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'rb', 'php', 'css', 'scss', 'sql', 'sh', 'yaml', 'yml', 'xml'].includes(ext)
     ) {
       setFileType('code');
     } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
@@ -215,6 +217,8 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
         return <FileJson className="h-5 w-5" />;
       case 'video':
         return <Film className="h-5 w-5" />;
+      case 'html':
+        return <Code className="h-5 w-5" />;
       default:
         return <FileText className="h-5 w-5" />;
     }
@@ -319,6 +323,18 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
           <pre className="p-6 bg-muted rounded-lg overflow-auto h-full text-sm font-mono">
             <code>{content}</code>
           </pre>
+        );
+
+      case 'html':
+        return (
+          <div className="h-full w-full bg-white dark:bg-muted">
+            <iframe
+              srcDoc={content}
+              className="w-full h-full border-0"
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+              title={fileName}
+            />
+          </div>
         );
 
       case 'pdf':

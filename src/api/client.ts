@@ -27,7 +27,7 @@ class NexusAPIClient {
 
   // Helper to decode base64-encoded bytes and datetime from backend
   private decodeResult(result: any): any {
-    // Handle bytes type with base64 data
+    // Handle bytes type with base64 data (old format: {__type__: "bytes", data: "base64"})
     if (result && typeof result === 'object' && result.__type__ === 'bytes' && result.data) {
       try {
         // Decode base64 to Uint8Array (preserves binary data)
@@ -40,6 +40,22 @@ class NexusAPIClient {
       } catch (e) {
         console.warn('Failed to decode base64 bytes:', e);
         return result.data;
+      }
+    }
+
+    // Handle new bytes format (new format: {content: "base64", encoding: "base64"})
+    if (result && typeof result === 'object' && result.encoding === 'base64' && result.content) {
+      try {
+        // Decode base64 to Uint8Array (preserves binary data)
+        const binaryString = atob(result.content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+      } catch (e) {
+        console.warn('Failed to decode base64 bytes (new format):', e);
+        return result.content;
       }
     }
 

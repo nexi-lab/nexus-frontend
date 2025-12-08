@@ -84,9 +84,14 @@ function isParsedFile(fileName: string): boolean {
   return /_parsed\.(pdf|xlsx|xls|xlsm|xlsb|docx|doc|pptx|ppt)\.md$/i.test(fileName);
 }
 
+// Helper function to check if a file starts with a dot (hidden file)
+function isDotFile(fileName: string): boolean {
+  return fileName.startsWith('.');
+}
+
 export function FileList({ files, onFileClick, onFileDownload, onFileDelete, onFileRename }: FileListProps) {
-  // Filter out parsed markdown files
-  const visibleFiles = files.filter((file) => !isParsedFile(file.name));
+  // Filter out parsed markdown files and dot files
+  const visibleFiles = files.filter((file) => !isParsedFile(file.name) && !isDotFile(file.name));
 
   return (
     <div className="flex-1 overflow-auto">
