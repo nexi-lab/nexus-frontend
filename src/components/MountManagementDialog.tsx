@@ -140,7 +140,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
     user_email: '',
     sync_from_date: '', // ISO format: YYYY-MM-DD
     token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus',
-    max_message_per_label: 2000, // Default: 2000 messages per folder
+    max_message_per_label: 200, // Default: 200 messages per folder
   });
   
   // Auto-fill user_email from OAuth credential when available
@@ -607,10 +607,10 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
                         min="1"
                         max="10000"
                         value={gmailConfig.max_message_per_label}
-                        onChange={(e) => setGmailConfig({ ...gmailConfig, max_message_per_label: parseInt(e.target.value) || 2000 })}
+                        onChange={(e) => setGmailConfig({ ...gmailConfig, max_message_per_label: parseInt(e.target.value) || 200 })}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Maximum number of messages to sync per folder (SENT, STARRED, IMPORTANT, INBOX). Default: 2000.
+                        Maximum number of messages to sync per folder (SENT, STARRED, IMPORTANT, INBOX). Default: 200. Note: Syncing takes approximately 1 minute per 200 messages.
                       </p>
                     </div>
                   </>
