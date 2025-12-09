@@ -44,6 +44,7 @@ interface GmailConfig {
   user_email: string;
   sync_from_date: string;
   token_manager_db: string;
+  max_message_per_label: number;
 }
 
 export function MountManagementDialog({ open, onOpenChange, initialMountPoint, onSuccess }: MountManagementDialogProps) {
@@ -139,6 +140,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
     user_email: '',
     sync_from_date: '', // ISO format: YYYY-MM-DD
     token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus',
+    max_message_per_label: 2000, // Default: 2000 messages per folder
   });
   
   // Auto-fill user_email from OAuth credential when available
@@ -325,6 +327,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
         token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus', // Default path
         user_email: activeGmailCredential.user_email,
         sync_from_date: gmailConfig.sync_from_date || undefined, // Optional - defaults to 30 days ago
+        max_message_per_label: gmailConfig.max_message_per_label, // Maximum messages to sync per folder
         provider: 'gmail', // Specify the provider name for the connector
       };
       backendType = 'gmail_connector';
@@ -591,6 +594,23 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
                       />
                       <p className="text-xs text-muted-foreground">
                         Start date for syncing emails (YYYY-MM-DD). If not specified, syncs from 30 days ago.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="maxMessagesPerLabel" className="text-sm font-medium">
+                        Max Messages Per Folder
+                      </label>
+                      <Input
+                        id="maxMessagesPerLabel"
+                        type="number"
+                        min="1"
+                        max="10000"
+                        value={gmailConfig.max_message_per_label}
+                        onChange={(e) => setGmailConfig({ ...gmailConfig, max_message_per_label: parseInt(e.target.value) || 2000 })}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Maximum number of messages to sync per folder (SENT, STARRED, IMPORTANT, INBOX). Default: 2000.
                       </p>
                     </div>
                   </>
