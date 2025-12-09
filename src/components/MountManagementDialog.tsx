@@ -131,14 +131,14 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
   const [gdriveConfig, setGdriveConfig] = useState<GoogleDriveConfig>({
     user_email: '',
     root_folder: 'nexus-data',
-    token_manager_db: '~/.nexus/nexus.db',
+    token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus',
   });
   
   // Gmail specific config
   const [gmailConfig, setGmailConfig] = useState<GmailConfig>({
     user_email: '',
     sync_from_date: '', // ISO format: YYYY-MM-DD
-    token_manager_db: '~/.nexus/nexus.db',
+    token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus',
   });
   
   // Auto-fill user_email from OAuth credential when available
@@ -235,7 +235,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
     setPriority('10');
     setReadonly(false);
     setGcsConfig({ bucket: '', project_id: '', prefix: '', access_token: '' });
-    setGdriveConfig({ user_email: '', root_folder: 'nexus-data', token_manager_db: '~/.nexus/nexus.db' });
+    setGdriveConfig({ user_email: '', root_folder: 'nexus-data', token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus' });
     onOpenChange(false);
   };
 
@@ -308,7 +308,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
       
       // Use default token_manager_db path and OAuth credential email
       backendConfig = {
-        token_manager_db: '~/.nexus/nexus.db', // Default path
+        token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus', // Default path
         root_folder: gdriveConfig.root_folder || 'nexus-data',
         user_email: activeGdriveCredential.user_email,
         provider: 'google-drive', // Specify the provider name for the connector
@@ -322,7 +322,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
       
       // Use default token_manager_db path and OAuth credential email
       backendConfig = {
-        token_manager_db: '~/.nexus/nexus.db', // Default path
+        token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus', // Default path
         user_email: activeGmailCredential.user_email,
         sync_from_date: gmailConfig.sync_from_date || undefined, // Optional - defaults to 30 days ago
         provider: 'gmail', // Specify the provider name for the connector
