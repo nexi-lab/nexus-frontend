@@ -27,7 +27,7 @@ class NexusAPIClient {
 
   // Helper to decode base64-encoded bytes and datetime from backend
   private decodeResult(result: any): any {
-    // Handle bytes type with base64 data (old format: {__type__: "bytes", data: "base64"})
+    // Handle bytes type with base64 data (format: {__type__: 'bytes', data: '...'})
     if (result && typeof result === 'object' && result.__type__ === 'bytes' && result.data) {
       try {
         // Decode base64 to Uint8Array (preserves binary data)
