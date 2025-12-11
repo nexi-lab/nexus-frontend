@@ -66,11 +66,18 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
       ...(options.openedFilePath && { opened_file_path: options.openedFilePath }),
     };
 
-    // Build config with recursionLimit (max steps) if specified
+    // Build config with recursion_limit (max steps) if specified
+    // LangGraph SDK expects recursion_limit (snake_case) in the config object
     const config = {
       ...submitOptions?.config,
-      ...(options.maxSteps && { recursionLimit: options.maxSteps }),
+      ...(options.maxSteps && { recursion_limit: options.maxSteps }),
     };
+
+    console.log('[useLangGraph] Submitting with config:', {
+      config,
+      maxSteps: options.maxSteps,
+      hasRecursionLimit: !!config.recursion_limit
+    });
 
     return stream.submit(input, {
       ...submitOptions,
