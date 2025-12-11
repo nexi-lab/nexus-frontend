@@ -20,4 +20,5 @@ export interface ChatConfig {
   sandboxProvider?: string;
   sandboxExpiresAt?: string;
   openedFilePath?: string; // Currently opened file path in the editor
+  maxSteps?: number; // Maximum number of steps for agent execution (recursion limit)
 }

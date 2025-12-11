@@ -365,6 +365,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     userId: userInfo?.subject_id || '',
     tenantId: userInfo?.tenant_id || '',
     openedFilePath: openedFilePath, // Currently opened file path
+    maxSteps: 100, // Default maximum steps for agent execution
   });
   const [showConfig, setShowConfig] = useState(false);
   const [chatKey, setChatKey] = useState(0); // Key to force recreation
@@ -1156,6 +1157,16 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
               <label className="text-sm font-medium">Tenant ID (optional)</label>
               <Input placeholder="tenant-123" value={config.tenantId || ''} onChange={(e) => setConfig((prev) => ({ ...prev, tenantId: e.target.value }))} />
               <p className="text-xs text-muted-foreground">Tenant/organization identifier</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Max Steps</label>
+              <Input
+                type="number"
+                placeholder="100"
+                value={config.maxSteps || ''}
+                onChange={(e) => setConfig((prev) => ({ ...prev, maxSteps: e.target.value ? parseInt(e.target.value, 10) : undefined }))}
+              />
+              <p className="text-xs text-muted-foreground">Maximum number of steps the agent can execute (default: 100)</p>
             </div>
           </div>
         </DialogContent>

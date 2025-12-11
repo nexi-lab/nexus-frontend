@@ -13,6 +13,7 @@ interface UseLangGraphOptions {
   tenantId?: string;
   sandboxId?: string; // Sandbox ID for code execution
   openedFilePath?: string; // Currently opened file path in the editor
+  maxSteps?: number; // Maximum number of steps for agent execution (recursion limit)
   key?: number; // Add key to force recreation
   onThreadIdChange?: (threadId: string) => void;
 }
@@ -65,9 +66,16 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
       ...(options.openedFilePath && { opened_file_path: options.openedFilePath }),
     };
 
+    // Build config with recursionLimit (max steps) if specified
+    const config = {
+      ...submitOptions?.config,
+      ...(options.maxSteps && { recursionLimit: options.maxSteps }),
+    };
+
     return stream.submit(input, {
       ...submitOptions,
       metadata,
+      config,
     });
   };
 
