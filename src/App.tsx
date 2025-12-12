@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AdminSettings } from './pages/AdminSettings';
 import { Integrations } from './pages/Integrations';
 import { Connectors } from './pages/Connectors';
+import { Skills } from './pages/Skills';
 import OAuthCallback from './pages/OAuthCallback';
 import './index.css';
 import { Toaster } from 'sonner';
@@ -45,6 +46,7 @@ function AppContent() {
               <Route path="/admin" element={<AdminSettings />} />
               <Route path="/integrations" element={<Integrations />} />
               <Route path="/connectors" element={<Connectors />} />
+              <Route path="/skills" element={<Skills />} />
               <Route path="/mounts" element={<Navigate to="/connectors" replace />} />
               <Route path="/oauth/callback" element={<OAuthCallback />} />
             </Routes>

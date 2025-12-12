@@ -805,6 +805,111 @@ class NexusAPIClient {
   }> {
     return await this.call('oauth_test_credential', params);
   }
+
+  // ===== Skills Methods =====
+
+  /**
+   * List all skills.
+   *
+   * @param params - Optional parameters
+   * @returns Skills list with metadata
+   */
+  async skillsList(params?: {
+    tier?: string;
+    include_metadata?: boolean;
+  }): Promise<{
+    skills: Array<{
+      name: string;
+      description: string;
+      version?: string;
+      author?: string;
+      tier?: string;
+      file_path?: string;
+      created_at?: string;
+      modified_at?: string;
+      requires?: string[];
+    }>;
+    count: number;
+  }> {
+    return await this.call('skills_list', params || {});
+  }
+
+  /**
+   * Get detailed skill information.
+   *
+   * @param params - Skill query parameters
+   * @returns Skill information
+   */
+  async skillsInfo(params: {
+    skill_name: string;
+  }): Promise<{
+    name: string;
+    description: string;
+    version?: string;
+    author?: string;
+    tier?: string;
+    file_path?: string;
+    content?: string;
+    requires?: string[];
+    created_at?: string;
+    modified_at?: string;
+  }> {
+    return await this.call('skills_info', params);
+  }
+
+  /**
+   * Import skill from ZIP package.
+   *
+   * @param params - Import parameters
+   * @returns Import result with imported skills
+   */
+  async skillsImport(params: {
+    zip_data: string; // Base64 encoded
+    tier?: 'user' | 'system';
+    allow_overwrite?: boolean;
+  }): Promise<{
+    imported_skills: string[];
+    skill_paths: string[];
+    tier: string;
+  }> {
+    return await this.call('skills_import', params);
+  }
+
+  /**
+   * Validate skill ZIP package without importing.
+   *
+   * @param params - Validation parameters
+   * @returns Validation result with errors and warnings
+   */
+  async skillsValidateZip(params: {
+    zip_data: string; // Base64 encoded
+  }): Promise<{
+    valid: boolean;
+    skills_found: string[];
+    errors: string[];
+    warnings: string[];
+  }> {
+    return await this.call('skills_validate_zip', params);
+  }
+
+  /**
+   * Export skill to ZIP package.
+   *
+   * @param params - Export parameters
+   * @returns ZIP data (base64 encoded) and metadata
+   */
+  async skillsExport(params: {
+    skill_name: string;
+    format?: 'generic' | 'claude';
+    include_dependencies?: boolean;
+  }): Promise<{
+    skill_name: string;
+    zip_data: string; // Base64 encoded
+    size_bytes: number;
+    format: string;
+  }> {
+    return await this.call('skills_export', params);
+  }
 }
 
 // Default client instance

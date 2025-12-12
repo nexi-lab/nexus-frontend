@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
+import { BookOpen, Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
@@ -270,12 +270,22 @@ export function FileBrowser() {
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4 flex-1">
             <img src="/nexus-logo.png" alt="Nexus Logo" className="h-10 w-10" />
-            <h1 className="text-2xl font-bold">NexusFS</h1>
+            <h1 className="text-2xl font-bold">Nexus Hub</h1>
           </div>
           <div className="flex gap-2 items-center">
             {isAuthenticated ? (
               <>
-                {userInfo?.user && <span className="text-sm text-muted-foreground mr-2">{userInfo.user}</span>}
+                {userInfo?.user && (
+                  <span className="text-sm text-muted-foreground mr-2">
+                    <span className="font-medium">User:</span> {userInfo.user}
+                    {userInfo.tenant_id && (
+                      <>
+                        <span className="mx-2">|</span>
+                        <span className="font-medium">Tenant:</span> {userInfo.tenant_id}
+                      </>
+                    )}
+                  </span>
+                )}
                 <Button variant="ghost" size="sm" onClick={() => setCreateWorkspaceDialogOpen(true)}>
                   <FolderPlus className="h-4 w-4 mr-2" />
                   Workspaces
@@ -291,6 +301,10 @@ export function FileBrowser() {
                 <Button variant="ghost" size="sm" onClick={() => navigate('/connectors')}>
                   <Cloud className="h-4 w-4 mr-2" />
                   Connectors
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/skills')}>
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Skills
                 </Button>
                 {userInfo?.is_admin && (
                   <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>

@@ -163,8 +163,6 @@ function TreeNode({
       // Call the sync_mount API
       const result = await filesAPI.syncConnector(path, true, false);
 
-      console.log('Sync connector result:', result);
-
       // Invalidate all file list queries for this path and subdirectories
       // This will refresh the file tree to show newly synced files
       await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
@@ -178,7 +176,6 @@ function TreeNode({
 
       toast.success(`Synced ${path}: ${filesScanned} files scanned, ${filesCreated} created, ${filesUpdated} updated, ${filesDeleted} deleted`);
     } catch (error) {
-      console.error('Sync failed:', error);
       toast.error(`Failed to sync ${path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSyncing(false);
@@ -235,8 +232,14 @@ function TreeNode({
           )}
           style={{ paddingLeft: `${level * 12 + 8}px` }}
           onClick={() => {
-            setIsExpanded(!isExpanded);
+            const willBeExpanded = !isExpanded;
+            setIsExpanded(willBeExpanded);
             onPathChange(path);
+
+            // If expanding, invalidate cache to fetch fresh data
+            if (willBeExpanded) {
+              queryClient.invalidateQueries({ queryKey: fileKeys.list(path) });
+            }
           }}
         >
           <input
