@@ -10,7 +10,7 @@ export const fileKeys = {
   list: (path: string) => [...fileKeys.lists(), path] as const,
   file: (path: string) => [...fileKeys.all, 'file', path] as const,
   namespaces: () => [...fileKeys.all, 'namespaces'] as const,
-  mounts: () => [...fileKeys.all, 'mounts'] as const,
+  connectors: () => [...fileKeys.all, 'connectors'] as const,
 };
 
 // Hook to get the filesAPI with the authenticated client
@@ -30,14 +30,14 @@ export function useNamespaces(enabled = true) {
   });
 }
 
-// Get all mounts (global, fetched once)
-export function useMounts(enabled = true) {
+// Get all connectors (global, fetched once)
+export function useConnectors(enabled = true) {
   const filesAPI = useFilesAPI();
   return useQuery({
-    queryKey: fileKeys.mounts(),
-    queryFn: () => filesAPI.listMounts(),
+    queryKey: fileKeys.connectors(),
+    queryFn: () => filesAPI.listConnectors(),
     enabled,
-    staleTime: 30 * 1000, // 30 seconds - mounts don't change very often
+    staleTime: 30 * 1000, // 30 seconds - connectors don't change very often
   });
 }
 

@@ -16,8 +16,8 @@ export type ContextMenuAction =
   | 'copy-path'
   | 'copy-relative-path'
   | 'manage-permissions'
-  | 'add-mount'
-  | 'remove-mount';
+  | 'add-connector'
+  | 'remove-connector';
 
 interface FileContextMenuProps {
   children: ReactNode;
@@ -55,14 +55,14 @@ export function FileContextMenu({ children, file, onAction }: FileContextMenuPro
               Upload Files
             </ContextMenuItem>
             <ContextMenuSeparator />
-            <ContextMenuItem onClick={() => handleAction('add-mount')}>
+            <ContextMenuItem onClick={() => handleAction('add-connector')}>
               <Cloud className="mr-2 h-4 w-4" />
-              Add Mount Here
+              Add Connector Here
             </ContextMenuItem>
             {file.backendType && file.backendType !== 'LocalBackend' && (
-              <ContextMenuItem onClick={() => handleAction('remove-mount')}>
+              <ContextMenuItem onClick={() => handleAction('remove-connector')}>
                 <XCircle className="mr-2 h-4 w-4" />
-                Remove Mount
+                Remove Connector
               </ContextMenuItem>
             )}
             <ContextMenuSeparator />

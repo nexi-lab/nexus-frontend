@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Bot, Brain, Cloud, FolderPlus, Link2, MessageSquare, Settings } from 'lucide-react';
+import { Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
@@ -20,7 +20,7 @@ import { LeftPanel } from './LeftPanel';
 import { LoginDialog } from './LoginDialog';
 import { ManagePermissionsDialog } from './ManagePermissionsDialog';
 import { MemoryManagementDialog } from './MemoryManagementDialog';
-import { MountManagementDialog } from './MountManagementDialog';
+import { ConnectorManagementDialog } from './ConnectorManagementDialog';
 import { RenameDialog } from './RenameDialog';
 import { StoreMemoryDialog } from './StoreMemoryDialog';
 import { ThemeToggle } from './ThemeToggle';
@@ -41,8 +41,7 @@ export function FileBrowser() {
   const [memoryManagementDialogOpen, setMemoryManagementDialogOpen] = useState(false);
   const [storeMemoryDialogOpen, setStoreMemoryDialogOpen] = useState(false);
   const [registerAgentDialogOpen, setRegisterAgentDialogOpen] = useState(false);
-  const [mountManagementDialogOpen, setMountManagementDialogOpen] = useState(false);
-  const [mountTargetPath, setMountTargetPath] = useState<string | undefined>(undefined);
+  const [connectorManagementDialogOpen, setConnectorManagementDialogOpen] = useState(false);
   const [renameFile, setRenameFile] = useState<FileInfo | null>(null);
   const [managePermissionsFile, setManagePermissionsFile] = useState<FileInfo | null>(null);
   const [versionHistoryFile, setVersionHistoryFile] = useState<FileInfo | null>(null);
@@ -223,38 +222,37 @@ export function FileBrowser() {
         setManagePermissionsFile(file);
         break;
 
-      case 'add-mount':
+      case 'add-connector':
         if (file.isDirectory) {
-          setMountTargetPath(file.path);
-          setMountManagementDialogOpen(true);
+          setConnectorManagementDialogOpen(true);
         }
         break;
 
-      case 'remove-mount':
+      case 'remove-connector':
         if (file.isDirectory && file.path) {
-          if (confirm(`Are you sure you want to remove the mount at ${file.path}? This will also delete the mount point directory and saved configuration.`)) {
+          if (confirm(`Are you sure you want to remove the connector at ${file.path}? This will also delete the connector directory and saved configuration.`)) {
             try {
-              // First remove the mount (deactivate)
+              // First remove the connector (deactivate)
               await apiClient.call('remove_mount', { mount_point: file.path });
 
-              // Then delete the saved mount configuration from database
+              // Then delete the saved connector configuration from database
               try {
                 await apiClient.call('delete_saved_mount', { mount_point: file.path });
-                console.log('Deleted saved mount configuration');
+                console.log('Deleted saved connector configuration');
               } catch (deleteError) {
                 // If delete_saved_mount fails (e.g., no saved config exists), log but don't fail
-                console.warn('Could not delete saved mount configuration (may not exist):', deleteError);
+                console.warn('Could not delete saved connector configuration (may not exist):', deleteError);
               }
 
               // Then delete the directory
               await filesAPI.rmdir(file.path, true);
 
               // Invalidate queries to refresh the UI
-              await queryClient.invalidateQueries({ queryKey: fileKeys.mounts() });
+              await queryClient.invalidateQueries({ queryKey: fileKeys.connectors() });
               await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
             } catch (error) {
-              console.error('Failed to remove mount:', error);
-              alert(`Failed to remove mount: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              console.error('Failed to remove connector:', error);
+              alert(`Failed to remove connector: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
           }
         }
@@ -278,10 +276,6 @@ export function FileBrowser() {
             {isAuthenticated ? (
               <>
                 {userInfo?.user && <span className="text-sm text-muted-foreground mr-2">{userInfo.user}</span>}
-                <Button variant="ghost" size="sm" type="button" onClick={() => setChatPanelOpen(!chatPanelOpen)}>
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Chat
-                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setCreateWorkspaceDialogOpen(true)}>
                   <FolderPlus className="h-4 w-4 mr-2" />
                   Workspaces
@@ -294,13 +288,9 @@ export function FileBrowser() {
                   <Bot className="h-4 w-4 mr-2" />
                   Agents
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/integrations')}>
-                  <Link2 className="h-4 w-4 mr-2" />
-                  Integrations
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/mounts')}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/connectors')}>
                   <Cloud className="h-4 w-4 mr-2" />
-                  Mounts
+                  Connectors
                 </Button>
                 {userInfo?.is_admin && (
                   <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
@@ -338,8 +328,19 @@ export function FileBrowser() {
       </header>
 
       {/* Breadcrumb */}
-      <div className="border-b px-4 py-2 bg-muted/20">
+      <div className="border-b px-4 py-2 bg-muted/20 flex items-center justify-between gap-3">
         <Breadcrumb path={currentPath} onPathChange={setCurrentPath} />
+        <Button
+          variant="ghost"
+          size="icon"
+          type="button"
+          aria-label={chatPanelOpen ? 'Hide AI panel' : 'Show AI panel'}
+          title={chatPanelOpen ? 'Hide AI panel' : 'Show AI panel'}
+          onClick={() => setChatPanelOpen((v) => !v)}
+          className="flex-shrink-0"
+        >
+          <Bot className="h-5 w-5" />
+        </Button>
       </div>
 
       {/* Main Content */}
@@ -355,7 +356,6 @@ export function FileBrowser() {
               creatingNewItem={creatingNewItem}
               onCreateItem={handleCreateItem}
               onCancelCreate={handleCancelCreate}
-              onOpenMemoryDialog={() => setStoreMemoryDialogOpen(true)}
             />
           </Panel>
 
@@ -418,13 +418,11 @@ export function FileBrowser() {
         onAgentSelect={handleAgentSelect}
       />
 
-      <MountManagementDialog
-        open={mountManagementDialogOpen}
+      <ConnectorManagementDialog
+        open={connectorManagementDialogOpen}
         onOpenChange={(open) => {
-          setMountManagementDialogOpen(open);
-          if (!open) setMountTargetPath(undefined);
+          setConnectorManagementDialogOpen(open);
         }}
-        initialMountPoint={mountTargetPath}
       />
 
       <RenameDialog open={!!renameFile} onOpenChange={(open) => !open && setRenameFile(null)} file={renameFile} />

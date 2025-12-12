@@ -20,10 +20,9 @@ const CloudFolderIcon = ({ className }: { className?: string }) => (
 
 type BackendType = 'gcs_connector' | 's3' | 'gdrive_connector' | 'gmail_connector';
 
-interface MountManagementDialogProps {
+interface ConnectorManagementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialMountPoint?: string;
   onSuccess?: () => void;
 }
 
@@ -42,16 +41,19 @@ interface GoogleDriveConfig {
 
 interface GmailConfig {
   user_email: string;
-  sync_from_date: string;
   token_manager_db: string;
   max_message_per_label: number;
 }
 
-export function MountManagementDialog({ open, onOpenChange, initialMountPoint, onSuccess }: MountManagementDialogProps) {
+export function ConnectorManagementDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+}: ConnectorManagementDialogProps) {
   const { apiClient, userInfo } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<'select' | 'configure'>(initialMountPoint ? 'configure' : 'select');
+  const [step, setStep] = useState<'select' | 'configure'>('select');
   const [selectedBackend, setSelectedBackend] = useState<BackendType>('gcs_connector');
   
   // Get current user's user_id (preferred) or user (fallback)
@@ -110,15 +112,13 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
   });
 
   // Form state
-  const [mountName, setMountName] = useState('');
+  const [connectorName, setConnectorName] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('10');
   const [readonly, setReadonly] = useState(false);
 
-  // Compute full mount point from prefix + name
-  const fullMountPoint = initialMountPoint
-    ? `${initialMountPoint}/${mountName}`.replace(/\/+/g, '/')
-    : `/${mountName}`.replace(/\/+/g, '/');
+  // Compute full connector path
+  const fullConnectorPath = `/connectors/${connectorName}`.replace(/\/+/g, '/');
 
   // GCS specific config
   const [gcsConfig, setGcsConfig] = useState<GCSConfig>({
@@ -138,7 +138,6 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
   // Gmail specific config
   const [gmailConfig, setGmailConfig] = useState<GmailConfig>({
     user_email: '',
-    sync_from_date: '', // ISO format: YYYY-MM-DD
     token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus',
     max_message_per_label: 200, // Default: 200 messages per folder
   });
@@ -160,7 +159,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
   }, [selectedBackend, activeGdriveCredential, activeGmailCredential]);
 
 
-  const createMountMutation = useMutation({
+  const createConnectorMutation = useMutation({
     mutationFn: async (params: {
       mount_point: string;
       backend_type: string;
@@ -169,17 +168,17 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
       readonly: boolean;
       description: string;
     }) => {
-      // First save the mount
+      // First save the connector
       const saveResult = await apiClient.call<string>('save_mount', params);
-      console.log('Mount saved with ID:', saveResult);
+      console.log('Connector saved with ID:', saveResult);
 
-      // Then load the mount to activate it
+      // Then load the connector to activate it
       const loadResult = await apiClient.call<string>('load_mount', {
         mount_point: params.mount_point,
       });
-      console.log('Mount loaded:', loadResult);
+      console.log('Connector loaded:', loadResult);
 
-      // Finally, sync the mount to import existing files (only for cloud backends)
+      // Finally, sync the connector to import existing files (only for cloud backends)
       if (params.backend_type.includes('connector') || params.backend_type.includes('gcs')) {
         try {
           const syncResult = await apiClient.call<{
@@ -193,31 +192,31 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
             mount_point: params.mount_point,
             recursive: true,
           });
-          console.log('Mount synced:', syncResult);
-          return { mountPoint: loadResult, syncResult };
+          console.log('Connector synced:', syncResult);
+          return { connectorPath: loadResult, syncResult };
         } catch (syncError) {
-          console.warn('Sync failed but mount was created:', syncError);
-          return { mountPoint: loadResult, syncResult: null };
+          console.warn('Sync failed but connector was created:', syncError);
+          return { connectorPath: loadResult, syncResult: null };
         }
       }
 
-      return { mountPoint: loadResult, syncResult: null };
+      return { connectorPath: loadResult, syncResult: null };
     },
     onSuccess: async (result) => {
-      const { mountPoint, syncResult } = result as any;
+      const { connectorPath, syncResult } = result as any;
 
       if (syncResult) {
         const filesScanned = syncResult.files_scanned || syncResult.files_found || 0;
         const filesAdded = syncResult.files_created || syncResult.files_added || 0;
-        toast.success(`Mount created and synced: ${mountPoint}\n${filesScanned} files scanned, ${filesAdded} imported`);
+        toast.success(`Connector created and synced: ${connectorPath}\n${filesScanned} files scanned, ${filesAdded} imported`);
       } else {
-        toast.success(`Mount created successfully: ${mountPoint}`);
+        toast.success(`Connector created successfully: ${connectorPath}`);
       }
 
-      // Invalidate mounts and file lists to refresh the UI
-      await queryClient.invalidateQueries({ queryKey: fileKeys.mounts() });
+      // Invalidate connectors and file lists to refresh the UI
+      await queryClient.invalidateQueries({ queryKey: fileKeys.connectors() });
       await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
-      await queryClient.invalidateQueries({ queryKey: ['saved_mounts'] });
+      await queryClient.invalidateQueries({ queryKey: ['saved_connectors'] });
       handleClose();
       // Call onSuccess callback if provided (for parent component to refresh)
       if (onSuccess) {
@@ -225,14 +224,14 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
       }
     },
     onError: (error: any) => {
-      console.error('Failed to create mount:', error);
-      toast.error(`Failed to create mount: ${error.message || 'Unknown error'}`);
+      console.error('Failed to create connector:', error);
+      toast.error(`Failed to create connector: ${error.message || 'Unknown error'}`);
     },
   });
 
   const handleClose = () => {
-    setStep(initialMountPoint ? 'configure' : 'select');
-    setMountName('');
+    setStep('select');
+    setConnectorName('');
     setDescription('');
     setPriority('10');
     setReadonly(false);
@@ -280,9 +279,13 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate mount name
-    if (!mountName || mountName.trim() === '') {
-      toast.error('Mount name is required');
+    // Validate connector name
+    if (!connectorName || connectorName.trim() === '') {
+      toast.error('Connector name is required');
+      return;
+    }
+    if (/\s/.test(connectorName)) {
+      toast.error('Connector name cannot contain spaces');
       return;
     }
 
@@ -326,16 +329,15 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
       backendConfig = {
         token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus', // Default path
         user_email: activeGmailCredential.user_email,
-        sync_from_date: gmailConfig.sync_from_date || undefined, // Optional - defaults to 30 days ago
         max_message_per_label: gmailConfig.max_message_per_label, // Maximum messages to sync per folder
         provider: 'gmail', // Specify the provider name for the connector
       };
       backendType = 'gmail_connector';
     }
 
-    // Submit the mount
-    createMountMutation.mutate({
-      mount_point: fullMountPoint,
+    // Submit the connector
+    createConnectorMutation.mutate({
+      mount_point: fullConnectorPath,
       backend_type: backendType,
       backend_config: backendConfig,
       priority: parseInt(priority) || 10,
@@ -379,11 +381,11 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Add New Mount</DialogTitle>
+          <DialogTitle>Add New Connector</DialogTitle>
           <DialogDescription>
             {step === 'select'
-              ? 'Choose a backend to mount'
-              : `Configure ${backendOptions.find(b => b.type === selectedBackend)?.name} mount`}
+              ? 'Choose a backend to connect'
+              : `Configure ${backendOptions.find(b => b.type === selectedBackend)?.name} connector`}
           </DialogDescription>
         </DialogHeader>
 
@@ -414,29 +416,19 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Common fields */}
-            {initialMountPoint && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Mount Path Prefix</label>
-                <Input value={initialMountPoint} disabled className="bg-muted" />
-                <p className="text-xs text-muted-foreground">Base directory path (read-only)</p>
-              </div>
-            )}
-
             <div className="space-y-2">
-              <label htmlFor="mountName" className="text-sm font-medium">
-                Mount Name <span className="text-red-500">*</span>
+              <label htmlFor="connectorName" className="text-sm font-medium">
+                Connector Name <span className="text-red-500">*</span>
               </label>
               <Input
-                id="mountName"
-                placeholder="my-gcs-bucket"
-                value={mountName}
-                onChange={(e) => setMountName(e.target.value)}
+                id="connectorName"
+                placeholder="my-connector"
+                value={connectorName}
+                onChange={(e) => setConnectorName(e.target.value.replace(/\s+/g, ''))}
                 required
               />
               <p className="text-xs text-muted-foreground">
-                {initialMountPoint
-                  ? `Full mount path will be: ${fullMountPoint}`
-                  : 'Name for the mount point (e.g., my-bucket)'}
+                Connector path: {fullConnectorPath}
               </p>
             </div>
 
@@ -446,7 +438,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
               </label>
               <Input
                 id="description"
-                placeholder="Optional description for this mount"
+                placeholder="Optional description for this connector"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -461,7 +453,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
                   </label>
                   <Input
                     id="bucket"
-                    placeholder="my-gcs-bucket"
+                    placeholder="my-connector"
                     value={gcsConfig.bucket}
                     onChange={(e) => setGcsConfig({ ...gcsConfig, bucket: e.target.value })}
                     required
@@ -583,23 +575,8 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
                     </div>
 
                     <div className="space-y-2">
-                      <label htmlFor="syncFromDate" className="text-sm font-medium">
-                        Sync From Date <span className="text-muted-foreground">(Optional)</span>
-                      </label>
-                      <Input
-                        id="syncFromDate"
-                        type="date"
-                        value={gmailConfig.sync_from_date}
-                        onChange={(e) => setGmailConfig({ ...gmailConfig, sync_from_date: e.target.value })}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Start date for syncing emails (YYYY-MM-DD). If not specified, syncs from 30 days ago.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
                       <label htmlFor="maxMessagesPerLabel" className="text-sm font-medium">
-                        Max Messages Per Folder
+                        Max Messages Per Label
                       </label>
                       <Input
                         id="maxMessagesPerLabel"
@@ -652,7 +629,7 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Higher priority mounts are checked first</p>
+                <p className="text-xs text-muted-foreground">Higher priority connectors are checked first</p>
               </div>
 
               <div className="space-y-2">
@@ -676,8 +653,8 @@ export function MountManagementDialog({ open, onOpenChange, initialMountPoint, o
               <Button type="button" variant="outline" onClick={() => setStep('select')}>
                 Back
               </Button>
-              <Button type="submit" disabled={createMountMutation.isPending}>
-                {createMountMutation.isPending ? 'Creating...' : 'Create Mount'}
+              <Button type="submit" disabled={createConnectorMutation.isPending}>
+                {createConnectorMutation.isPending ? 'Creating...' : 'Create Connector'}
               </Button>
             </div>
           </form>

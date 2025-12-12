@@ -1,15 +1,15 @@
-import type { FileInfo, GlobResult, GrepResult, ListResult, MountInfo } from '../types/file';
+import type { ConnectorInfo, FileInfo, GlobResult, GrepResult, ListResult } from '../types/file';
 import type NexusAPIClient from './client';
 
-// Helper function to find the mount point for a given path
-// Only returns mount info if the path is EXACTLY a mount point (not files inside it)
-function findMountForPath(path: string, mounts: MountInfo[]): { mountPoint: string; backendType: string } | null {
-  for (const mount of mounts) {
-    // Only match if path is exactly the mount point
-    if (path === mount.mount_point) {
+// Helper function to find the connector for a given path
+// Only returns connector info if the path is EXACTLY a connector path (not files inside it)
+function findConnectorForPath(path: string, connectors: ConnectorInfo[]): { connectorPath: string; backendType: string } | null {
+  for (const connector of connectors) {
+    // Only match if path is exactly the connector path
+    if (path === connector.mount_point) {
       return {
-        mountPoint: mount.mount_point,
-        backendType: mount.backend_type,
+        connectorPath: connector.mount_point,
+        backendType: connector.backend_type,
       };
     }
   }
@@ -201,14 +201,14 @@ export function createFilesAPI(client: NexusAPIClient) {
       return result.namespaces;
     },
 
-    // List all active mounts
-    async listMounts(): Promise<MountInfo[]> {
-      const result = await client.call<MountInfo[]>('list_mounts', {});
+    // List all active connectors
+    async listConnectors(): Promise<ConnectorInfo[]> {
+      const result = await client.call<ConnectorInfo[]>('list_mounts', {});
       return result;
     },
 
-    // List all saved mount configurations (from database)
-    async listSavedMounts(): Promise<Array<{
+    // List all saved connector configurations (from database)
+    async listSavedConnectors(): Promise<Array<{
       mount_point: string;
       backend_type: string;
       backend_config: Record<string, any>;
@@ -235,16 +235,20 @@ export function createFilesAPI(client: NexusAPIClient) {
       return result;
     },
 
-    // Load and activate a saved mount
-    async loadMount(mount_point: string): Promise<string> {
+    // Load and activate a saved connector
+    async loadConnector(mount_point: string): Promise<string> {
       const result = await client.call<string>('load_mount', {
         mount_point,
       });
       return result;
     },
 
-    // Sync mount metadata from connector backend
-    async syncMount(mount_point: string, recursive: boolean = true, dry_run: boolean = false): Promise<{ files_scanned: number; files_updated: number; files_created: number; files_deleted: number; errors: number }> {
+    // Sync connector metadata from connector backend
+    async syncConnector(
+      mount_point: string,
+      recursive: boolean = true,
+      dry_run: boolean = false,
+    ): Promise<{ files_scanned: number; files_updated: number; files_created: number; files_deleted: number; errors: number }> {
       const result = await client.call<{ files_scanned: number; files_updated: number; files_created: number; files_deleted: number; errors: number }>('sync_mount', {
         mount_point,
         recursive,
@@ -253,8 +257,8 @@ export function createFilesAPI(client: NexusAPIClient) {
       return result;
     },
 
-    // Delete a saved mount configuration
-    async deleteSavedMount(mount_point: string): Promise<boolean> {
+    // Delete a saved connector configuration
+    async deleteSavedConnector(mount_point: string): Promise<boolean> {
       const result = await client.call<boolean>('delete_saved_mount', {
         mount_point,
       });
@@ -263,14 +267,14 @@ export function createFilesAPI(client: NexusAPIClient) {
   };
 }
 
-// Export helper function to enrich file info with mount data
-export function enrichFileWithMount(file: FileInfo, mounts: MountInfo[]): FileInfo {
-  const mountInfo = findMountForPath(file.path, mounts);
-  if (mountInfo) {
+// Export helper function to enrich file info with connector data
+export function enrichFileWithConnector(file: FileInfo, connectors: ConnectorInfo[]): FileInfo {
+  const connectorInfo = findConnectorForPath(file.path, connectors);
+  if (connectorInfo) {
     return {
       ...file,
-      mountPoint: mountInfo.mountPoint,
-      backendType: mountInfo.backendType,
+      connectorPath: connectorInfo.connectorPath,
+      backendType: connectorInfo.backendType,
     };
   }
   return file;

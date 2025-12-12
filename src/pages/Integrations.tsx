@@ -27,8 +27,13 @@ interface OAuthCredential {
   revoked: boolean;
 }
 
-export function Integrations() {
-  const navigate = useNavigate();
+export function IntegrationsPanel({
+  embedded = false,
+  urlCleanupPath = '/integrations',
+}: {
+  embedded?: boolean;
+  urlCleanupPath?: string;
+}) {
   const { apiClient, userInfo } = useAuth();
   const [selectedProvider, setSelectedProvider] = useState<string>('');
   const [oauthDialogOpen, setOauthDialogOpen] = useState(false);
@@ -50,7 +55,9 @@ export function Integrations() {
       // Reload to show the new credential
       loadProvidersAndCredentials();
       // Clean up URL
-      window.history.replaceState({}, '', '/integrations');
+      if (!embedded) {
+        window.history.replaceState({}, '', urlCleanupPath);
+      }
     }
   }, []);
 
@@ -184,6 +191,169 @@ export function Integrations() {
   };
 
   return (
+    <>
+      {/* Available Integrations */}
+      <div className="rounded-lg border bg-card">
+        <div className="p-4 border-b">
+          <h2 className="text-lg font-semibold">Integrations</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {credentials.length > 0
+              ? `${credentials.length} connection${credentials.length !== 1 ? 's' : ''} configured`
+              : 'Connect these services to extend Nexus functionality'}
+          </p>
+        </div>
+        <div className="p-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading integrations...</span>
+            </div>
+          ) : providers.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-muted-foreground">No integrations available</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {providers.map((provider) => {
+                const credential = getConnectedCredential(provider.name);
+                const isConnected = !!credential;
+                const connectedEmail = credential?.user_email || null;
+                const isExpired = credential?.expires_at ? new Date(credential.expires_at) < new Date() : false;
+
+                return (
+                  <div
+                    key={provider.name}
+                    className={`rounded-lg border p-4 hover:bg-muted/50 transition-colors ${
+                      isConnected && !isExpired
+                        ? 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20'
+                        : isExpired
+                          ? 'border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20'
+                          : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {provider.icon_url && (
+                          <img
+                            src={provider.icon_url}
+                            alt={provider.display_name}
+                            className="w-6 h-6 flex-shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        )}
+                        <h3 className="font-semibold truncate">{provider.display_name}</h3>
+                      </div>
+                      {isConnected ? (
+                        <span
+                          className={`px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1 flex-shrink-0 ${
+                            isExpired
+                              ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200'
+                              : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                          }`}
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          {isExpired ? 'Expired' : 'Connected'}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0">
+                          Not Connected
+                        </span>
+                      )}
+                    </div>
+
+                    {connectedEmail && (
+                      <div className="mb-2">
+                        <p className="text-xs text-muted-foreground truncate">{connectedEmail}</p>
+                        {credential?.expires_at && (
+                          <p className={`text-xs mt-1 ${isExpired ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground'}`}>
+                            {isExpired ? 'Expired - Reconnect required' : `Expires: ${new Date(credential.expires_at).toLocaleDateString()}`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {provider.requires_pkce && !isConnected && (
+                      <p className="text-xs text-muted-foreground mb-3">Requires PKCE authentication</p>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      {isConnected && !isExpired ? (
+                        <>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleTestCredential(provider.name)}
+                            disabled={loading || testingProvider === provider.name}
+                          >
+                            {testingProvider === provider.name ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Testing...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-4 w-4 mr-2" />
+                                Test Connection
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDisconnectProvider(provider.name)}
+                            disabled={loading || testingProvider === provider.name}
+                            title="Disconnect"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => handleConnectProvider(provider.name)}
+                          disabled={loading}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Connect
+                        </Button>
+                      )}
+                      {isConnected && isExpired && (
+                        <Button variant="default" size="sm" className="flex-1" onClick={() => handleConnectProvider(provider.name)} disabled={loading}>
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          Reconnect
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* OAuth Setup Dialog */}
+      <OAuthSetupDialog
+        open={oauthDialogOpen}
+        onOpenChange={setOauthDialogOpen}
+        provider={selectedProvider}
+        onSuccess={() => {
+          loadProvidersAndCredentials();
+        }}
+      />
+    </>
+  );
+}
+
+export function Integrations() {
+  const navigate = useNavigate();
+
+  return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -208,168 +378,7 @@ export function Integrations() {
             </p>
           </div>
 
-          {/* Available Integrations */}
-          <div className="rounded-lg border bg-card">
-            <div className="p-4 border-b">
-              <h2 className="text-lg font-semibold">Available Integrations</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                {credentials.length > 0
-                  ? `${credentials.length} connection${credentials.length !== 1 ? 's' : ''} configured`
-                  : 'Connect these services to extend Nexus functionality'}
-              </p>
-            </div>
-            <div className="p-4">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-sm text-muted-foreground">Loading integrations...</span>
-                </div>
-              ) : providers.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-sm text-muted-foreground">No integrations available</p>
-                </div>
-              ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {providers.map((provider) => {
-                    const credential = getConnectedCredential(provider.name);
-                    const isConnected = !!credential;
-                    const connectedEmail = credential?.user_email || null;
-                    const isExpired = credential?.expires_at
-                      ? new Date(credential.expires_at) < new Date()
-                      : false;
-
-                    return (
-                      <div
-                        key={provider.name}
-                        className={`rounded-lg border p-4 hover:bg-muted/50 transition-colors ${
-                          isConnected && !isExpired
-                            ? 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20'
-                            : isExpired
-                            ? 'border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20'
-                            : ''
-                        }`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            {provider.icon_url && (
-                              <img
-                                src={provider.icon_url}
-                                alt={provider.display_name}
-                                className="w-6 h-6 flex-shrink-0"
-                                onError={(e) => {
-                                  // Hide broken images
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                              />
-                            )}
-                            <h3 className="font-semibold truncate">{provider.display_name}</h3>
-                          </div>
-                          {isConnected ? (
-                            <span
-                              className={`px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1 flex-shrink-0 ${
-                                isExpired
-                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200'
-                                  : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
-                              }`}
-                            >
-                              <CheckCircle2 className="h-3 w-3" />
-                              {isExpired ? 'Expired' : 'Connected'}
-                        </span>
-                          ) : (
-                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0">
-                              Not Connected
-                        </span>
-                      )}
-                    </div>
-                        {connectedEmail && (
-                          <div className="mb-2">
-                            <p className="text-xs text-muted-foreground truncate">
-                              {connectedEmail}
-                            </p>
-                            {credential?.expires_at && (
-                              <p
-                                className={`text-xs mt-1 ${
-                                  isExpired
-                                    ? 'text-orange-600 dark:text-orange-400'
-                                    : 'text-muted-foreground'
-                                }`}
-                              >
-                                {isExpired
-                                  ? 'Expired - Reconnect required'
-                                  : `Expires: ${new Date(credential.expires_at).toLocaleDateString()}`}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        {provider.requires_pkce && !isConnected && (
-                          <p className="text-xs text-muted-foreground mb-3">
-                            Requires PKCE authentication
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2">
-                          {isConnected && !isExpired ? (
-                            <>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                className="flex-1"
-                                onClick={() => handleTestCredential(provider.name)}
-                                disabled={loading || testingProvider === provider.name}
-                              >
-                                {testingProvider === provider.name ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Testing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Play className="h-4 w-4 mr-2" />
-                                    Test Connection
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDisconnectProvider(provider.name)}
-                                disabled={loading || testingProvider === provider.name}
-                                title="Disconnect"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => handleConnectProvider(provider.name)}
-                              disabled={loading}
-                            >
-                              <Plus className="h-4 w-4 mr-2" />
-                              Connect
-                            </Button>
-                          )}
-                          {isConnected && isExpired && (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="flex-1"
-                              onClick={() => handleConnectProvider(provider.name)}
-                              disabled={loading}
-                            >
-                              <CheckCircle2 className="h-4 w-4 mr-2" />
-                              Reconnect
-                            </Button>
-                          )}
-                        </div>
-                  </div>
-                    );
-                  })}
-              </div>
-              )}
-            </div>
-          </div>
+          <IntegrationsPanel embedded={false} urlCleanupPath="/integrations" />
         </div>
       </main>
 
@@ -392,16 +401,6 @@ export function Integrations() {
           </div>
         </div>
       </footer>
-
-      {/* OAuth Setup Dialog */}
-      <OAuthSetupDialog
-        open={oauthDialogOpen}
-        onOpenChange={setOauthDialogOpen}
-        provider={selectedProvider}
-        onSuccess={() => {
-          loadProvidersAndCredentials();
-        }}
-      />
     </div>
   );
 }

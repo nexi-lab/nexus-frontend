@@ -99,10 +99,10 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
       );
 
       if (existingCredential) {
-        // User already has credentials - skip OAuth and create mount directly (only for Google Drive)
+        // User already has credentials - skip OAuth and create connector directly (only for Google Drive)
         toast.success(`Using existing ${providerDisplayName || providerName} credentials`);
         if (providerName === 'google-drive') {
-          await createMount();
+          await createConnector();
         } else {
           setStep('success');
           setTimeout(() => {
@@ -146,13 +146,13 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
     }
   };
 
-  const createMount = async () => {
-    // Generate a clean mount point from the email
+  const createConnector = async () => {
+    // Generate a clean connector path from the email
     const sanitizedEmail = userEmail.replace(/[^a-zA-Z0-9@._-]/g, '_');
-    const mountPoint = `/mnt/gdrive/${sanitizedEmail}`;
+    const connectorPath = `/mnt/gdrive/${sanitizedEmail}`;
 
     try {
-      // Create mount point directories if they don't exist
+      // Create connector directories if they don't exist
       try {
         // First ensure /mnt exists
         await apiClient.call('mkdir', { path: '/mnt' });
@@ -174,12 +174,12 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
       }
 
       try {
-        // Finally create the user-specific mount point
-        await apiClient.call('mkdir', { path: mountPoint });
+        // Finally create the user-specific connector path
+        await apiClient.call('mkdir', { path: connectorPath });
       } catch (err: any) {
         // Ignore if already exists or permission denied
         if (!err.message?.includes('already exists') && !err.message?.includes('permission')) {
-          throw new Error(`Failed to create mount directory: ${err.message}`);
+          throw new Error(`Failed to create connector directory: ${err.message}`);
         }
       }
 
@@ -187,8 +187,8 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
       // For Docker deployment, this should be the PostgreSQL URL
       const dbPath = 'postgresql://postgres:nexus@postgres:5432/nexus';
 
-      const mountParams = {
-        mount_point: mountPoint,
+      const connectorParams = {
+        mount_point: connectorPath,
         backend_type: 'gdrive_connector',
         backend_config: {
           token_manager_db: dbPath,
@@ -202,13 +202,13 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
         description: `Google Drive for ${userEmail}`,
       };
 
-      // Save the mount configuration
-      await apiClient.call('save_mount', mountParams);
+      // Save the connector configuration
+      await apiClient.call('save_mount', connectorParams);
 
-      // Load (activate) the mount
-      await apiClient.call('load_mount', { mount_point: mountPoint });
+      // Load (activate) the connector
+      await apiClient.call('load_mount', { mount_point: connectorPath });
 
-      // Sync the mount to import existing files
+      // Sync the connector to import existing files
       const syncResult = await apiClient.call<{
         files_found?: number;
         files_added?: number;
@@ -216,10 +216,10 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
         files_scanned?: number;
         files_created?: number;
         errors: number;
-      }>('sync_mount', { mount_point: mountPoint });
+      }>('sync_mount', { mount_point: connectorPath });
 
       toast.success(
-        `Google Drive mounted at ${mountPoint}! Found ${syncResult.files_scanned || syncResult.files_found || 0} files.`
+        `Google Drive connector created at ${connectorPath}! Found ${syncResult.files_scanned || syncResult.files_found || 0} files.`
       );
 
       setStep('success');
@@ -229,10 +229,10 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
         onSuccess?.(userEmail);
         handleClose();
       }, 2000);
-    } catch (mountError: any) {
-      console.error('Mount creation failed:', mountError);
-      toast.error(`Failed to create mount: ${mountError.message}`);
-      throw mountError;
+    } catch (connectorError: any) {
+      console.error('Connector creation failed:', connectorError);
+      toast.error(`Failed to create connector: ${connectorError.message}`);
+      throw connectorError;
     }
   };
 
@@ -285,14 +285,14 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
 
         toast.success('OAuth credentials stored successfully!');
 
-        // Automatically create and mount Google Drive (only for google-drive provider)
+        // Automatically create Google Drive connector (only for google-drive provider)
         if (providerName === 'google-drive') {
-          toast.info('Creating Google Drive mount...');
+          toast.info('Creating Google Drive connector...');
           try {
-            await createMount();
-          } catch (mountError: any) {
-            console.error('Mount creation failed:', mountError);
-            // Still show success for OAuth, but note mount failed
+            await createConnector();
+          } catch (connectorError: any) {
+            console.error('Connector creation failed:', connectorError);
+            // Still show success for OAuth, but note connector failed
             setStep('success');
           }
         } else {

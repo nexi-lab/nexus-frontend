@@ -1,21 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Bot, Brain, Building2, ChevronDown, ChevronRight, Files, RefreshCw, Search, User } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { fileKeys } from '../hooks/useFiles';
+import { Files, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { fileKeys, useDeleteFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
 import type { ContextMenuAction } from './FileContextMenu';
 import { FileTree } from './FileTree';
 import { SearchBar } from './SearchBar';
-
-interface RegisteredMemory {
-  path: string;
-  name: string | null;
-  description: string;
-  created_at: string;
-  created_by: string | null;
-  metadata: Record<string, any>;
-}
+import { Button } from './ui/button';
 
 interface LeftPanelProps {
   currentPath: string;
@@ -25,7 +17,6 @@ interface LeftPanelProps {
   creatingNewItem?: { type: 'file' | 'folder'; parentPath: string } | null;
   onCreateItem?: (path: string, type: 'file' | 'folder') => void;
   onCancelCreate?: () => void;
-  onOpenMemoryDialog?: () => void;
 }
 
 export function LeftPanel({
@@ -36,22 +27,95 @@ export function LeftPanel({
   creatingNewItem,
   onCreateItem,
   onCancelCreate,
-  onOpenMemoryDialog,
 }: LeftPanelProps) {
-  const { apiClient, userInfo } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'explorer' | 'search'>('explorer');
   const [searchFolderPath, setSearchFolderPath] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const deleteMutation = useDeleteFile();
 
-  // Memory state
-  const [memories, setMemories] = useState<RegisteredMemory[]>([]);
-  const [loadingMemories, setLoadingMemories] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    org: true,
-    user: true,
-    agent: true,
-  });
+  // Multi-select state (within explorer tree)
+  const [selectedItems, setSelectedItems] = useState<Map<string, FileInfo>>(new Map());
+  const [lastSelectedByParent, setLastSelectedByParent] = useState<Map<string, string>>(new Map());
+  const selectedCount = selectedItems.size;
+
+  const selectedPaths = useMemo(() => new Set(selectedItems.keys()), [selectedItems]);
+
+  const toggleSelect = (file: FileInfo, parentPath: string) => {
+    setSelectedItems((prev) => {
+      const next = new Map(prev);
+      if (next.has(file.path)) next.delete(file.path);
+      else next.set(file.path, file);
+      return next;
+    });
+    setLastSelectedByParent((prev) => {
+      const next = new Map(prev);
+      next.set(parentPath, file.path);
+      return next;
+    });
+  };
+
+  const rangeSelect = (parentPath: string, orderedSiblings: FileInfo[], targetPath: string) => {
+    const anchorPath = lastSelectedByParent.get(parentPath) ?? targetPath;
+    const startIndex = orderedSiblings.findIndex((f) => f.path === anchorPath);
+    const endIndex = orderedSiblings.findIndex((f) => f.path === targetPath);
+
+    if (startIndex === -1 || endIndex === -1) {
+      // Fallback: behave like a normal toggle anchored at target
+      const target = orderedSiblings.find((f) => f.path === targetPath);
+      if (target) toggleSelect(target, parentPath);
+      return;
+    }
+
+    const [from, to] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+    const slice = orderedSiblings.slice(from, to + 1);
+
+    setSelectedItems((prev) => {
+      const next = new Map(prev);
+      for (const f of slice) {
+        next.set(f.path, f);
+      }
+      return next;
+    });
+
+    setLastSelectedByParent((prev) => {
+      const next = new Map(prev);
+      next.set(parentPath, targetPath);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedItems(new Map());
+
+  const handleDeleteSelected = async () => {
+    if (selectedItems.size === 0) return;
+    const count = selectedItems.size;
+    if (!window.confirm(`Delete ${count} item${count === 1 ? '' : 's'}?\n\nThis will permanently delete the selected files/folders.`)) {
+      return;
+    }
+
+    const items = Array.from(selectedItems.values()).sort((a, b) => b.path.length - a.path.length);
+    const errors: Array<{ path: string; error: unknown }> = [];
+
+    for (const item of items) {
+      try {
+        await deleteMutation.mutateAsync({ path: item.path, isDirectory: item.isDirectory });
+      } catch (err) {
+        errors.push({ path: item.path, error: err });
+      }
+    }
+
+    await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+
+    if (errors.length > 0) {
+      console.error('Batch delete errors:', errors);
+      toast.error(`Deleted with errors: ${errors.length} item${errors.length === 1 ? '' : 's'} failed`);
+    } else {
+      toast.success(`Deleted ${count} item${count === 1 ? '' : 's'}`);
+    }
+
+    clearSelection();
+  };
 
   // Refresh file tree
   const handleRefreshFileTree = async () => {
@@ -59,8 +123,8 @@ export function LeftPanel({
     try {
       // Invalidate all file list queries to force refetch
       await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
-      // Invalidate mounts to refetch mount points and update cloud icons
-      await queryClient.invalidateQueries({ queryKey: fileKeys.mounts() });
+      // Invalidate connectors to refetch connector roots and update cloud icons
+      await queryClient.invalidateQueries({ queryKey: fileKeys.connectors() });
     } finally {
       // Add a small delay for visual feedback
       setTimeout(() => setIsRefreshing(false), 500);
@@ -75,40 +139,6 @@ export function LeftPanel({
     }
     // Pass all actions to parent
     onContextMenuAction?.(action, file);
-  };
-
-  // Load memories on mount
-  useEffect(() => {
-    loadMemories();
-  }, []);
-
-  const loadMemories = async () => {
-    setLoadingMemories(true);
-    try {
-      const memoryList = await apiClient.listRegisteredMemories();
-      setMemories(memoryList);
-    } catch (err) {
-      console.error('Failed to load memories:', err);
-      setMemories([]);
-    } finally {
-      setLoadingMemories(false);
-    }
-  };
-
-  // Group memories by scope
-  const groupedMemories = {
-    org: memories.filter((m) => m.metadata?.scope === 'tenant'),
-    user: memories.filter((m) => m.metadata?.scope === 'user'),
-    agent: memories.filter((m) => {
-      if (m.metadata?.scope !== 'agent') return false;
-      // Only show agent-scoped memories for current user's agents
-      const userId = userInfo?.user || userInfo?.subject_id;
-      return m.metadata?.user_id === userId;
-    }),
-  };
-
-  const toggleGroup = (group: string) => {
-    setExpandedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
   };
 
   return (
@@ -143,15 +173,47 @@ export function LeftPanel({
           <div className="h-full flex flex-col">
             {/* Refresh button for explorer */}
             <div className="flex items-center justify-between px-3 py-2 border-b bg-background/50">
-              <span className="text-xs font-medium text-muted-foreground">Files</span>
-              <button
-                onClick={handleRefreshFileTree}
-                disabled={isRefreshing}
-                className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50"
-                title="Refresh file tree"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Files</span>
+                {selectedCount > 0 && (
+                  <span className="text-xs text-muted-foreground">({selectedCount} selected)</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                {selectedCount > 0 && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={clearSelection}
+                      title="Clear selection"
+                      type="button"
+                      className="h-7 w-7"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleDeleteSelected}
+                      title="Delete selected"
+                      type="button"
+                      className="h-7 w-7"
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </>
+                )}
+                <button
+                  onClick={handleRefreshFileTree}
+                  disabled={isRefreshing}
+                  className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50"
+                  title="Refresh file tree"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto p-2">
               <FileTree
@@ -166,104 +228,15 @@ export function LeftPanel({
                 creatingNewItem={creatingNewItem}
                 onCreateItem={onCreateItem}
                 onCancelCreate={onCancelCreate}
+                selectedPaths={selectedPaths}
+                onToggleSelect={toggleSelect}
+                onRangeSelect={rangeSelect}
               />
             </div>
           </div>
         ) : (
           <SearchBar currentPath={searchFolderPath || currentPath} onFileSelect={onFileSelect} onContextMenuAction={handleContextMenuAction} />
         )}
-      </div>
-
-      {/* Memory Section */}
-      <div className="border-t bg-background/95 max-h-[300px] flex flex-col">
-        <div className="px-4 py-2 flex items-center gap-2 border-b">
-          <Brain className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Memories</span>
-          {loadingMemories && <span className="text-xs text-muted-foreground">(loading...)</span>}
-          <button onClick={onOpenMemoryDialog} className="ml-auto p-1 hover:bg-muted rounded transition-colors" title="Add Memory">
-            <Brain className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-auto">
-          {/* Org (Tenant) Group */}
-          <div className="border-b">
-            <button onClick={() => toggleGroup('org')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
-              {expandedGroups.org ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-              <Building2 className="h-3 w-3 text-blue-500" />
-              <span className="text-xs font-medium">Organization</span>
-              <span className="text-xs text-muted-foreground ml-auto">({groupedMemories.org.length})</span>
-            </button>
-            {expandedGroups.org && (
-              <div className="bg-muted/20">
-                {groupedMemories.org.length === 0 ? (
-                  <div className="px-4 py-2 text-xs text-muted-foreground italic">No organization memories</div>
-                ) : (
-                  groupedMemories.org.map((memory) => (
-                    <div key={memory.path} className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer" title={memory.description || memory.path}>
-                      <div className="text-xs font-medium truncate">{memory.name || memory.path.split('/').pop()}</div>
-                      {memory.description && <div className="text-xs text-muted-foreground truncate">{memory.description}</div>}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* User Group */}
-          <div className="border-b">
-            <button onClick={() => toggleGroup('user')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
-              {expandedGroups.user ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-              <User className="h-3 w-3 text-green-500" />
-              <span className="text-xs font-medium">User</span>
-              <span className="text-xs text-muted-foreground ml-auto">({groupedMemories.user.length})</span>
-            </button>
-            {expandedGroups.user && (
-              <div className="bg-muted/20">
-                {groupedMemories.user.length === 0 ? (
-                  <div className="px-4 py-2 text-xs text-muted-foreground italic">No user memories</div>
-                ) : (
-                  groupedMemories.user.map((memory) => (
-                    <div key={memory.path} className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer" title={memory.description || memory.path}>
-                      <div className="text-xs font-medium truncate">{memory.name || memory.path.split('/').pop()}</div>
-                      {memory.description && <div className="text-xs text-muted-foreground truncate">{memory.description}</div>}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Agent Group */}
-          <div>
-            <button onClick={() => toggleGroup('agent')} className="w-full px-4 py-2 flex items-center gap-2 hover:bg-muted/50 transition-colors">
-              {expandedGroups.agent ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-              <Bot className="h-3 w-3 text-purple-500" />
-              <span className="text-xs font-medium">Agent</span>
-              <span className="text-xs text-muted-foreground ml-auto">({groupedMemories.agent.length})</span>
-            </button>
-            {expandedGroups.agent && (
-              <div className="bg-muted/20">
-                {groupedMemories.agent.length === 0 ? (
-                  <div className="px-4 py-2 text-xs text-muted-foreground italic">No agent memories</div>
-                ) : (
-                  groupedMemories.agent.map((memory) => (
-                    <div key={memory.path} className="px-4 py-1.5 hover:bg-muted/50 cursor-pointer" title={memory.description || memory.path}>
-                      <div className="text-xs font-medium truncate">{memory.name || memory.path.split('/').pop()}</div>
-                      <div className="flex items-center gap-2">
-                        {memory.description && <div className="text-xs text-muted-foreground truncate flex-1">{memory.description}</div>}
-                        {memory.metadata?.agent_id && (
-                          <div className="text-xs text-purple-500 font-mono">
-                            {memory.metadata.agent_id.includes(',') ? memory.metadata.agent_id.split(',')[1] : memory.metadata.agent_id}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -1,10 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, Mail, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { createFilesAPI, enrichFileWithMount } from '../api/files';
+import { createFilesAPI, enrichFileWithConnector } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
-import { fileKeys, useFileList, useMounts } from '../hooks/useFiles';
+import { fileKeys, useConnectors, useFileList } from '../hooks/useFiles';
 import { cn } from '../lib/utils';
 import type { FileInfo } from '../types/file';
 import { type ContextMenuAction, FileContextMenu } from './FileContextMenu';
@@ -40,7 +40,7 @@ function getFolderIcon(backendType?: string, isExpanded?: boolean) {
     );
   }
 
-  // Mount point - use backend-specific icon
+  // Connector root - use backend-specific icon
   // Normalize backend type for comparison (case-insensitive, handle variations)
   const normalizedBackendType = backendType.toLowerCase();
   
@@ -69,6 +69,14 @@ function getFolderIcon(backendType?: string, isExpanded?: boolean) {
       </span>
     );
   }
+
+  if (normalizedBackendType.includes('gmail')) {
+    return (
+      <span title={`Backend: ${backendType}`}>
+        <Mail className="h-4 w-4 text-red-500 flex-shrink-0" />
+      </span>
+    );
+  }
   
   // Default fallback
   return (
@@ -87,6 +95,9 @@ interface FileTreeProps {
   creatingNewItem?: { type: 'file' | 'folder'; parentPath: string } | null;
   onCreateItem?: (path: string, type: 'file' | 'folder') => void;
   onCancelCreate?: () => void;
+  selectedPaths?: Set<string>;
+  onToggleSelect?: (file: FileInfo, parentPath: string) => void;
+  onRangeSelect?: (parentPath: string, orderedSiblings: FileInfo[], targetPath: string) => void;
 }
 
 interface TreeNodeProps {
@@ -103,7 +114,13 @@ interface TreeNodeProps {
   onCreateItem?: (path: string, type: 'file' | 'folder') => void;
   onCancelCreate?: () => void;
   backendType?: string;
-  mounts?: import('../types/file').MountInfo[];
+  connectors?: import('../types/file').ConnectorInfo[];
+  selectedPaths?: Set<string>;
+  onToggleSelect?: (file: FileInfo, parentPath: string) => void;
+  onRangeSelect?: (parentPath: string, orderedSiblings: FileInfo[], targetPath: string) => void;
+  selectionMode?: boolean;
+  parentPath?: string;
+  siblingsInParent?: FileInfo[];
 }
 
 function TreeNode({
@@ -120,7 +137,13 @@ function TreeNode({
   onCreateItem,
   onCancelCreate,
   backendType,
-  mounts,
+  connectors,
+  selectedPaths,
+  onToggleSelect,
+  onRangeSelect,
+  selectionMode,
+  parentPath,
+  siblingsInParent,
 }: TreeNodeProps) {
   const queryClient = useQueryClient();
   const { apiClient } = useAuth();
@@ -131,21 +154,21 @@ function TreeNode({
   // Use regular file listing for all paths
   const { data: rawFiles, isLoading } = useFileList(path, isExpanded);
 
-  // Handle sync mount - call actual sync_mount API
-  const handleSyncMount = async (e: React.MouseEvent) => {
+  // Handle sync connector - call actual sync_mount API
+  const handleSyncConnector = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent expanding/collapsing the folder
 
     setIsSyncing(true);
     try {
       // Call the sync_mount API
-      const result = await filesAPI.syncMount(path, true, false);
+      const result = await filesAPI.syncConnector(path, true, false);
 
-      console.log('Sync mount result:', result);
+      console.log('Sync connector result:', result);
 
       // Invalidate all file list queries for this path and subdirectories
       // This will refresh the file tree to show newly synced files
       await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
-      await queryClient.invalidateQueries({ queryKey: fileKeys.mounts() });
+      await queryClient.invalidateQueries({ queryKey: fileKeys.connectors() });
 
       // Handle different possible property names from API response
       const filesScanned = result.files_scanned ?? (result as any).files_found ?? 0;
@@ -162,11 +185,11 @@ function TreeNode({
     }
   };
 
-  // Enrich files with mount information if mounts are available
+  // Enrich files with connector information if connectors are available
   const files = useMemo(() => {
-    if (!rawFiles || !mounts) return rawFiles;
-    return rawFiles.map(file => enrichFileWithMount(file, mounts));
-  }, [rawFiles, mounts]);
+    if (!rawFiles || !connectors) return rawFiles;
+    return rawFiles.map((file) => enrichFileWithConnector(file, connectors));
+  }, [rawFiles, connectors]);
 
   const isActive = currentPath === path;
 
@@ -187,12 +210,20 @@ function TreeNode({
     return files?.filter((f) => !f.isDirectory && !isParsedFile(f.name) && !isDotFile(f.name)) || [];
   }, [files]);
 
+  const siblingsInThisFolder = useMemo(() => {
+    // Order matches what the UI renders: directories first, then files
+    return [...directories, ...fileItems];
+  }, [directories, fileItems]);
+
   const dirFileInfo: FileInfo = {
     path,
     name,
     isDirectory: true,
     backendType,
   };
+  const isSelected = !!selectedPaths?.has(path);
+  const checkboxContextParent = parentPath ?? path;
+  const checkboxContextSiblings = siblingsInParent ?? siblingsInThisFolder;
 
   return (
     <div>
@@ -208,6 +239,24 @@ function TreeNode({
             onPathChange(path);
           }}
         >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              // Shift+click selects range between last anchor and current within the same folder list
+              if ((e as any).nativeEvent?.shiftKey) {
+                onRangeSelect?.(checkboxContextParent, checkboxContextSiblings, path);
+                return;
+              }
+              onToggleSelect?.(dirFileInfo, checkboxContextParent);
+            }}
+            className={cn(
+              'h-3.5 w-3.5 mr-1',
+              selectionMode || isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+            )}
+            aria-label={`Select ${name}`}
+          />
           {/* Always show arrow for directories, even if children haven't loaded yet */}
           {isExpanded ? (
             <ChevronDown className="h-4 w-4 flex-shrink-0" />
@@ -218,10 +267,10 @@ function TreeNode({
           <span className="truncate">{name}</span>
           {backendType && backendType !== 'LocalBackend' && (
             <button
-              onClick={handleSyncMount}
+              onClick={handleSyncConnector}
               disabled={isSyncing}
               className="ml-auto opacity-0 group-hover:opacity-100 hover:bg-muted p-1 rounded transition-opacity"
-              title="Sync mount"
+              title="Sync connector"
             >
               <RefreshCw className={cn('h-3 w-3 text-muted-foreground', isSyncing && 'animate-spin')} />
             </button>
@@ -247,7 +296,13 @@ function TreeNode({
               onCreateItem={onCreateItem}
               onCancelCreate={onCancelCreate}
               backendType={dir.backendType}
-              mounts={mounts}
+              connectors={connectors}
+              selectedPaths={selectedPaths}
+              onToggleSelect={onToggleSelect}
+              onRangeSelect={onRangeSelect}
+              selectionMode={selectionMode}
+              parentPath={path}
+              siblingsInParent={siblingsInThisFolder}
             />
           ))}
 
@@ -267,11 +322,28 @@ function TreeNode({
           {fileItems.map((file) => (
             <FileContextMenu key={file.path} file={file} onAction={(action, file) => onContextMenuAction?.(action, file)}>
               <div
-                className="flex items-center gap-1 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 rounded-md transition-colors overflow-hidden"
+                className="group flex items-center gap-1 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 rounded-md transition-colors overflow-hidden"
                 style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
                 onClick={() => onFileClick?.(file)}
               >
-                <span className="w-4 flex-shrink-0" />
+                <input
+                  type="checkbox"
+                  checked={!!selectedPaths?.has(file.path)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    // Shift+click selects range within this folder
+                    if ((e as any).nativeEvent?.shiftKey) {
+                      onRangeSelect?.(path, siblingsInThisFolder, file.path);
+                      return;
+                    }
+                    onToggleSelect?.(file, path);
+                  }}
+                  className={cn(
+                    'h-3.5 w-3.5 mr-1',
+                    selectionMode || selectedPaths?.has(file.path) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                  )}
+                  aria-label={`Select ${file.name}`}
+                />
                 <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />
                 <span className="truncate min-w-0">{file.name}</span>
               </div>
@@ -292,9 +364,12 @@ export function FileTree({
   creatingNewItem,
   onCreateItem,
   onCancelCreate,
+  selectedPaths,
+  onToggleSelect,
+  onRangeSelect,
 }: FileTreeProps) {
-  // Fetch mounts once globally
-  const { data: mounts } = useMounts();
+  // Fetch connectors once globally
+  const { data: connectors } = useConnectors();
 
   // Build a set of all relevant directory paths from search results
   const relevantPaths = useMemo(() => {
@@ -336,7 +411,11 @@ export function FileTree({
         creatingNewItem={creatingNewItem}
         onCreateItem={onCreateItem}
         onCancelCreate={onCancelCreate}
-        mounts={mounts}
+        connectors={connectors}
+        selectedPaths={selectedPaths}
+        onToggleSelect={onToggleSelect}
+        onRangeSelect={onRangeSelect}
+        selectionMode={(selectedPaths?.size || 0) > 0}
       />
     </div>
   );
