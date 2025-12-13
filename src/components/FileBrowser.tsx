@@ -1,14 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
-import { fileKeys, useCreateDirectory, useCreateWorkspace, useDeleteFile, useRegisterAgent, useUploadFile } from '../hooks/useFiles';
+import { fileKeys, useCreateDirectory, useDeleteFile, useUploadFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
 import { copyToClipboard } from '../utils';
-import { AgentManagementDialog } from './AgentManagementDialog';
 import { Breadcrumb } from './Breadcrumb';
 import { ChatPanel } from './ChatPanel';
 import { CreateFolderDialog } from './CreateFolderDialog';
@@ -19,17 +18,16 @@ import { FileVersionHistoryDialog } from './FileVersionHistoryDialog';
 import { LeftPanel } from './LeftPanel';
 import { LoginDialog } from './LoginDialog';
 import { ManagePermissionsDialog } from './ManagePermissionsDialog';
-import { MemoryManagementDialog } from './MemoryManagementDialog';
 import { ConnectorManagementDialog } from './ConnectorManagementDialog';
 import { RenameDialog } from './RenameDialog';
 import { StoreMemoryDialog } from './StoreMemoryDialog';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from './ui/button';
-import { WorkspaceManagementDialog } from './WorkspaceManagementDialog';
 
 export function FileBrowser() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, logout, apiClient, userInfo } = useAuth();
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [currentPath, setCurrentPath] = useState('/');
@@ -37,10 +35,7 @@ export function FileBrowser() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadTargetPath, setUploadTargetPath] = useState<string>('/');
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
-  const [createWorkspaceDialogOpen, setCreateWorkspaceDialogOpen] = useState(false);
-  const [memoryManagementDialogOpen, setMemoryManagementDialogOpen] = useState(false);
   const [storeMemoryDialogOpen, setStoreMemoryDialogOpen] = useState(false);
-  const [registerAgentDialogOpen, setRegisterAgentDialogOpen] = useState(false);
   const [connectorManagementDialogOpen, setConnectorManagementDialogOpen] = useState(false);
   const [renameFile, setRenameFile] = useState<FileInfo | null>(null);
   const [managePermissionsFile, setManagePermissionsFile] = useState<FileInfo | null>(null);
@@ -53,8 +48,17 @@ export function FileBrowser() {
   const deleteMutation = useDeleteFile();
   const uploadMutation = useUploadFile();
   const createDirMutation = useCreateDirectory();
-  const createWorkspaceMutation = useCreateWorkspace();
-  const registerAgentMutation = useRegisterAgent();
+
+  // Handle agent selection from URL parameters
+  useEffect(() => {
+    const agentId = searchParams.get('agent');
+    if (agentId) {
+      setInitialSelectedAgentId(agentId);
+      setChatPanelOpen(true);
+      // Clear the URL parameter
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams]);
 
   const handleFileSelect = (file: FileInfo) => {
     setSelectedFile(file);
@@ -92,42 +96,6 @@ export function FileBrowser() {
 
   const handleCancelCreate = () => {
     setCreatingNewItem(null);
-  };
-
-  const handleCreateWorkspace = async (path: string, name: string, description: string) => {
-    await createWorkspaceMutation.mutateAsync({
-      path,
-      name: name || undefined,
-      description: description || undefined,
-    });
-  };
-
-  const handleRegisterAgent = async (
-    agentId: string,
-    name: string,
-    description: string,
-    generateApiKey: boolean,
-    config: {
-      platform: string;
-      endpoint_url: string;
-      agent_id?: string;
-      system_prompt: string;
-      tools: string[];
-    },
-  ) => {
-    const result = await registerAgentMutation.mutateAsync({
-      agentId,
-      name,
-      description: description || undefined,
-      generateApiKey,
-      config,
-    });
-    return result;
-  };
-
-  const handleAgentSelect = (agentId: string) => {
-    setInitialSelectedAgentId(agentId);
-    setChatPanelOpen(true);
   };
 
   const handleContextMenuAction = async (action: ContextMenuAction, file: FileInfo) => {
@@ -286,25 +254,25 @@ export function FileBrowser() {
                     )}
                   </span>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => setCreateWorkspaceDialogOpen(true)}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/workspace')}>
                   <FolderPlus className="h-4 w-4 mr-2" />
-                  Workspaces
+                  Workspace
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setMemoryManagementDialogOpen(true)}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/memory')}>
                   <Brain className="h-4 w-4 mr-2" />
                   Memory
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setRegisterAgentDialogOpen(true)}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/agent')}>
                   <Bot className="h-4 w-4 mr-2" />
-                  Agents
+                  Agent
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/connectors')}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/connector')}>
                   <Cloud className="h-4 w-4 mr-2" />
-                  Connectors
+                  Connector
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/skills')}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/skill')}>
                   <BookOpen className="h-4 w-4 mr-2" />
-                  Skills
+                  Skill
                 </Button>
                 {userInfo?.is_admin && (
                   <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
@@ -419,18 +387,7 @@ export function FileBrowser() {
 
       <CreateFolderDialog open={createFolderDialogOpen} onOpenChange={setCreateFolderDialogOpen} currentPath={currentPath} />
 
-      <WorkspaceManagementDialog open={createWorkspaceDialogOpen} onOpenChange={setCreateWorkspaceDialogOpen} onCreateWorkspace={handleCreateWorkspace} />
-
-      <MemoryManagementDialog open={memoryManagementDialogOpen} onOpenChange={setMemoryManagementDialogOpen} />
-
       <StoreMemoryDialog open={storeMemoryDialogOpen} onOpenChange={setStoreMemoryDialogOpen} />
-
-      <AgentManagementDialog
-        open={registerAgentDialogOpen}
-        onOpenChange={setRegisterAgentDialogOpen}
-        onRegisterAgent={handleRegisterAgent}
-        onAgentSelect={handleAgentSelect}
-      />
 
       <ConnectorManagementDialog
         open={connectorManagementDialogOpen}

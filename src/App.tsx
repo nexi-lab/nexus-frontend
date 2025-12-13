@@ -5,9 +5,12 @@ import { FileBrowser } from './components/FileBrowser';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AdminSettings } from './pages/AdminSettings';
-import { Integrations } from './pages/Integrations';
-import { Connectors } from './pages/Connectors';
-import { Skills } from './pages/Skills';
+import { Integration } from './pages/Integration';
+import { Connector } from './pages/Connector';
+import { Skill } from './pages/Skill';
+import { Agent } from './pages/Agent';
+import { Workspace } from './pages/Workspace';
+import { Memory } from './pages/Memory';
 import OAuthCallback from './pages/OAuthCallback';
 import './index.css';
 import { Toaster } from 'sonner';
@@ -44,10 +47,13 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<FileBrowser />} />
               <Route path="/admin" element={<AdminSettings />} />
-              <Route path="/integrations" element={<Integrations />} />
-              <Route path="/connectors" element={<Connectors />} />
-              <Route path="/skills" element={<Skills />} />
-              <Route path="/mounts" element={<Navigate to="/connectors" replace />} />
+              <Route path="/integration" element={<Integration />} />
+              <Route path="/connector" element={<Connector />} />
+              <Route path="/skill" element={<Skill />} />
+              <Route path="/agent" element={<Agent />} />
+              <Route path="/workspace" element={<Workspace />} />
+              <Route path="/memory" element={<Memory />} />
+              <Route path="/mounts" element={<Navigate to="/connector" replace />} />
               <Route path="/oauth/callback" element={<OAuthCallback />} />
             </Routes>
           </BrowserRouter>

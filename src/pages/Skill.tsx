@@ -15,7 +15,7 @@ interface EditingSkill {
   path: string;
 }
 
-export function Skills() {
+export function Skill() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { apiClient } = useAuth();

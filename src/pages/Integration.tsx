@@ -350,7 +350,7 @@ export function IntegrationsPanel({
   );
 }
 
-export function Integrations() {
+export function Integration() {
   const navigate = useNavigate();
 
   return (

@@ -8,7 +8,7 @@ import { fileKeys } from '../hooks/useFiles';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { ConnectorManagementDialog } from '../components/ConnectorManagementDialog';
-import { IntegrationsPanel } from './Integrations';
+import { IntegrationsPanel } from './Integration';
 
 // Custom icon for cloud storage services (Google Drive, OneDrive, etc.)
 const CloudFolderIcon = ({ className }: { className?: string }) => (
@@ -52,7 +52,7 @@ const BACKEND_NAMES: Record<string, string> = {
   gmail_connector: 'Gmail',
 };
 
-export function Connectors() {
+export function Connector() {
   const navigate = useNavigate();
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
@@ -158,8 +158,8 @@ export function Connectors() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Back to files">
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <Database className="h-8 w-8" />
-            <h1 className="text-2xl font-bold">Connectors</h1>
+            <Cloud className="h-8 w-8" />
+            <h1 className="text-2xl font-bold">Connector</h1>
           </div>
           <Button onClick={() => setAddConnectorDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />

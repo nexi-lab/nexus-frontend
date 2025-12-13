@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Check, Copy, Edit, Eye, EyeOff, Filter, Key, Plus, Search, Shield, Trash2, User } from 'lucide-react';
+import { ArrowLeft, Calendar, Check, Copy, Edit, Eye, EyeOff, Filter, Key, Plus, Search, Settings, Shield, Trash2, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
@@ -257,7 +257,7 @@ export function AdminSettings() {
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Back to files">
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <Shield className="h-8 w-8" />
+            <Settings className="h-8 w-8" />
             <h1 className="text-2xl font-bold">Admin Settings</h1>
           </div>
           <Button onClick={() => setCreateDialogOpen(true)}>
