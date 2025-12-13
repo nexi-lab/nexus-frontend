@@ -307,26 +307,12 @@ export function Agent() {
     setIsRegistering(true);
 
     try {
-      const result = await apiClient.registerAgent(
-        fullAgentId,
-        agentName.trim(),
-        description.trim(),
-        generateApiKey,
-        platform === 'langgraph'
-          ? {
-              platform,
-              endpoint_url: endpointUrl.trim(),
-              agent_id: langgraphAgentId.trim() || undefined,
-              system_prompt: '',
-              tools: [],
-            }
-          : {
-              platform,
-              endpoint_url: '',
-              system_prompt: systemPrompt.trim(),
-              tools: selectedTools,
-            },
-      );
+      const result = await apiClient.registerAgent({
+        agent_id: fullAgentId,
+        name: agentName.trim(),
+        description: description.trim(),
+        generate_api_key: generateApiKey,
+      });
 
       // If API key was generated, show it
       if (result.api_key) {

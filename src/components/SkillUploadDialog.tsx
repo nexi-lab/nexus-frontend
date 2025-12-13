@@ -243,7 +243,7 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
                 <Checkbox
                   id="overwrite"
                   checked={allowOverwrite}
-                  onCheckedChange={(checked) => setAllowOverwrite(checked === true)}
+                  onCheckedChange={(checked: boolean | 'indeterminate') => setAllowOverwrite(checked === true)}
                 />
                 <Label
                   htmlFor="overwrite"
