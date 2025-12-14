@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Copy, ExternalLink, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { copyToClipboard } from '@/utils';
+import { userPath } from '@/utils/pathUtils';
 
 interface OAuthSetupDialogProps {
   open: boolean;
@@ -15,7 +16,7 @@ interface OAuthSetupDialogProps {
 }
 
 export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provider: initialProvider }: OAuthSetupDialogProps) {
-  const { apiClient } = useAuth();
+  const { apiClient, userInfo } = useAuth();
   const [step, setStep] = useState<'email' | 'authorize' | 'code' | 'success'>('email');
   const [userEmail, setUserEmail] = useState('');
   const [rootFolder, setRootFolder] = useState('');
@@ -147,59 +148,47 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
   };
 
   const createConnector = async () => {
-    // Generate a clean connector path from the email
-    const sanitizedEmail = userEmail.replace(/[^a-zA-Z0-9@._-]/g, '_');
-    const connectorPath = `/mnt/gdrive/${sanitizedEmail}`;
+    // Get tenant ID and user ID from userInfo
+    const tenantId = userInfo?.tenant_id || 'default';
+    const userId = userInfo?.subject_id || userInfo?.user || 'anonymous';
+    
+    // Generate connector path using new convention: /tenant:<tenantId>/user:<userId>/connector/<name>
+    // Use connector name directly (sanitized, no spaces)
+    const connectorName = userEmail.replace(/[^a-zA-Z0-9@._-]/g, '_').replace(/\s+/g, '_');
+    const connectorPath = userPath(tenantId, userId, 'connector', connectorName);
 
     try {
-      // Create connector directories if they don't exist
-      try {
-        // First ensure /mnt exists
-        await apiClient.call('mkdir', { path: '/mnt' });
-      } catch (err: any) {
-        // Ignore if already exists or permission denied
-        if (!err.message?.includes('already exists') && !err.message?.includes('permission')) {
-          console.warn('Failed to create /mnt:', err);
-        }
+      // Determine backend type based on provider
+      let backendType = 'gdrive_connector';
+      if (providerName === 'gmail') {
+        backendType = 'gmail_connector';
+      } else if (providerName === 'microsoft-onedrive' || providerName === 'microsoft') {
+        backendType = 'onedrive_connector';
+      } else if (providerName === 'x' || providerName === 'twitter') {
+        backendType = 'x_connector';
       }
 
-      try {
-        // Then create /mnt/gdrive
-        await apiClient.call('mkdir', { path: '/mnt/gdrive' });
-      } catch (err: any) {
-        // Ignore if already exists or permission denied
-        if (!err.message?.includes('already exists') && !err.message?.includes('permission')) {
-          console.warn('Failed to create /mnt/gdrive:', err);
-        }
-      }
+      // Build backend config - do NOT include token_manager_db, backend will use TOKEN_MANAGER_DB env var
+      const backendConfig: Record<string, any> = {
+        user_email: userEmail,
+        provider: providerName,
+      };
 
-      try {
-        // Finally create the user-specific connector path
-        await apiClient.call('mkdir', { path: connectorPath });
-      } catch (err: any) {
-        // Ignore if already exists or permission denied
-        if (!err.message?.includes('already exists') && !err.message?.includes('permission')) {
-          throw new Error(`Failed to create connector directory: ${err.message}`);
-        }
+      // Add provider-specific config
+      if (backendType === 'gdrive_connector') {
+        backendConfig.root_folder = rootFolder || 'nexus-data';
+        backendConfig.use_shared_drives = false;
+      } else if (backendType === 'gmail_connector') {
+        backendConfig.max_message_per_label = 200;
       }
-
-      // Get the database URL from the backend config
-      // For Docker deployment, this should be the PostgreSQL URL
-      const dbPath = 'postgresql://postgres:nexus@postgres:5432/nexus';
 
       const connectorParams = {
         mount_point: connectorPath,
-        backend_type: 'gdrive_connector',
-        backend_config: {
-          token_manager_db: dbPath,
-          user_email: userEmail,
-          root_folder: rootFolder || 'nexus-data',
-          use_shared_drives: false,
-          provider: 'google',
-        },
+        backend_type: backendType,
+        backend_config: backendConfig,
         priority: 10,
         readonly: false,
-        description: `Google Drive for ${userEmail}`,
+        description: `${providerDisplayName || 'Connector'} for ${userEmail}`,
       };
 
       // Save the connector configuration
@@ -219,7 +208,7 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
       }>('sync_mount', { mount_point: connectorPath });
 
       toast.success(
-        `Google Drive connector created at ${connectorPath}! Found ${syncResult.files_scanned || syncResult.files_found || 0} files.`
+        `${providerDisplayName || 'Connector'} created at ${connectorPath}! Found ${syncResult.files_scanned || syncResult.files_found || 0} files.`
       );
 
       setStep('success');

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { fileKeys } from '../hooks/useFiles';
+import { userPath } from '../utils/pathUtils';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
@@ -36,12 +37,10 @@ interface GCSConfig {
 interface GoogleDriveConfig {
   user_email: string;
   root_folder: string;
-  token_manager_db: string;
 }
 
 interface GmailConfig {
   user_email: string;
-  token_manager_db: string;
   max_message_per_label: number;
 }
 
@@ -117,8 +116,13 @@ export function ConnectorManagementDialog({
   const [priority, setPriority] = useState('10');
   const [readonly, setReadonly] = useState(false);
 
-  // Compute full connector path
-  const fullConnectorPath = `/connectors/${connectorName}`.replace(/\/+/g, '/');
+  // Compute full connector path using new convention: /tenant:<tenantId>/user:<userId>/connector/<name>
+  // Use connector name directly (sanitized, no spaces)
+  const tenantId = userInfo?.tenant_id || 'default';
+  const userId = userInfo?.subject_id || userInfo?.user || 'anonymous';
+  // Sanitize connector name: remove spaces, keep alphanumeric, underscore, hyphen
+  const sanitizedName = connectorName ? connectorName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') : '';
+  const fullConnectorPath = sanitizedName ? userPath(tenantId, userId, 'connector', sanitizedName) : '';
 
   // GCS specific config
   const [gcsConfig, setGcsConfig] = useState<GCSConfig>({
@@ -129,16 +133,14 @@ export function ConnectorManagementDialog({
   });
 
   // Google Drive specific config
-  const [gdriveConfig, setGdriveConfig] = useState<GoogleDriveConfig>({
+  const [gdriveConfig, setGdriveConfig] = useState<Omit<GoogleDriveConfig, 'token_manager_db'>>({
     user_email: '',
     root_folder: 'nexus-data',
-    token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus',
   });
   
   // Gmail specific config
-  const [gmailConfig, setGmailConfig] = useState<GmailConfig>({
+  const [gmailConfig, setGmailConfig] = useState<Omit<GmailConfig, 'token_manager_db'>>({
     user_email: '',
-    token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus',
     max_message_per_label: 200, // Default: 200 messages per folder
   });
   
@@ -236,7 +238,7 @@ export function ConnectorManagementDialog({
     setPriority('10');
     setReadonly(false);
     setGcsConfig({ bucket: '', project_id: '', prefix: '', access_token: '' });
-    setGdriveConfig({ user_email: '', root_folder: 'nexus-data', token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus' });
+    setGdriveConfig({ user_email: '', root_folder: 'nexus-data' });
     onOpenChange(false);
   };
 
@@ -311,9 +313,8 @@ export function ConnectorManagementDialog({
         return;
       }
       
-      // Use default token_manager_db path and OAuth credential email
+      // Backend will use TOKEN_MANAGER_DB env var, don't include it in config
       backendConfig = {
-        token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus', // Default path
         root_folder: gdriveConfig.root_folder || 'nexus-data',
         user_email: activeGdriveCredential.user_email,
         provider: 'google-drive', // Specify the provider name for the connector
@@ -325,9 +326,8 @@ export function ConnectorManagementDialog({
         return;
       }
       
-      // Use default token_manager_db path and OAuth credential email
+      // Backend will use TOKEN_MANAGER_DB env var, don't include it in config
       backendConfig = {
-        token_manager_db: 'postgresql://postgres:nexus@postgres:5432/nexus', // Default path
         user_email: activeGmailCredential.user_email,
         max_message_per_label: gmailConfig.max_message_per_label, // Maximum messages to sync per folder
         provider: 'gmail', // Specify the provider name for the connector
