@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
+import { createWorkspace } from '../utils/resourceUtils';
+import { deleteWorkspace } from '../utils/resourceUtils';
 
 interface WorkspaceData {
   path: string;
@@ -58,7 +60,9 @@ export function Workspace() {
     }
 
     try {
-      await apiClient.unregisterWorkspace(path);
+      const tenantId = userInfo?.tenant_id || 'default';
+      // Pass apiClient to use the authenticated user's API key, not from environment
+      await deleteWorkspace(path, tenantId, apiClient);
       await loadWorkspaces(); // Refresh list
     } catch (err) {
       setWorkspaceError(err instanceof Error ? err.message : 'Failed to unregister workspace');
@@ -74,30 +78,27 @@ export function Workspace() {
       return;
     }
 
-    // Validate workspace name (alphanumeric, underscores, hyphens only)
-    if (!/^[a-zA-Z0-9_-]+$/.test(workspaceName.trim())) {
-      setError('Workspace name must contain only letters, numbers, underscores, and hyphens');
-      return;
-    }
-
-    // Get user_id from userInfo
+    // Get user_id and tenant_id from userInfo
     const userId = userInfo?.user || userInfo?.subject_id;
+    const tenantId = userInfo?.tenant_id || 'default';
+    
     if (!userId) {
       setError('Unable to determine user ID. Please log in again.');
       return;
     }
 
-    // Compose full path as /workspace/<user_id>/<workspace_name>
-    const fullPath = `/workspace/${userId}/${workspaceName.trim()}`;
-
     setIsCreating(true);
 
     try {
-      await apiClient.registerWorkspace({
-        path: fullPath,
-        name: workspaceName.trim(),
-        description: description.trim() || undefined,
-      });
+      // Use new convention path helper with automatic ReBAC ownership
+      // Pass apiClient to use the authenticated user's API key, not from environment
+      await createWorkspace(
+        workspaceName.trim(),
+        tenantId,
+        userId,
+        apiClient,
+        description.trim() || undefined
+      );
 
       // Success - reset form and switch to list view
       resetForm();
@@ -122,10 +123,14 @@ export function Workspace() {
     return parts[parts.length - 1] || path;
   };
 
-  // Filter to only show user's workspaces
+  // Filter to only show user's workspaces (both old and new convention paths)
   const userWorkspaces = workspaces.filter((ws) => {
     const userId = userInfo?.user || userInfo?.subject_id;
-    return ws.path.startsWith(`/workspace/${userId}/`);
+    const tenantId = userInfo?.tenant_id || 'default';
+    // Support both old convention (/workspace/userId/...) and new convention (/tenant:.../user:.../workspace/...)
+    return ws.path.startsWith(`/workspace/${userId}/`) || 
+           ws.path.includes(`/user:${userId}/workspace/`) ||
+           (tenantId && ws.path.includes(`/tenant:${tenantId}/user:${userId}/workspace/`));
   });
 
   return (
@@ -232,8 +237,7 @@ export function Workspace() {
 
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm mt-4">
                 <p className="text-blue-900 dark:text-blue-100">
-                  <strong>About workspaces:</strong> Workspaces organize your files and enable snapshots for version control. All workspaces are under{' '}
-                  <code className="bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded">/workspace/{userInfo?.user || 'user'}/</code>
+                  <strong>About workspaces:</strong> Workspaces organize your files and enable snapshots for version control. Workspaces are created using the multi-tenant namespace convention with automatic ReBAC ownership.
                 </p>
               </div>
             </div>
@@ -246,20 +250,15 @@ export function Workspace() {
                   <label htmlFor="workspace-name" className="text-sm font-medium">
                     Workspace Name *
                   </label>
-                  <div className="flex items-center gap-0">
-                    <span className="px-3 py-2 bg-muted text-muted-foreground border border-r-0 rounded-l-md font-mono text-sm whitespace-nowrap">
-                      /workspace/{userInfo?.user || 'user'}/
-                    </span>
-                    <Input
-                      id="workspace-name"
-                      placeholder="my-project"
-                      value={workspaceName}
-                      onChange={(e) => setWorkspaceName(e.target.value)}
-                      disabled={isCreating}
-                      className="font-mono rounded-l-none"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Unique name for your workspace (letters, numbers, underscores, hyphens only)</p>
+                  <Input
+                    id="workspace-name"
+                    placeholder="my-project"
+                    value={workspaceName}
+                    onChange={(e) => setWorkspaceName(e.target.value)}
+                    disabled={isCreating}
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">Workspace name (will be automatically placed in tenant/user namespace with UUID suffix)</p>
                 </div>
 
                 {/* Description */}
