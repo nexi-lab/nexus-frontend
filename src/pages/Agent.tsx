@@ -1,11 +1,10 @@
-import { Bot, Calendar, Check, Copy, Eye, EyeOff, Info, MessageSquare, Plug, Plus, ArrowLeft, Trash2, Zap } from 'lucide-react';
+import { Bot, Calendar, Check, Copy, Eye, EyeOff, Info, MessageSquare, Plug, Plus, ArrowLeft, Trash2, Zap, Folder, Database, FileArchive, Pencil, Crown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { copyToClipboard } from '../utils';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 
 interface Agent {
@@ -14,6 +13,18 @@ interface Agent {
   name: string;
   description?: string;
   created_at: string;
+  skills?: string[]; // Skill names the agent has access to
+  skillPermissions?: Record<string, 'viewer' | 'editor' | 'owner'>; // Permission level for each skill
+  connectors?: string[]; // Connector mount points the agent has access to
+  connectorPermissions?: Record<string, 'viewer' | 'editor' | 'owner'>; // Permission level for each connector
+  workspaces?: string[]; // Workspace paths the agent has access to
+  workspacePermissions?: Record<string, 'viewer' | 'editor' | 'owner'>; // Permission level for each workspace
+  hasAllWorkspaces?: boolean; // Whether agent has access to all workspaces
+  allWorkspacesPermission?: 'viewer' | 'editor' | 'owner'; // Permission level for all workspaces
+  hasMemoryAccess?: boolean;
+  memoryPermission?: 'viewer' | 'editor' | 'owner'; // Permission level for memory
+  hasResourcesAccess?: boolean;
+  resourcesPermission?: 'viewer' | 'editor' | 'owner'; // Permission level for resources
 }
 
 interface SandboxConnectionStatus {
@@ -23,42 +34,18 @@ interface SandboxConnectionStatus {
   error?: string;
 }
 
-// System prompt templates
-const SYSTEM_PROMPT_TEMPLATES = {
-  general_assistant: `You are a helpful AI assistant. You can help users with a wide variety of tasks including answering questions, writing code, analyzing data, and more. Always be concise, accurate, and helpful.`,
-  deep_research: `You are a deep research assistant. Your role is to:
-1. Conduct thorough research on complex topics
-2. Synthesize information from multiple sources
-3. Provide well-structured, evidence-based analysis
-4. Cite sources and verify facts
-5. Break down complex topics into understandable explanations`,
-  quant_analysis: `You are a quantitative analysis expert. Your role is to:
-1. Analyze financial and numerical data
-2. Build statistical models and perform data analysis
-3. Create visualizations and reports
-4. Identify trends, patterns, and anomalies
-5. Provide data-driven insights and recommendations
-Use tools like Python, pandas, numpy, and matplotlib when needed.`,
-  code_expert: `You are an expert software engineer. Your role is to:
-1. Write clean, efficient, and well-documented code
-2. Debug and optimize existing code
-3. Explain complex programming concepts
-4. Follow best practices and design patterns
-5. Provide code reviews and suggestions`,
-};
-
-// Available tool sets from nexus_tools
-const AVAILABLE_TOOL_SETS = [
-  { id: 'file_operations', name: 'File Operations', description: 'Read, write, search files' },
-  { id: 'web_search', name: 'Web Search', description: 'Search the web for information' },
-  { id: 'coding_capability', name: 'Coding & Data Analysis', description: 'Execute Python code and analyze data' },
-  { id: 'memory', name: 'Memory', description: 'Store and retrieve information' },
+// Available platforms
+const AVAILABLE_PLATFORMS = [
+  { id: 'langgraph', name: 'LangGraph', description: 'LangGraph agent platform', enabled: true },
+  { id: 'claude_adk', name: 'Claude ADK', description: 'Claude Agent SDK', enabled: false },
+  { id: 'google_adk', name: 'Google ADK', description: 'Google Agent Development Kit', enabled: false },
+  { id: 'crewai', name: 'CrewAI', description: 'CrewAI agent framework', enabled: false },
 ];
 
 export function Agent() {
   const navigate = useNavigate();
   const { userInfo, apiClient, apiKey } = useAuth();
-  const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'edit' | 'create'>('list');
 
   // Agent list state
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -72,6 +59,7 @@ export function Agent() {
   const [agentName, setAgentName] = useState('');
   const [description, setDescription] = useState('');
   const [generateApiKey, setGenerateApiKey] = useState(false);
+  const [inheritPermissions, setInheritPermissions] = useState(false); // v0.5.1: Permission inheritance control
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
@@ -79,17 +67,44 @@ export function Agent() {
   const [copied, setCopied] = useState(false);
 
   // Agent configuration state
-  const [platform, setPlatform] = useState('nexus');
+  const [platform, setPlatform] = useState('langgraph');
   const [endpointUrl, setEndpointUrl] = useState('http://localhost:2024');
-  const [langgraphAgentId, setLanggraphAgentId] = useState('');
-  const [promptTemplate, setPromptTemplate] = useState('general_assistant');
-  const [systemPrompt, setSystemPrompt] = useState(SYSTEM_PROMPT_TEMPLATES.general_assistant);
-  const [selectedTools, setSelectedTools] = useState<string[]>(AVAILABLE_TOOL_SETS.map((tool) => tool.id));
+  const [langgraphAgentId, setLanggraphAgentId] = useState('agent');
+
+  // Skills state
+  const [skills, setSkills] = useState<Array<{name: string; description: string; tier: string; path: string}>>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [loadingSkills, setLoadingSkills] = useState(false);
+
+  // Connectors state
+  const [connectors, setConnectors] = useState<Array<{mount_point: string; backend_type: string}>>([]);
+  const [selectedConnectors, setSelectedConnectors] = useState<string[]>([]);
+  const [connectorPermissions, setConnectorPermissions] = useState<Record<string, 'viewer' | 'editor' | 'owner'>>({});
+  const [loadingConnectors, setLoadingConnectors] = useState(false);
+
+  // Workspaces state
+  const [workspaces, setWorkspaces] = useState<Array<{path: string; name: string | null; description: string}>>([]);
+  const [selectedWorkspaces, setSelectedWorkspaces] = useState<string[]>([]);
+  const [workspacePermissions, setWorkspacePermissions] = useState<Record<string, 'viewer' | 'editor' | 'owner'>>({});
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
+  const [grantAllWorkspaces, setGrantAllWorkspaces] = useState(false);
+  const [allWorkspacesPermission, setAllWorkspacesPermission] = useState<'viewer' | 'editor' | 'owner'>('viewer');
+
+  // Directory access state (memory, resources)
+  const [grantMemoryAccess, setGrantMemoryAccess] = useState(false);
+  const [grantResourcesAccess, setGrantResourcesAccess] = useState(false);
+
+  // Edit state
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
 
   // Load agents on mount and when switching to list tab
   useEffect(() => {
     if (activeTab === 'list') {
       loadAgents();
+    } else if (activeTab === 'create' || activeTab === 'edit') {
+      loadSkills();
+      loadConnectors();
+      loadWorkspaces();
     }
   }, [activeTab]);
 
@@ -98,12 +113,181 @@ export function Agent() {
     setAgentError(null);
     try {
       const agentList = await apiClient.listAgents();
-      setAgents(agentList);
+
+      // Load skills, connectors, workspaces, and directory access for each agent
+      const agentsWithPermissions = await Promise.all(
+        agentList.map(async (agent) => {
+          // Fetch ReBAC tuples once per agent to avoid duplicate API calls
+          const tuples = await apiClient.rebacListTuples({ subject: ['agent', agent.agent_id] });
+          
+          // Use the same tuples for all permission checks
+          const [skillData, connectorData, workspaceData, memoryAccess, resourcesAccess, allWorkspacesAccess] = await Promise.all([
+            apiClient.getAgentSkills(agent.agent_id, tuples),
+            apiClient.getAgentConnectors(agent.agent_id, tuples),
+            apiClient.getAgentWorkspaces(agent.agent_id, tuples),
+            apiClient.getDirectoryAccess(agent.agent_id, '/memory', tuples),
+            apiClient.getDirectoryAccess(agent.agent_id, '/resources', tuples),
+            apiClient.getAllWorkspacesAccess(agent.agent_id, tuples),
+          ]);
+
+          // Extract skill names and permissions
+          const skills = skillData.map(s => s.name);
+          const skillPermissions = skillData.reduce((acc, s) => {
+            acc[s.name] = s.permission;
+            return acc;
+          }, {} as Record<string, 'viewer' | 'editor' | 'owner'>);
+
+          // Extract connector paths and permissions
+          const connectors = connectorData.map(c => c.path);
+          const connectorPermissions = connectorData.reduce((acc, c) => {
+            acc[c.path] = c.permission;
+            return acc;
+          }, {} as Record<string, 'viewer' | 'editor' | 'owner'>);
+
+          // Extract workspace paths and permissions
+          const workspaces = workspaceData.map(w => w.path);
+          const workspacePermissions = workspaceData.reduce((acc, w) => {
+            acc[w.path] = w.permission;
+            return acc;
+          }, {} as Record<string, 'viewer' | 'editor' | 'owner'>);
+
+          return {
+            ...agent,
+            skills,
+            skillPermissions,
+            connectors,
+            connectorPermissions,
+            workspaces,
+            workspacePermissions,
+            hasAllWorkspaces: allWorkspacesAccess.hasAccess,
+            allWorkspacesPermission: allWorkspacesAccess.permission,
+            hasMemoryAccess: memoryAccess.hasAccess,
+            memoryPermission: memoryAccess.permission,
+            hasResourcesAccess: resourcesAccess.hasAccess,
+            resourcesPermission: resourcesAccess.permission,
+          };
+        })
+      );
+
+      setAgents(agentsWithPermissions);
     } catch (err) {
       setAgentError(err instanceof Error ? err.message : 'Failed to load agents');
     } finally {
       setLoadingAgents(false);
     }
+  };
+
+  const loadSkills = async () => {
+    setLoadingSkills(true);
+    try {
+      const result = await apiClient.skillsList();
+      // Extract skills array from the result object, filtering out any without file_path
+      const skillsArray = result.skills
+        .filter(skill => skill.file_path)
+        .map(skill => ({
+          name: skill.name,
+          description: skill.description,
+          tier: skill.tier || 'free',
+          // Use the directory path of the skill (parent directory of SKILL.md)
+          path: skill.file_path!.substring(0, skill.file_path!.lastIndexOf('/'))
+        }));
+      setSkills(skillsArray);
+    } catch (err) {
+      console.error('Failed to load skills:', err);
+      setSkills([]);
+    } finally {
+      setLoadingSkills(false);
+    }
+  };
+
+  const loadConnectors = async () => {
+    setLoadingConnectors(true);
+    try {
+      const mounts = await apiClient.listMounts();
+      // Filter for connectors (mounts with /connectors/ prefix)
+      const connectorMounts = mounts
+        .filter(m => m.mount_point.startsWith('/connectors/'))
+        .map(m => ({
+          mount_point: m.mount_point,
+          backend_type: m.backend_type,
+        }));
+      setConnectors(connectorMounts);
+    } catch (err) {
+      console.error('Failed to load connectors:', err);
+      setConnectors([]);
+    } finally {
+      setLoadingConnectors(false);
+    }
+  };
+
+  const loadWorkspaces = async () => {
+    setLoadingWorkspaces(true);
+    try {
+      const workspaceList = await apiClient.listWorkspaces();
+      const workspaceData = workspaceList.map(w => ({
+        path: w.path,
+        name: w.name,
+        description: w.description,
+      }));
+      setWorkspaces(workspaceData);
+    } catch (err) {
+      console.error('Failed to load workspaces:', err);
+      setWorkspaces([]);
+    } finally {
+      setLoadingWorkspaces(false);
+    }
+  };
+
+  const toggleSkill = (skillName: string) => {
+    setSelectedSkills((prev) => (prev.includes(skillName) ? prev.filter((name) => name !== skillName) : [...prev, skillName]));
+  };
+
+  const toggleConnector = (mountPoint: string) => {
+    setSelectedConnectors((prev) => {
+      if (prev.includes(mountPoint)) {
+        // Remove connector
+        const newSelected = prev.filter((mp) => mp !== mountPoint);
+        // Also remove from permissions map
+        setConnectorPermissions((perms) => {
+          const newPerms = { ...perms };
+          delete newPerms[mountPoint];
+          return newPerms;
+        });
+        return newSelected;
+      } else {
+        // Add connector with default viewer permission
+        setConnectorPermissions((perms) => ({ ...perms, [mountPoint]: 'viewer' }));
+        return [...prev, mountPoint];
+      }
+    });
+  };
+
+  const setConnectorPermission = (mountPoint: string, permission: 'viewer' | 'editor' | 'owner') => {
+    setConnectorPermissions((prev) => ({ ...prev, [mountPoint]: permission }));
+  };
+
+  const toggleWorkspace = (path: string) => {
+    setSelectedWorkspaces((prev) => {
+      if (prev.includes(path)) {
+        // Remove workspace
+        const newSelected = prev.filter((p) => p !== path);
+        // Also remove from permissions map
+        setWorkspacePermissions((perms) => {
+          const newPerms = { ...perms };
+          delete newPerms[path];
+          return newPerms;
+        });
+        return newSelected;
+      } else {
+        // Add workspace with default viewer permission
+        setWorkspacePermissions((perms) => ({ ...perms, [path]: 'viewer' }));
+        return [...prev, path];
+      }
+    });
+  };
+
+  const setWorkspacePermission = (path: string, permission: 'viewer' | 'editor' | 'owner') => {
+    setWorkspacePermissions((prev) => ({ ...prev, [path]: permission }));
   };
 
   const handleStartSandbox = async (agentId: string) => {
@@ -235,14 +419,6 @@ export function Agent() {
     }
   };
 
-  const handlePromptTemplateChange = (template: string) => {
-    setPromptTemplate(template);
-    setSystemPrompt(SYSTEM_PROMPT_TEMPLATES[template as keyof typeof SYSTEM_PROMPT_TEMPLATES]);
-  };
-
-  const toggleTool = (toolId: string) => {
-    setSelectedTools((prev) => (prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]));
-  };
 
   const handleDeleteAgent = async (agentId: string, agentName: string) => {
     if (!confirm(`Are you sure you want to delete agent "${agentName}"?`)) {
@@ -257,10 +433,261 @@ export function Agent() {
     }
   };
 
+  const handleEditAgent = async (agent: Agent) => {
+    // Populate form with agent data
+    const agentName = agent.agent_id.split(',')[1]; // Extract agent name from full ID
+    setAgentName(agentName);
+    setDescription(agent.description || '');
+    setEditingAgentId(agent.agent_id);
+    setSelectedSkills(agent.skills || []);
+    setSelectedConnectors(agent.connectors || []);
+    setConnectorPermissions(agent.connectorPermissions || {});
+    setSelectedWorkspaces(agent.workspaces || []);
+    setWorkspacePermissions(agent.workspacePermissions || {});
+    setGrantAllWorkspaces(agent.hasAllWorkspaces || false);
+    setAllWorkspacesPermission(agent.allWorkspacesPermission || 'viewer');
+    setGrantMemoryAccess(agent.hasMemoryAccess || false);
+    setGrantResourcesAccess(agent.hasResourcesAccess || false);
+
+    // Note: We can't change API key generation or inheritance for existing agents
+    // These are only for new agent creation
+    setGenerateApiKey(false);
+    setInheritPermissions(false);
+
+    // Switch to edit tab
+    setActiveTab('edit');
+  };
+
+  // Unified helper: Update permissions for a resource type
+  const updateResourcePermissions = async (
+    tuples: Array<{tuple_id: string; object_type: string; object_id: string; relation: string}>,
+    currentPaths: string[],
+    selectedPaths: string[],
+    currentPermissions: Record<string, 'viewer' | 'editor' | 'owner'>,
+    selectedPermissions: Record<string, 'viewer' | 'editor' | 'owner'>,
+    pathToObjectPath: (path: string) => string | null,
+    getRelation: (permission: 'viewer' | 'editor' | 'owner') => string = (p) => p === 'editor' ? 'direct_editor' : 'direct_viewer'
+  ) => {
+    const pathsToAdd = selectedPaths.filter(p => !currentPaths.includes(p));
+    const pathsToRemove = currentPaths.filter(p => !selectedPaths.includes(p));
+    const pathsToUpdate = selectedPaths.filter(p =>
+      currentPaths.includes(p) &&
+      currentPermissions[p] !== selectedPermissions[p]
+    );
+
+    // Remove paths
+    for (const path of pathsToRemove) {
+      const objectPath = pathToObjectPath(path);
+      if (objectPath) {
+        const tuple = tuples.find(t => t.object_type === 'file' && t.object_id === objectPath);
+        if (tuple) {
+          await apiClient.rebacDelete({ tuple_id: tuple.tuple_id });
+        }
+      }
+    }
+
+    // Update permissions (if permission level changed)
+    for (const path of pathsToUpdate) {
+      const objectPath = pathToObjectPath(path);
+      if (objectPath) {
+        // Remove old permission
+        const oldTuple = tuples.find(t => t.object_type === 'file' && t.object_id === objectPath);
+        if (oldTuple) {
+          await apiClient.rebacDelete({ tuple_id: oldTuple.tuple_id });
+        }
+        // Add new permission
+        const relation = getRelation(selectedPermissions[path]);
+        await apiClient.rebacCreate({
+          subject: ['agent', editingAgentId!],
+          relation,
+          object: ['file', objectPath],
+        });
+      }
+    }
+
+    // Add new paths
+    for (const path of pathsToAdd) {
+      const objectPath = pathToObjectPath(path);
+      if (objectPath) {
+        const relation = getRelation(selectedPermissions[path] || 'viewer');
+        await apiClient.rebacCreate({
+          subject: ['agent', editingAgentId!],
+          relation,
+          object: ['file', objectPath],
+        });
+      }
+    }
+  };
+
+  // Helper: Update simple resource access (no permission levels, just add/remove)
+  const updateSimpleResourceAccess = async (
+    tuples: Array<{tuple_id: string; object_type: string; object_id: string}>,
+    currentItems: string[],
+    selectedItems: string[],
+    itemToPath: (item: string) => string | null,
+    defaultRelation: string = 'direct_viewer'
+  ) => {
+    const itemsToAdd = selectedItems.filter(i => !currentItems.includes(i));
+    const itemsToRemove = currentItems.filter(i => !selectedItems.includes(i));
+
+    // Remove items
+    for (const item of itemsToRemove) {
+      const path = itemToPath(item);
+      if (path) {
+        const tuple = tuples.find(t => t.object_type === 'file' && t.object_id === path);
+        if (tuple) {
+          await apiClient.rebacDelete({ tuple_id: tuple.tuple_id });
+        }
+      }
+    }
+
+    // Add items
+    for (const item of itemsToAdd) {
+      const path = itemToPath(item);
+      if (path) {
+        await apiClient.rebacCreate({
+          subject: ['agent', editingAgentId!],
+          relation: defaultRelation,
+          object: ['file', path],
+        });
+      }
+    }
+  };
+
+  // Helper: Update single path permission (for special cases like all-workspaces)
+  const updateSinglePathPermission = async (
+    tuples: Array<{tuple_id: string; object_type: string; object_id: string}>,
+    path: string,
+    currentHasAccess: boolean,
+    newHasAccess: boolean,
+    currentPermission: 'viewer' | 'editor' | 'owner',
+    newPermission: 'viewer' | 'editor' | 'owner',
+    getRelation: (permission: 'viewer' | 'editor' | 'owner') => string = (p) => p === 'editor' ? 'direct_editor' : 'direct_viewer'
+  ) => {
+    if (currentHasAccess && !newHasAccess) {
+      // Remove access
+      const tuple = tuples.find(t => t.object_type === 'file' && t.object_id === path);
+      if (tuple) {
+        await apiClient.rebacDelete({ tuple_id: tuple.tuple_id });
+      }
+    } else if (!currentHasAccess && newHasAccess) {
+      // Grant access
+      const relation = getRelation(newPermission);
+      await apiClient.rebacCreate({
+        subject: ['agent', editingAgentId!],
+        relation,
+        object: ['file', path],
+      });
+    } else if (currentHasAccess && newHasAccess && currentPermission !== newPermission) {
+      // Update permission level
+      const oldTuple = tuples.find(t => t.object_type === 'file' && t.object_id === path);
+      if (oldTuple) {
+        await apiClient.rebacDelete({ tuple_id: oldTuple.tuple_id });
+      }
+      const relation = getRelation(newPermission);
+      await apiClient.rebacCreate({
+        subject: ['agent', editingAgentId!],
+        relation,
+        object: ['file', path],
+      });
+    }
+  };
+
+  const handleUpdateAgent = async () => {
+    if (!editingAgentId) return;
+
+    setIsRegistering(true);
+    try {
+      const agent = agents.find(a => a.agent_id === editingAgentId);
+      if (!agent) {
+        setError('Agent not found');
+        return;
+      }
+
+      // Get all ReBAC tuples for the agent
+      const tuples = await apiClient.rebacListTuples({ subject: ['agent', editingAgentId] });
+
+      // 1. Handle Skills (simple add/remove, no permission levels)
+      await updateSimpleResourceAccess(
+        tuples,
+        agent.skills || [],
+        selectedSkills,
+        (skillName) => {
+          const skill = skills.find(s => s.name === skillName);
+          return skill?.path || null;
+        }
+      );
+
+      // 2. Handle Connectors (with permission levels)
+      await updateResourcePermissions(
+        tuples,
+        agent.connectors || [],
+        selectedConnectors,
+        agent.connectorPermissions || {},
+        connectorPermissions,
+        (mountPoint) => mountPoint
+      );
+
+      // 3. Handle Workspaces (with permission levels)
+      await updateResourcePermissions(
+        tuples,
+        agent.workspaces || [],
+        selectedWorkspaces,
+        agent.workspacePermissions || {},
+        workspacePermissions,
+        (path) => path
+      );
+
+      // 3b. Handle All Workspaces Access (special case)
+      const userId = editingAgentId.split(',')[0];
+      const workspaceRootPath = `/workspace/${userId}`;
+      await updateSinglePathPermission(
+        tuples,
+        workspaceRootPath,
+        agent.hasAllWorkspaces || false,
+        grantAllWorkspaces,
+        agent.allWorkspacesPermission || 'viewer',
+        allWorkspacesPermission
+      );
+
+      // 4. Handle Directory Access (memory, resources) - simple add/remove
+      const directories = [
+        { path: '/memory', current: agent.hasMemoryAccess || false, new: grantMemoryAccess },
+        { path: '/resources', current: agent.hasResourcesAccess || false, new: grantResourcesAccess },
+      ];
+
+      for (const dir of directories) {
+        await updateSinglePathPermission(
+          tuples,
+          dir.path,
+          dir.current,
+          dir.new,
+          'viewer',
+          'viewer'
+        );
+      }
+
+      // Reset form and go back to list
+      resetForm();
+      await loadAgents();
+      setActiveTab('list');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update agent');
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
+    // If in edit tab, handle update
+    if (activeTab === 'edit' && editingAgentId) {
+      return handleUpdateAgent();
+    }
+
+    // Otherwise, handle new agent creation
     if (!agentName.trim()) {
       setError('Agent name is required');
       return;
@@ -278,20 +705,18 @@ export function Agent() {
       return;
     }
 
-    // Validate endpoint URL for LangGraph platform
-    if (platform === 'langgraph') {
-      if (!endpointUrl.trim()) {
-        setError('Endpoint URL is required for LangGraph agents');
-        return;
-      }
+    // Validate endpoint URL
+    if (!endpointUrl.trim()) {
+      setError('Endpoint URL is required');
+      return;
+    }
 
-      // Validate endpoint URL format
-      try {
-        new URL(endpointUrl);
-      } catch {
-        setError('Invalid endpoint URL format');
-        return;
-      }
+    // Validate endpoint URL format
+    try {
+      new URL(endpointUrl);
+    } catch {
+      setError('Invalid endpoint URL format');
+      return;
     }
 
     // Get user_id from userInfo
@@ -307,26 +732,126 @@ export function Agent() {
     setIsRegistering(true);
 
     try {
-      const result = await apiClient.registerAgent(
-        fullAgentId,
-        agentName.trim(),
-        description.trim(),
-        generateApiKey,
-        platform === 'langgraph'
-          ? {
-              platform,
-              endpoint_url: endpointUrl.trim(),
-              agent_id: langgraphAgentId.trim() || undefined,
-              system_prompt: '',
-              tools: [],
-            }
-          : {
-              platform,
-              endpoint_url: '',
-              system_prompt: systemPrompt.trim(),
-              tools: selectedTools,
-            },
-      );
+      // Build metadata with platform, endpoint_url, and agent_id
+      const metadata: Record<string, any> = {
+        platform,
+        endpoint_url: endpointUrl.trim(),
+      };
+
+      // Add agent_id if specified
+      if (langgraphAgentId.trim()) {
+        metadata.agent_id = langgraphAgentId.trim();
+      }
+
+      const result = await apiClient.registerAgent({
+        agent_id: fullAgentId,
+        name: agentName.trim(),
+        description: description.trim(),
+        generate_api_key: generateApiKey,
+        inherit_permissions: inheritPermissions, // v0.5.1: Pass inheritance flag
+        metadata, // v0.5.1: Pass metadata
+      });
+
+      // Grant permissions for selected skills
+      if (selectedSkills.length > 0) {
+        // Get unique skill paths to grant permissions on
+        const skillPathsToGrant = new Set<string>();
+
+        for (const skillName of selectedSkills) {
+          const skill = skills.find(s => s.name === skillName);
+          if (skill) {
+            // Only add the specific skill directory, not parent paths
+            skillPathsToGrant.add(skill.path);
+          }
+        }
+
+        // Grant permissions on specific skill directories only
+        // NOTE: Use "file" object type with "direct_viewer" relation for READ permission
+        // The file namespace maps "read" → ["viewer", "editor", "owner"]
+        // And "viewer" → union of ["direct_viewer", "parent_viewer", "group_viewer"]
+        for (const skillPath of skillPathsToGrant) {
+          try {
+            await apiClient.rebacCreate({
+              subject: ['agent', fullAgentId],
+              relation: 'direct_viewer',
+              object: ['file', skillPath],
+            });
+            console.log(`Granted direct_viewer permission for: ${skillPath}`);
+          } catch (grantErr) {
+            console.error(`Failed to grant permission for ${skillPath}:`, grantErr);
+            // Continue even if this fails - might already exist
+          }
+        }
+      }
+
+      // Grant permissions for selected connectors
+      for (const mountPoint of selectedConnectors) {
+        try {
+          const relation = connectorPermissions[mountPoint] === 'editor' ? 'direct_editor' : 'direct_viewer';
+          await apiClient.rebacCreate({
+            subject: ['agent', fullAgentId],
+            relation,
+            object: ['file', mountPoint],
+          });
+          console.log(`Granted ${relation} permission for connector: ${mountPoint}`);
+        } catch (grantErr) {
+          console.error(`Failed to grant permission for ${mountPoint}:`, grantErr);
+          // Continue even if this fails - might already exist
+        }
+      }
+
+      // Grant permissions for selected workspaces
+      for (const path of selectedWorkspaces) {
+        try {
+          const relation = workspacePermissions[path] === 'editor' ? 'direct_editor' : 'direct_viewer';
+          await apiClient.rebacCreate({
+            subject: ['agent', fullAgentId],
+            relation,
+            object: ['file', path],
+          });
+          console.log(`Granted ${relation} permission for workspace: ${path}`);
+        } catch (grantErr) {
+          console.error(`Failed to grant permission for ${path}:`, grantErr);
+        }
+      }
+
+      // Grant all-workspaces access if requested
+      if (grantAllWorkspaces) {
+        try {
+          const workspaceRootPath = `/workspace/${userId}`;
+          const relation = allWorkspacesPermission === 'editor' ? 'direct_editor' : 'direct_viewer';
+          await apiClient.rebacCreate({
+            subject: ['agent', fullAgentId],
+            relation,
+            object: ['file', workspaceRootPath],
+          });
+          console.log(`Granted ${relation} permission for all workspaces: ${workspaceRootPath}`);
+        } catch (grantErr) {
+          console.error('Failed to grant all-workspaces permission:', grantErr);
+        }
+      }
+
+      // Grant directory access (memory, resources)
+      const directoryGrants = [
+        { path: '/memory', grant: grantMemoryAccess },
+        { path: '/resources', grant: grantResourcesAccess },
+      ];
+
+      for (const dir of directoryGrants) {
+        if (dir.grant) {
+          try {
+            await apiClient.rebacCreate({
+              subject: ['agent', fullAgentId],
+              relation: 'direct_viewer',
+              object: ['file', dir.path],
+            });
+            console.log(`Granted direct_viewer permission for directory: ${dir.path}`);
+          } catch (grantErr) {
+            console.error(`Failed to grant permission for ${dir.path}:`, grantErr);
+            // Continue even if this fails - might already exist
+          }
+        }
+      }
 
       // If API key was generated, show it
       if (result.api_key) {
@@ -352,22 +877,20 @@ export function Agent() {
     setShowApiKey(false);
     setCopied(false);
     setError(null);
-    setPlatform('nexus');
+    setPlatform('langgraph'); // Default to langgraph
     setEndpointUrl('http://localhost:2024');
-    setLanggraphAgentId('');
-    setPromptTemplate('general_assistant');
-    setSystemPrompt(SYSTEM_PROMPT_TEMPLATES.general_assistant);
-    setSelectedTools(AVAILABLE_TOOL_SETS.map((tool) => tool.id));
-  };
-
-  const handleQuickSetupNexusAssistant = () => {
-    setAgentName('nexus_assistant');
-    setDescription('A claude-code like general agent that connects to Nexus File System.');
-    setPlatform('langgraph');
-    setEndpointUrl('http://localhost:2024');
-    setLanggraphAgentId('agent');
-    setGenerateApiKey(false);
-    setError(null);
+    setLanggraphAgentId('agent'); // Default to 'agent'
+    setSelectedSkills([]); // Clear selected skills
+    setSelectedConnectors([]); // Clear selected connectors
+    setConnectorPermissions({}); // Clear connector permissions
+    setSelectedWorkspaces([]); // Clear selected workspaces
+    setWorkspacePermissions({}); // Clear workspace permissions
+    setGrantAllWorkspaces(false); // Clear all-workspaces flag
+    setAllWorkspacesPermission('viewer'); // Reset all-workspaces permission
+    setGrantMemoryAccess(false); // Reset memory access
+    setGrantResourcesAccess(false); // Reset resources access
+    setInheritPermissions(false); // Reset inheritance flag
+    setEditingAgentId(null); // Clear editing agent ID
   };
 
   const handleCopyApiKey = async () => {
@@ -393,6 +916,22 @@ export function Agent() {
   const getAgentDisplayName = (agentId: string) => {
     const parts = agentId.split(',');
     return parts.length === 2 ? parts[1] : agentId;
+  };
+
+  // Strip /connectors/ prefix from mount point for display
+  const getConnectorDisplayName = (mountPoint: string) => {
+    return mountPoint.replace(/^\/connectors\//, '');
+  };
+
+  // Render permission icon based on permission level
+  const PermissionIcon = ({ permission }: { permission: 'viewer' | 'editor' | 'owner' }) => {
+    if (permission === 'owner') {
+      return <Crown className="h-2.5 w-2.5" />;
+    } else if (permission === 'editor') {
+      return <Pencil className="h-2.5 w-2.5" />;
+    } else {
+      return <Eye className="h-2.5 w-2.5" />;
+    }
   };
 
   // Filter to only show user's agents
@@ -444,10 +983,22 @@ export function Agent() {
             <Button
               variant="ghost"
               className={`rounded-none border-b-2 ${
+                activeTab === 'edit' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'
+              }`}
+              onClick={() => setActiveTab('edit')}
+              disabled={!editingAgentId}
+            >
+              <Bot className="h-4 w-4 mr-1" />
+              Edit Agent
+            </Button>
+            <Button
+              variant="ghost"
+              className={`rounded-none border-b-2 ${
                 activeTab === 'create' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'
               }`}
               onClick={() => {
                 if (!newApiKey) {
+                  resetForm(); // Reset form when switching to create tab
                   setActiveTab('create');
                 }
               }}
@@ -499,46 +1050,178 @@ export function Agent() {
                       error: 'bg-red-500',
                     }[connectionStatus.nexusStatus];
 
-                    const sandboxTooltip = {
-                      none: 'Sandbox not created',
-                      creating: 'Creating sandbox...',
-                      created: `Sandbox created (${connectionStatus.sandbox_id})`,
-                      error: `Sandbox error: ${connectionStatus.error || 'Unknown error'}`,
-                    }[connectionStatus.sandboxStatus];
-
-                    const nexusTooltip = {
-                      disconnected: 'Nexus not connected',
-                      connecting: 'Connecting Nexus...',
-                      connected: 'Nexus connected',
-                      error: `Nexus connection failed: ${connectionStatus.error || 'Unknown error'}`,
-                    }[connectionStatus.nexusStatus];
 
                     return (
                       <div key={agent.agent_id} className="border rounded-lg p-4 space-y-3">
                         {/* Agent Header */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <Bot className="h-4 w-4 text-muted-foreground" />
                               <span className="font-medium">{agentName}</span>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(agent.created_at).toLocaleDateString()}
+                              </div>
                             </div>
                             {agent.description && <div className="text-sm text-muted-foreground mb-2">{agent.description}</div>}
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Calendar className="h-3 w-3" />
-                              Created {new Date(agent.created_at).toLocaleDateString()}
+
+                            {/* Check if agent inherits all permissions (has no explicit permissions) */}
+                            {(() => {
+                              const hasExplicitPermissions =
+                                (agent.skills && agent.skills.length > 0) ||
+                                (agent.connectors && agent.connectors.length > 0) ||
+                                (agent.workspaces && agent.workspaces.length > 0) ||
+                                agent.hasAllWorkspaces ||
+                                agent.hasMemoryAccess ||
+                                agent.hasResourcesAccess;
+
+                              if (!hasExplicitPermissions) {
+                                return (
+                                  <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                                    <Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                                    <span className="text-blue-700 dark:text-blue-300">
+                                      <strong>Inherits all owner permissions</strong> - This agent uses your credentials and has full access to all your resources.
+                                    </span>
+                                  </div>
+                                );
+                              }
+
+                              return null;
+                            })()}
+
+                            {/* Compact Permissions Display */}
+                            <div className="space-y-1.5 text-xs">
+                              {/* Skills */}
+                              {agent.skills && agent.skills.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <Zap className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                  <div className="flex flex-wrap gap-1">
+                                    {agent.skills.map((skillName) => {
+                                      const permission = agent.skillPermissions?.[skillName] || 'viewer';
+                                      return (
+                                        <span
+                                          key={skillName}
+                                          className="px-1.5 py-0.5 rounded flex items-center gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                                        >
+                                          <PermissionIcon permission={permission} />
+                                          {skillName}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Connectors */}
+                              {agent.connectors && agent.connectors.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <Plug className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                  <div className="flex flex-wrap gap-1">
+                                    {agent.connectors.map((conn) => {
+                                      const permission = agent.connectorPermissions?.[conn] || 'viewer';
+                                      const displayName = conn.replace(/^\/connectors\//, '');
+                                      const colorClass =
+                                        permission === 'owner'
+                                          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                          : permission === 'editor'
+                                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300';
+                                      return (
+                                        <span
+                                          key={conn}
+                                          className={`px-1.5 py-0.5 rounded flex items-center gap-1 ${colorClass}`}
+                                        >
+                                          <PermissionIcon permission={permission} />
+                                          {displayName}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Workspaces */}
+                              {((agent.workspaces && agent.workspaces.length > 0) || agent.hasAllWorkspaces) && (
+                                <div className="flex items-center gap-2">
+                                  <Folder className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                  <div className="flex flex-wrap gap-1">
+                                    {agent.hasAllWorkspaces && (
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded font-medium flex items-center gap-1 ${
+                                          agent.allWorkspacesPermission === 'owner'
+                                            ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                            : agent.allWorkspacesPermission === 'editor'
+                                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                              : 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400'
+                                        }`}
+                                      >
+                                        <PermissionIcon permission={agent.allWorkspacesPermission || 'viewer'} />
+                                        All
+                                      </span>
+                                    )}
+                                    {agent.workspaces?.map((ws) => {
+                                      const permission = agent.workspacePermissions?.[ws] || 'viewer';
+                                      const displayName = ws.split('/').pop() || ws;
+                                      const colorClass =
+                                        permission === 'owner'
+                                          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                          : permission === 'editor'
+                                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                            : 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400';
+                                      return (
+                                        <span
+                                          key={ws}
+                                          className={`px-1.5 py-0.5 rounded flex items-center gap-1 ${colorClass}`}
+                                        >
+                                          <PermissionIcon permission={permission} />
+                                          {displayName}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Directory Access (Memory, Resources) */}
+                              {(agent.hasMemoryAccess || agent.hasResourcesAccess) && (
+                                <div className="flex items-center gap-2">
+                                  <Database className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                  <div className="flex flex-wrap gap-1">
+                                    {agent.hasMemoryAccess && (
+                                      <span className="px-1.5 py-0.5 rounded flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                                        <PermissionIcon permission={agent.memoryPermission || 'viewer'} />
+                                        memory
+                                      </span>
+                                    )}
+                                    {agent.hasResourcesAccess && (
+                                      <span className="px-1.5 py-0.5 rounded flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                                        <PermissionIcon permission={agent.resourcesPermission || 'viewer'} />
+                                        resources
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
                             <Button
                               variant="default"
                               size="sm"
-                              onClick={() => {
-                                // Navigate back to file browser with agent selected
-                                navigate(`/?agent=${agent.agent_id}`);
-                              }}
+                              onClick={() => navigate(`/?agent=${agent.agent_id}`)}
                             >
                               <MessageSquare className="h-4 w-4 mr-1" />
                               Use Agent
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditAgent(agent)}
+                            >
+                              <Bot className="h-4 w-4 mr-1" />
+                              Edit Agent
                             </Button>
                             <Button
                               variant="ghost"
@@ -554,92 +1237,77 @@ export function Agent() {
                           </div>
                         </div>
 
-                        {/* Nexus Connection Settings */}
-                        <div className="border-t pt-3">
-                          <div className="text-sm font-medium mb-3 flex items-center gap-2">
-                            <Plug className="h-4 w-4" />
-                            Nexus Connection Settings
-                          </div>
+                        {/* Compact Connection Status - Clickable */}
+                        <div className="border-t pt-2 flex items-center gap-3 text-xs">
+                          {/* Nexus Status - Clickable */}
+                          <button
+                            onClick={() => {
+                              if (connectionStatus.nexusStatus === 'disconnected' || connectionStatus.nexusStatus === 'error') {
+                                handleConnectNexus(agent.agent_id);
+                              }
+                            }}
+                            disabled={connectionStatus.nexusStatus === 'connecting' || connectionStatus.nexusStatus === 'connected'}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded hover:bg-accent ${
+                              connectionStatus.nexusStatus === 'disconnected' || connectionStatus.nexusStatus === 'error'
+                                ? 'cursor-pointer'
+                                : 'cursor-default opacity-60'
+                            }`}
+                            title={
+                              connectionStatus.nexusStatus === 'disconnected'
+                                ? 'Click to connect'
+                                : connectionStatus.nexusStatus === 'connecting'
+                                  ? 'Connecting...'
+                                  : connectionStatus.nexusStatus === 'connected'
+                                    ? 'Connected'
+                                    : 'Connection error - click to retry'
+                            }
+                          >
+                            <div className={`h-2 w-2 rounded-full ${nexusStatusColor}`} />
+                            <span className="text-muted-foreground">Nexus</span>
+                          </button>
 
-                          {/* Status indicators */}
-                          <div className="flex items-center gap-4 mb-3 text-xs">
-                            {/* Nexus connection status */}
-                            <div className="flex items-center gap-2" title={nexusTooltip}>
-                              <span className="text-muted-foreground">Nexus:</span>
-                              <div className={`h-2 w-2 rounded-full ${nexusStatusColor}`} />
-                              <span className="text-muted-foreground">
-                                {connectionStatus.nexusStatus === 'disconnected'
-                                  ? 'Not connected'
-                                  : connectionStatus.nexusStatus === 'connecting'
-                                    ? 'Connecting...'
-                                    : connectionStatus.nexusStatus === 'connected'
-                                      ? 'Connected'
-                                      : 'Error'}
-                              </span>
-                            </div>
-                            {/* Sandbox status */}
-                            <div className="flex items-center gap-2" title={sandboxTooltip}>
-                              <span className="text-muted-foreground">Sandbox:</span>
-                              <div className={`h-2 w-2 rounded-full ${sandboxStatusColor}`} />
-                              <span className="text-muted-foreground">
-                                {connectionStatus.sandboxStatus === 'none'
-                                  ? 'Not created'
+                          {/* Sandbox Status - Clickable */}
+                          <button
+                            onClick={() => {
+                              if (
+                                connectionStatus.nexusStatus === 'connected' &&
+                                (connectionStatus.sandboxStatus === 'none' || connectionStatus.sandboxStatus === 'error')
+                              ) {
+                                handleStartSandbox(agent.agent_id);
+                              }
+                            }}
+                            disabled={
+                              connectionStatus.nexusStatus !== 'connected' ||
+                              connectionStatus.sandboxStatus === 'creating' ||
+                              connectionStatus.sandboxStatus === 'created'
+                            }
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded hover:bg-accent ${
+                              connectionStatus.nexusStatus === 'connected' &&
+                              (connectionStatus.sandboxStatus === 'none' || connectionStatus.sandboxStatus === 'error')
+                                ? 'cursor-pointer'
+                                : 'cursor-default opacity-60'
+                            }`}
+                            title={
+                              connectionStatus.nexusStatus !== 'connected'
+                                ? 'Connect Nexus first'
+                                : connectionStatus.sandboxStatus === 'none'
+                                  ? 'Click to start'
                                   : connectionStatus.sandboxStatus === 'creating'
-                                    ? 'Creating...'
+                                    ? 'Starting...'
                                     : connectionStatus.sandboxStatus === 'created'
-                                      ? 'Running'
-                                      : 'Error'}
-                              </span>
-                            </div>
-                          </div>
+                                      ? `Running (${connectionStatus.sandbox_id})`
+                                      : 'Sandbox error - click to retry'
+                            }
+                          >
+                            <div className={`h-2 w-2 rounded-full ${sandboxStatusColor}`} />
+                            <span className="text-muted-foreground">Sandbox</span>
+                          </button>
 
-                          {/* Action buttons */}
-                          <div className="flex items-center gap-2">
-                            {/* Connect Nexus Button */}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleConnectNexus(agent.agent_id)}
-                              disabled={connectionStatus.nexusStatus === 'connecting' || connectionStatus.nexusStatus === 'connected'}
-                              title={connectionStatus.nexusStatus === 'connected' ? 'Already connected' : 'Connect to Nexus server'}
-                            >
-                              <Plug className="h-4 w-4 mr-1" />
-                              {connectionStatus.nexusStatus === 'connecting'
-                                ? 'Connecting...'
-                                : connectionStatus.nexusStatus === 'connected'
-                                  ? 'Connected'
-                                  : 'Connect Nexus'}
-                            </Button>
-                            {/* Start Sandbox Button */}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleStartSandbox(agent.agent_id)}
-                              disabled={
-                                connectionStatus.nexusStatus !== 'connected' ||
-                                connectionStatus.sandboxStatus === 'creating' ||
-                                connectionStatus.sandboxStatus === 'created'
-                              }
-                              title={
-                                connectionStatus.nexusStatus !== 'connected'
-                                  ? 'Connect to Nexus first'
-                                  : connectionStatus.sandboxStatus === 'created'
-                                    ? 'Sandbox already running'
-                                    : 'Start sandbox'
-                              }
-                            >
-                              <Zap className="h-4 w-4 mr-1" />
-                              {connectionStatus.sandboxStatus === 'creating'
-                                ? 'Starting...'
-                                : connectionStatus.sandboxStatus === 'created'
-                                  ? 'Running'
-                                  : 'Start Sandbox'}
-                            </Button>
-                          </div>
-
-                          {/* Error message if any */}
+                          {/* Error indicator */}
                           {connectionStatus.error && (
-                            <div className="mt-2 text-xs text-destructive bg-destructive/10 p-2 rounded">{connectionStatus.error}</div>
+                            <span className="text-destructive flex-1 truncate" title={connectionStatus.error}>
+                              ⚠ {connectionStatus.error}
+                            </span>
                           )}
                         </div>
                       </div>
@@ -710,31 +1378,376 @@ export function Agent() {
                 </Button>
               </div>
             </div>
-          ) : (
-            // Register Agent Form
+          ) : activeTab === 'edit' ? (
+            // Edit Agent Form
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
-                {/* Quick Setup Card */}
-                <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border-2 border-purple-200 dark:border-purple-800 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <Zap className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Quick Setup: Nexus Assistant</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">A Claude-Code-like general agent that connects to Nexus File System</p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleQuickSetupNexusAssistant}
+                {/* Agent Name */}
+                <div className="space-y-2">
+                  <label htmlFor="agent-name" className="text-sm font-medium">
+                    Agent Name *
+                  </label>
+                  <div className="flex items-center gap-0">
+                    <span className="px-3 py-2 bg-muted text-muted-foreground border border-r-0 rounded-l-md font-mono text-sm">
+                      {userInfo?.user || 'user'},
+                    </span>
+                    <Input
+                      id="agent-name"
+                      placeholder="data_analyst"
+                      value={agentName}
+                      onChange={(e) => setAgentName(e.target.value.toLowerCase())}
+                      disabled={true} // Always disabled in edit mode
+                      className="font-mono rounded-l-none"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Agent name cannot be changed</p>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-2">
+                  <label htmlFor="agent-description" className="text-sm font-medium">
+                    Description
+                  </label>
+                  <Textarea
+                    id="agent-description"
+                    placeholder="A general assistant that helps with various tasks..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    disabled={isRegistering}
+                    rows={3}
+                  />
+                </div>
+
+                {/* Agent Permission Mode Indicator */}
+                {(() => {
+                  const hasExplicitPermissions =
+                    selectedSkills.length > 0 ||
+                    selectedConnectors.length > 0 ||
+                    selectedWorkspaces.length > 0 ||
+                    grantAllWorkspaces ||
+                    grantMemoryAccess ||
+                    grantResourcesAccess;
+
+                  if (!hasExplicitPermissions) {
+                    return (
+                      <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                        <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 space-y-2">
+                          <div className="font-medium text-blue-900 dark:text-blue-100">
+                            This agent inherits all owner permissions
+                          </div>
+                          <p className="text-sm text-blue-700 dark:text-blue-300">
+                            This agent currently uses your credentials and has full access to all your resources.
+                            To restrict access, grant specific permissions below using the principle of least privilege.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="flex items-start gap-3 p-4 rounded-lg bg-green-50/50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+                      <Check className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 space-y-2">
+                        <div className="font-medium text-green-900 dark:text-green-100">
+                          Explicit permissions configured
+                        </div>
+                        <p className="text-sm text-green-700 dark:text-green-300">
+                          This agent has specific permissions granted below. It can only access the resources you've explicitly allowed.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Skills Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Skills Access</label>
+                  {loadingSkills ? (
+                    <div className="text-sm text-muted-foreground">Loading skills...</div>
+                  ) : skills.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No skills available</div>
+                  ) : (
+                    <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto">
+                      {skills.map((skill) => (
+                        <div key={skill.name} className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            id={`skill-${skill.name}`}
+                            checked={selectedSkills.includes(skill.name)}
+                            onChange={() => toggleSkill(skill.name)}
+                            disabled={isRegistering}
+                            className="h-4 w-4 mt-0.5"
+                          />
+                          <label htmlFor={`skill-${skill.name}`} className="flex-1 cursor-pointer">
+                            <div className="text-sm font-medium flex items-center gap-2">
+                              {skill.name}
+                              {skill.tier && (
+                                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                  skill.tier === 'pro' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
+                                  'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                }`}>
+                                  {skill.tier}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{skill.description}</div>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Select skills to grant READ-ONLY access. The agent will be able to use these skills.
+                  </p>
+                </div>
+
+                {/* Connectors Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Plug className="h-4 w-4" />
+                    Connectors Access
+                  </label>
+                  {loadingConnectors ? (
+                    <div className="text-sm text-muted-foreground">Loading connectors...</div>
+                  ) : connectors.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No connectors available</div>
+                  ) : (
+                    <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto">
+                      {connectors.map((connector) => (
+                        <div key={connector.mount_point} className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            id={`connector-${connector.mount_point}`}
+                            checked={selectedConnectors.includes(connector.mount_point)}
+                            onChange={() => toggleConnector(connector.mount_point)}
+                            disabled={isRegistering}
+                            className="h-4 w-4 mt-0.5"
+                          />
+                          <label htmlFor={`connector-${connector.mount_point}`} className="flex-1 cursor-pointer">
+                            <div className="text-sm font-medium">{getConnectorDisplayName(connector.mount_point)}</div>
+                            <div className="text-xs text-muted-foreground">{connector.backend_type}</div>
+                          </label>
+                          {selectedConnectors.includes(connector.mount_point) && (
+                            <select
+                              value={connectorPermissions[connector.mount_point] || 'viewer'}
+                              onChange={(e) => setConnectorPermission(connector.mount_point, e.target.value as 'viewer' | 'editor')}
+                              disabled={isRegistering}
+                              className="text-xs px-2 py-1 border rounded bg-background"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <option value="viewer">Read-Only</option>
+                              <option value="editor">Read-Write</option>
+                            </select>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Select connectors and choose permission level (Read-Only or Read-Write).
+                  </p>
+                </div>
+
+                {/* Workspaces Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Folder className="h-4 w-4" />
+                    Workspaces Access
+                  </label>
+
+                  {/* All Workspaces Option */}
+                  <div className="border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-950/20">
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        id="grant-all-workspaces"
+                        checked={grantAllWorkspaces}
+                        onChange={(e) => setGrantAllWorkspaces(e.target.checked)}
                         disabled={isRegistering}
-                        className="bg-white dark:bg-gray-900 hover:bg-purple-50 dark:hover:bg-purple-950"
-                      >
-                        <Zap className="h-4 w-4 mr-2" />
-                        Use This Template
-                      </Button>
+                        className="h-4 w-4 mt-0.5"
+                      />
+                      <label htmlFor="grant-all-workspaces" className="flex-1 cursor-pointer">
+                        <div className="text-sm font-medium">Grant access to ALL workspaces</div>
+                        <div className="text-xs text-muted-foreground">Base permission for all current and future workspaces</div>
+                      </label>
+                      {grantAllWorkspaces && (
+                        <select
+                          value={allWorkspacesPermission}
+                          onChange={(e) => setAllWorkspacesPermission(e.target.value as 'viewer' | 'editor')}
+                          disabled={isRegistering}
+                          className="text-xs px-2 py-1 border rounded bg-background"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <option value="viewer">Read-Only</option>
+                          <option value="editor">Read-Write</option>
+                        </select>
+                      )}
                     </div>
                   </div>
+
+                  {/* Individual Workspaces - Always shown */}
+                  <div>
+                    <label className="text-sm font-medium">Individual Workspace Permissions (Optional)</label>
+                    {loadingWorkspaces ? (
+                      <div className="text-sm text-muted-foreground mt-2">Loading workspaces...</div>
+                    ) : workspaces.length === 0 ? (
+                      <div className="text-sm text-muted-foreground mt-2">No workspaces available</div>
+                    ) : (
+                      <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto mt-2">
+                        {workspaces.map((workspace) => (
+                          <div key={workspace.path} className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              id={`workspace-${workspace.path}`}
+                              checked={selectedWorkspaces.includes(workspace.path)}
+                              onChange={() => toggleWorkspace(workspace.path)}
+                              disabled={isRegistering}
+                              className="h-4 w-4 mt-0.5"
+                            />
+                            <label htmlFor={`workspace-${workspace.path}`} className="flex-1 cursor-pointer">
+                              <div className="text-sm font-medium">{workspace.name || workspace.path}</div>
+                              {workspace.description && (
+                                <div className="text-xs text-muted-foreground">{workspace.description}</div>
+                              )}
+                            </label>
+                            {selectedWorkspaces.includes(workspace.path) && (
+                              <select
+                                value={workspacePermissions[workspace.path] || 'viewer'}
+                                onChange={(e) => setWorkspacePermission(workspace.path, e.target.value as 'viewer' | 'editor')}
+                                disabled={isRegistering}
+                                className="text-xs px-2 py-1 border rounded bg-background"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <option value="viewer">Read-Only</option>
+                                <option value="editor">Read-Write</option>
+                              </select>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    {grantAllWorkspaces
+                      ? '✓ All workspaces access enabled. Individual permissions can override or enhance the base permission (e.g., read-only for all, read-write for specific workspaces).'
+                      : 'Grant base access to all workspaces, or select individual workspaces for granular control.'}
+                  </p>
                 </div>
+
+                {/* Directory Access (Memory, Resources) */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Directory Access</label>
+                  <div className="space-y-2 border rounded-lg p-3 bg-muted/50">
+                    {/* Memory Access */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="memory-access"
+                        checked={grantMemoryAccess}
+                        onChange={(e) => setGrantMemoryAccess(e.target.checked)}
+                        disabled={isRegistering}
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor="memory-access" className="flex-1 cursor-pointer">
+                        <div className="text-sm font-medium flex items-center gap-2">
+                          <Database className="h-4 w-4" />
+                          Memory (/memory)
+                        </div>
+                        <div className="text-xs text-muted-foreground">Agent can access memory storage</div>
+                      </label>
+                    </div>
+
+                    {/* Resources Access */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="resources-access"
+                        checked={grantResourcesAccess}
+                        onChange={(e) => setGrantResourcesAccess(e.target.checked)}
+                        disabled={isRegistering}
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor="resources-access" className="flex-1 cursor-pointer">
+                        <div className="text-sm font-medium flex items-center gap-2">
+                          <FileArchive className="h-4 w-4" />
+                          Resources (/resources)
+                        </div>
+                        <div className="text-xs text-muted-foreground">Agent can access resource files</div>
+                      </label>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Grant READ-ONLY access to entire directories.
+                  </p>
+                </div>
+
+                {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{error}</div>}
+
+                {/* Submit Button */}
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      resetForm();
+                      setActiveTab('list');
+                    }}
+                    disabled={isRegistering}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isRegistering}>
+                    {isRegistering ? 'Updating...' : 'Update Agent'}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          ) : (
+            // Register New Agent Form
+            <form onSubmit={handleSubmit}>
+              <div className="space-y-4">
+                {/* Platform Selection */}
+                {activeTab === 'create' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Platform *</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {AVAILABLE_PLATFORMS.map((platformOption) => (
+                        <button
+                          key={platformOption.id}
+                          type="button"
+                          onClick={() => platformOption.enabled && setPlatform(platformOption.id)}
+                          disabled={!platformOption.enabled || isRegistering}
+                          className={`
+                            relative p-4 border-2 rounded-lg text-left transition-all
+                            ${platform === platformOption.id && platformOption.enabled
+                              ? 'border-primary bg-primary/5'
+                              : platformOption.enabled
+                                ? 'border-border hover:border-primary/50 cursor-pointer'
+                                : 'border-border bg-muted/50 cursor-not-allowed opacity-50'
+                            }
+                          `}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-sm mb-1">{platformOption.name}</h3>
+                              <p className="text-xs text-muted-foreground">{platformOption.description}</p>
+                            </div>
+                            {platform === platformOption.id && platformOption.enabled && (
+                              <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                            )}
+                          </div>
+                          {!platformOption.enabled && (
+                            <span className="absolute top-2 right-2 text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                              Coming Soon
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Agent Name */}
                 <div className="space-y-2">
@@ -754,7 +1767,9 @@ export function Agent() {
                       className="font-mono rounded-l-none"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">Unique name for your agent (lowercase, alphanumeric, underscores, hyphens only)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Unique name for your agent (lowercase, alphanumeric, underscores, hyphens only)
+                  </p>
                 </div>
 
                 {/* Description */}
@@ -764,7 +1779,7 @@ export function Agent() {
                   </label>
                   <Textarea
                     id="agent-description"
-                    placeholder="Analyzes data and generates reports..."
+                    placeholder="A general assistant that helps with various tasks..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     disabled={isRegistering}
@@ -772,152 +1787,326 @@ export function Agent() {
                   />
                 </div>
 
-                {/* Platform */}
+                {/* Endpoint URL */}
                 <div className="space-y-2">
-                  <label htmlFor="platform" className="text-sm font-medium">
-                    Platform *
+                  <label htmlFor="endpoint-url" className="text-sm font-medium">
+                    Endpoint URL *
                   </label>
-                  <Select value={platform} onValueChange={setPlatform} disabled={isRegistering}>
-                    <SelectTrigger id="platform">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="nexus">Nexus</SelectItem>
-                      <SelectItem value="langgraph">LangGraph</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {platform === 'nexus' ? 'Built-in Nexus agent with tools and memory' : 'External LangGraph agent endpoint'}
-                  </p>
+                  <Input
+                    id="endpoint-url"
+                    placeholder="http://localhost:2024"
+                    value={endpointUrl}
+                    onChange={(e) => setEndpointUrl(e.target.value)}
+                    disabled={isRegistering}
+                  />
+                  <p className="text-xs text-muted-foreground">Agent service endpoint URL</p>
                 </div>
 
-                {/* LangGraph-specific configuration fields */}
-                {platform === 'langgraph' && (
-                  <>
-                    {/* Endpoint URL */}
-                    <div className="space-y-2">
-                      <label htmlFor="endpoint-url" className="text-sm font-medium">
-                        Endpoint URL *
-                      </label>
-                      <Input
-                        id="endpoint-url"
-                        placeholder="http://localhost:2024"
-                        value={endpointUrl}
-                        onChange={(e) => setEndpointUrl(e.target.value)}
-                        disabled={isRegistering}
-                      />
-                      <p className="text-xs text-muted-foreground">LangGraph agent service endpoint URL</p>
-                    </div>
-
-                    {/* Agent ID */}
-                    <div className="space-y-2">
-                      <label htmlFor="langgraph-agent-id" className="text-sm font-medium">
-                        Agent ID
-                      </label>
-                      <Input
-                        id="langgraph-agent-id"
-                        placeholder="agent-123 (optional)"
-                        value={langgraphAgentId}
-                        onChange={(e) => setLanggraphAgentId(e.target.value)}
-                        disabled={isRegistering}
-                      />
-                      <p className="text-xs text-muted-foreground">Optional: LangGraph agent identifier for routing</p>
-                    </div>
-                  </>
-                )}
-
-                {/* Nexus-specific configuration fields */}
-                {platform === 'nexus' && (
-                  <>
-                    {/* System Prompt Template */}
-                    <div className="space-y-2">
-                      <label htmlFor="prompt-template" className="text-sm font-medium">
-                        System Prompt Template
-                      </label>
-                      <Select value={promptTemplate} onValueChange={handlePromptTemplateChange}>
-                        <SelectTrigger id="prompt-template">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="general_assistant">General Assistant</SelectItem>
-                          <SelectItem value="deep_research">Deep Research</SelectItem>
-                          <SelectItem value="quant_analysis">Quantitative Analysis</SelectItem>
-                          <SelectItem value="code_expert">Code Expert</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* System Prompt */}
-                    <div className="space-y-2">
-                      <label htmlFor="system-prompt" className="text-sm font-medium">
-                        System Prompt
-                      </label>
-                      <Textarea
-                        id="system-prompt"
-                        value={systemPrompt}
-                        onChange={(e) => setSystemPrompt(e.target.value)}
-                        disabled={isRegistering}
-                        rows={5}
-                        className="font-mono text-xs"
-                      />
-                      <p className="text-xs text-muted-foreground">Customize the agent's behavior and instructions</p>
-                    </div>
-
-                    {/* Tools */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Tools & Capabilities</label>
-                      <div className="space-y-2 border rounded-lg p-3 bg-muted/50">
-                        {AVAILABLE_TOOL_SETS.map((tool) => (
-                          <div key={tool.id} className="flex items-start gap-2">
-                            <input
-                              type="checkbox"
-                              id={`tool-${tool.id}`}
-                              checked={selectedTools.includes(tool.id)}
-                              onChange={() => toggleTool(tool.id)}
-                              disabled={isRegistering}
-                              className="h-4 w-4 mt-0.5"
-                            />
-                            <label htmlFor={`tool-${tool.id}`} className="flex-1 cursor-pointer">
-                              <div className="text-sm font-medium">{tool.name}</div>
-                              <div className="text-xs text-muted-foreground">{tool.description}</div>
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground">Select the tools and capabilities available to this agent</p>
-                    </div>
-                  </>
-                )}
+                {/* Agent ID */}
+                <div className="space-y-2">
+                  <label htmlFor="langgraph-agent-id" className="text-sm font-medium">
+                    Agent ID
+                  </label>
+                  <Input
+                    id="langgraph-agent-id"
+                    placeholder="agent"
+                    value={langgraphAgentId}
+                    onChange={(e) => setLanggraphAgentId(e.target.value)}
+                    disabled={isRegistering}
+                  />
+                  <p className="text-xs text-muted-foreground">Agent identifier for routing (default: agent)</p>
+                </div>
 
                 {/* Generate API Key Option */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="generate-api-key"
-                      checked={generateApiKey}
-                      onChange={(e) => setGenerateApiKey(e.target.checked)}
-                      disabled={isRegistering}
-                      className="h-4 w-4"
-                    />
-                    <label htmlFor="generate-api-key" className="text-sm font-medium">
-                      Generate API key for agent
-                    </label>
-                  </div>
-                  <p className="text-xs text-muted-foreground ml-6">
-                    {generateApiKey ? (
-                      <span className="text-orange-600 dark:text-orange-400">Agent will have its own API key (for independent authentication)</span>
-                    ) : (
-                      <span className="text-green-600 dark:text-green-400">Recommended: Agent will use owner's credentials + X-Agent-ID header</span>
+                      <input
+                        type="checkbox"
+                        id="generate-api-key"
+                        checked={generateApiKey}
+                        onChange={(e) => setGenerateApiKey(e.target.checked)}
+                        disabled={isRegistering}
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor="generate-api-key" className="text-sm font-medium">
+                        Generate API key for agent
+                      </label>
+                    </div>
+                    <p className="text-xs text-muted-foreground ml-6">
+                      {generateApiKey ? (
+                        <span className="text-orange-600 dark:text-orange-400">Agent will have its own API key (for independent authentication)</span>
+                      ) : (
+                        <span className="text-green-600 dark:text-green-400">Recommended: Agent will use owner's credentials + X-Agent-ID header</span>
+                      )}
+                    </p>
+
+                    {/* Inherit Permissions Option (only shown when API key is generated) */}
+                    {generateApiKey && (
+                      <div className="ml-6 mt-2 space-y-2 pl-4 border-l-2 border-gray-300 dark:border-gray-700">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="inherit-permissions"
+                            checked={inheritPermissions}
+                            onChange={(e) => setInheritPermissions(e.target.checked)}
+                            disabled={isRegistering}
+                            className="h-4 w-4"
+                          />
+                          <label htmlFor="inherit-permissions" className="text-sm font-medium">
+                            Inherit owner's permissions
+                          </label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {inheritPermissions ? (
+                            <span className="text-blue-600 dark:text-blue-400">✓ Agent inherits all your permissions</span>
+                          ) : (
+                            <span className="text-orange-600 dark:text-orange-400">⚠️ Agent starts with 0 permissions (grant via ReBAC)</span>
+                          )}
+                        </p>
+                      </div>
                     )}
-                  </p>
-                </div>
+
+                    {/* Skills Selection - Only show when API key is generated AND inheritance is disabled */}
+                    {generateApiKey && !inheritPermissions && (
+                      <div className="ml-6 mt-2 space-y-2 pl-4 border-l-2 border-gray-300 dark:border-gray-700">
+                        <label className="text-sm font-medium">Grant Skills Access (Optional)</label>
+                        {loadingSkills ? (
+                          <div className="text-sm text-muted-foreground">Loading skills...</div>
+                        ) : skills.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">No skills available</div>
+                        ) : (
+                          <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto">
+                            {skills.map((skill) => (
+                              <div key={skill.name} className="flex items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  id={`skill-${skill.name}`}
+                                  checked={selectedSkills.includes(skill.name)}
+                                  onChange={() => toggleSkill(skill.name)}
+                                  disabled={isRegistering}
+                                  className="h-4 w-4 mt-0.5"
+                                />
+                                <label htmlFor={`skill-${skill.name}`} className="flex-1 cursor-pointer">
+                                  <div className="text-sm font-medium flex items-center gap-2">
+                                    {skill.name}
+                                    {skill.tier && (
+                                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                        skill.tier === 'pro' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
+                                        'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                      }`}>
+                                        {skill.tier}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{skill.description}</div>
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Select skills to grant READ-ONLY access. The agent will be able to use these skills.
+                        </p>
+
+                        {/* Connectors Selection */}
+                        <div className="mt-4">
+                          <label className="text-sm font-medium flex items-center gap-2">
+                            <Plug className="h-4 w-4" />
+                            Grant Connectors Access (Optional)
+                          </label>
+                          {loadingConnectors ? (
+                            <div className="text-sm text-muted-foreground mt-2">Loading connectors...</div>
+                          ) : connectors.length === 0 ? (
+                            <div className="text-sm text-muted-foreground mt-2">No connectors available</div>
+                          ) : (
+                            <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto mt-2">
+                              {connectors.map((connector) => (
+                                <div key={connector.mount_point} className="flex items-start gap-2">
+                                  <input
+                                    type="checkbox"
+                                    id={`create-connector-${connector.mount_point}`}
+                                    checked={selectedConnectors.includes(connector.mount_point)}
+                                    onChange={() => toggleConnector(connector.mount_point)}
+                                    disabled={isRegistering}
+                                    className="h-4 w-4 mt-0.5"
+                                  />
+                                  <label htmlFor={`create-connector-${connector.mount_point}`} className="flex-1 cursor-pointer">
+                                    <div className="text-sm font-medium">{getConnectorDisplayName(connector.mount_point)}</div>
+                                    <div className="text-xs text-muted-foreground">{connector.backend_type}</div>
+                                  </label>
+                                  {selectedConnectors.includes(connector.mount_point) && (
+                                    <select
+                                      value={connectorPermissions[connector.mount_point] || 'viewer'}
+                                      onChange={(e) => setConnectorPermission(connector.mount_point, e.target.value as 'viewer' | 'editor')}
+                                      disabled={isRegistering}
+                                      className="text-xs px-2 py-1 border rounded bg-background"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <option value="viewer">Read-Only</option>
+                                      <option value="editor">Read-Write</option>
+                                    </select>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Select connectors and choose permission level (Read-Only or Read-Write).
+                          </p>
+                        </div>
+
+                        {/* Workspaces Selection */}
+                        <div className="mt-4">
+                          <label className="text-sm font-medium flex items-center gap-2">
+                            <Folder className="h-4 w-4" />
+                            Grant Workspaces Access (Optional)
+                          </label>
+
+                          {/* All Workspaces Option */}
+                          <div className="border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-950/20 mt-2">
+                            <div className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                id="create-grant-all-workspaces"
+                                checked={grantAllWorkspaces}
+                                onChange={(e) => setGrantAllWorkspaces(e.target.checked)}
+                                disabled={isRegistering}
+                                className="h-4 w-4 mt-0.5"
+                              />
+                              <label htmlFor="create-grant-all-workspaces" className="flex-1 cursor-pointer">
+                                <div className="text-sm font-medium">Grant access to ALL workspaces</div>
+                                <div className="text-xs text-muted-foreground">Base permission for all current and future workspaces</div>
+                              </label>
+                              {grantAllWorkspaces && (
+                                <select
+                                  value={allWorkspacesPermission}
+                                  onChange={(e) => setAllWorkspacesPermission(e.target.value as 'viewer' | 'editor')}
+                                  disabled={isRegistering}
+                                  className="text-xs px-2 py-1 border rounded bg-background"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <option value="viewer">Read-Only</option>
+                                  <option value="editor">Read-Write</option>
+                                </select>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Individual Workspaces - Always shown */}
+                          <div className="mt-2">
+                            <label className="text-sm font-medium">Individual Workspace Permissions (Optional)</label>
+                            {loadingWorkspaces ? (
+                              <div className="text-sm text-muted-foreground mt-2">Loading workspaces...</div>
+                            ) : workspaces.length === 0 ? (
+                              <div className="text-sm text-muted-foreground mt-2">No workspaces available</div>
+                            ) : (
+                              <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto mt-2">
+                                {workspaces.map((workspace) => (
+                                  <div key={workspace.path} className="flex items-start gap-2">
+                                    <input
+                                      type="checkbox"
+                                      id={`create-workspace-${workspace.path}`}
+                                      checked={selectedWorkspaces.includes(workspace.path)}
+                                      onChange={() => toggleWorkspace(workspace.path)}
+                                      disabled={isRegistering}
+                                      className="h-4 w-4 mt-0.5"
+                                    />
+                                    <label htmlFor={`create-workspace-${workspace.path}`} className="flex-1 cursor-pointer">
+                                      <div className="text-sm font-medium">{workspace.name || workspace.path}</div>
+                                      {workspace.description && (
+                                        <div className="text-xs text-muted-foreground">{workspace.description}</div>
+                                      )}
+                                    </label>
+                                    {selectedWorkspaces.includes(workspace.path) && (
+                                      <select
+                                        value={workspacePermissions[workspace.path] || 'viewer'}
+                                        onChange={(e) => setWorkspacePermission(workspace.path, e.target.value as 'viewer' | 'editor')}
+                                        disabled={isRegistering}
+                                        className="text-xs px-2 py-1 border rounded bg-background"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <option value="viewer">Read-Only</option>
+                                        <option value="editor">Read-Write</option>
+                                      </select>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {grantAllWorkspaces
+                              ? '✓ All workspaces access enabled. Individual permissions can override or enhance the base permission (e.g., read-only for all, read-write for specific workspaces).'
+                              : 'Grant base access to all workspaces, or select individual workspaces for granular control.'}
+                          </p>
+                        </div>
+
+                        {/* Directory Access */}
+                        <div className="mt-4">
+                          <label className="text-sm font-medium">Grant Directory Access (Optional)</label>
+                          <div className="space-y-2 border rounded-lg p-3 bg-muted/50 mt-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id="create-memory-access"
+                                checked={grantMemoryAccess}
+                                onChange={(e) => setGrantMemoryAccess(e.target.checked)}
+                                disabled={isRegistering}
+                                className="h-4 w-4"
+                              />
+                              <label htmlFor="create-memory-access" className="flex-1 cursor-pointer">
+                                <div className="text-sm font-medium flex items-center gap-2">
+                                  <Database className="h-4 w-4" />
+                                  Memory (/memory)
+                                </div>
+                                <div className="text-xs text-muted-foreground">Agent can access memory storage</div>
+                              </label>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id="create-resources-access"
+                                checked={grantResourcesAccess}
+                                onChange={(e) => setGrantResourcesAccess(e.target.checked)}
+                                disabled={isRegistering}
+                                className="h-4 w-4"
+                              />
+                              <label htmlFor="create-resources-access" className="flex-1 cursor-pointer">
+                                <div className="text-sm font-medium flex items-center gap-2">
+                                  <FileArchive className="h-4 w-4" />
+                                  Resources (/resources)
+                                </div>
+                                <div className="text-xs text-muted-foreground">Agent can access resource files</div>
+                              </label>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Grant READ-ONLY access to entire directories.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                 {/* Info Box */}
                 <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
-                  <p className="font-medium">Permission Inheritance:</p>
+                  <p className="font-medium">Permission Model:</p>
                   <p className="text-muted-foreground">
-                    Agents automatically inherit all permissions from their owner (you). You can grant additional permissions using ReBAC if needed.
+                    {!generateApiKey ? (
+                      <>
+                        <strong>Full Permissions:</strong> Agent uses your credentials and inherits all your permissions automatically.
+                      </>
+                    ) : inheritPermissions ? (
+                      <>
+                        <strong>Full Permissions:</strong> Agent has its own API key but inherits all your permissions.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Zero Permissions (Recommended):</strong> Agent starts with no permissions. Grant specific permissions via ReBAC for principle of least privilege.
+                      </>
+                    )}
                   </p>
                 </div>
 
@@ -925,8 +2114,16 @@ export function Agent() {
 
                 {/* Submit Button */}
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="outline" onClick={resetForm} disabled={isRegistering}>
-                    Reset
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      resetForm();
+                      setActiveTab('list');
+                    }}
+                    disabled={isRegistering}
+                  >
+                    Cancel
                   </Button>
                   <Button type="submit" disabled={isRegistering}>
                     {isRegistering ? 'Registering...' : 'Register Agent'}

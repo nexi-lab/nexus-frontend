@@ -1,6 +1,17 @@
 import axios, { type AxiosInstance } from 'axios';
 import type { RPCRequest, RPCResponse } from '../types/file';
 
+// ReBAC tuple type
+export type ReBACTuple = {
+  tuple_id: string;
+  subject_type: string;
+  subject_id: string;
+  relation: string;
+  object_type: string;
+  object_id: string;
+  created_at: string | null;
+};
+
 class NexusAPIClient {
   private client: AxiosInstance;
   private requestId = 0;
@@ -241,7 +252,14 @@ class NexusAPIClient {
   }
 
   // Agent API - Register a new agent
-  async registerAgent(params: { agent_id: string; name: string; description?: string; generate_api_key?: boolean }): Promise<{
+  async registerAgent(params: {
+    agent_id: string;
+    name: string;
+    description?: string;
+    generate_api_key?: boolean;
+    inherit_permissions?: boolean; // v0.5.1: Permission inheritance control
+    metadata?: Record<string, any>; // v0.5.1: Optional metadata (platform, endpoint_url, etc.)
+  }): Promise<{
     agent_id: string;
     user_id: string;
     name: string;
@@ -467,23 +485,227 @@ class NexusAPIClient {
   }
 
   // ReBAC API - List relationship tuples
-  async rebacListTuples(params?: { subject?: [string, string]; relation?: string; object?: [string, string] }): Promise<
-    Array<{
-      tuple_id: string;
-      subject_type: string;
-      subject_id: string;
-      relation: string;
-      object_type: string;
-      object_id: string;
-      created_at: string | null;
-    }>
-  > {
+  async rebacListTuples(params?: { subject?: [string, string]; relation?: string; object?: [string, string] }): Promise<ReBACTuple[]> {
     return await this.call('rebac_list_tuples', params || {});
   }
 
   // ReBAC API - Delete a relationship tuple
   async rebacDelete(params: { tuple_id: string }): Promise<boolean> {
     return await this.call('rebac_delete', params);
+  }
+
+  // Permission mapping: ReBAC relation to permission level
+  private readonly PERMISSION_MAP: Record<string, 'viewer' | 'editor' | 'owner'> = {
+    'direct_owner': 'owner',
+    'parent_owner': 'owner',
+    'direct_editor': 'editor',
+    'parent_editor': 'editor',
+    'direct_viewer': 'viewer',
+    'parent_viewer': 'viewer',
+  };
+
+  private getPermissionLevel(relation: string): 'viewer' | 'editor' | 'owner' {
+    return this.PERMISSION_MAP[relation] || 'viewer';
+  }
+
+  // Generic helper: Get agent resource access with permissions
+  private async getAgentResourceAccess<T>(
+    agentId: string,
+    resourceFetcher: () => Promise<T[]>,
+    pathExtractor: (resource: T) => string,
+    pathFilter?: (path: string) => boolean,
+    nameExtractor?: (resource: T) => string | null,
+    tuples?: ReBACTuple[]
+  ): Promise<Array<{name?: string; path: string; permission: 'viewer' | 'editor' | 'owner'}>> {
+    try {
+      // Get all available resources
+      const resources = await resourceFetcher();
+      
+      // Build path to resource mapping
+      const pathToResource = new Map<string, T>();
+      const validPaths = new Set<string>();
+      
+      for (const resource of resources) {
+        const path = pathExtractor(resource);
+        if (path && (!pathFilter || pathFilter(path))) {
+          validPaths.add(path);
+          pathToResource.set(path, resource);
+        }
+      }
+
+      // Check ReBAC permissions to find which resources this agent has access to
+      // Use provided tuples if available, otherwise fetch them
+      const permissionTuples = tuples || await this.rebacListTuples({ subject: ['agent', agentId] });
+
+      // Extract resources and their permission levels from granted permissions
+      const grantedResources: Array<{name?: string; path: string; permission: 'viewer' | 'editor' | 'owner'}> = [];
+      
+      for (const tuple of permissionTuples) {
+        if (tuple.object_type === 'file' && validPaths.has(tuple.object_id)) {
+          const resource = pathToResource.get(tuple.object_id);
+          if (resource) {
+            const permission = this.getPermissionLevel(tuple.relation);
+            const name = nameExtractor ? nameExtractor(resource) : null;
+
+            grantedResources.push({ 
+              name: name || undefined, 
+              path: tuple.object_id, 
+              permission: permission as 'viewer' | 'editor' | 'owner' 
+            });
+          }
+        }
+      }
+
+      // Deduplicate by path (or name if available), preferring highest permission level
+      const resourceMap = new Map<string, {name?: string; path: string; permission: 'viewer' | 'editor' | 'owner'}>();
+      const permissionPriority = { viewer: 1, editor: 2, owner: 3 };
+
+      for (const resource of grantedResources) {
+        const key = resource.name || resource.path;
+        const existing = resourceMap.get(key);
+        if (!existing || permissionPriority[resource.permission] > permissionPriority[existing.permission]) {
+          resourceMap.set(key, resource);
+        }
+      }
+
+      return Array.from(resourceMap.values());
+    } catch (err) {
+      console.error('Failed to get agent resource access:', err);
+      return [];
+    }
+  }
+
+  // Helper: Get skill names and permissions granted to an agent
+  async getAgentSkills(
+    agentId: string,
+    tuples?: ReBACTuple[]
+  ): Promise<Array<{name: string; permission: 'viewer' | 'editor' | 'owner'}>> {
+    const result = await this.getAgentResourceAccess<{name: string; file_path?: string}>(
+      agentId,
+      async () => {
+        const skillsResult = await this.skillsList();
+        return skillsResult.skills.filter(s => s.file_path);
+      },
+      (skill) => skill.file_path ? skill.file_path.substring(0, skill.file_path.lastIndexOf('/')) : '',
+      (path) => path.startsWith('/skills/'),
+      (skill) => skill.name,
+      tuples
+    );
+    
+    // Filter to ensure we have names and return in the expected format
+    return result
+      .filter(r => r.name)
+      .map(r => ({ name: r.name!, permission: r.permission }));
+  }
+
+  // List all mounts
+  async listMounts(): Promise<Array<{
+    mount_point: string;
+    priority: number;
+    readonly: boolean;
+    backend_type: string;
+  }>> {
+    const result = await this.call('list_mounts', {});
+    return result as Array<{
+      mount_point: string;
+      priority: number;
+      readonly: boolean;
+      backend_type: string;
+    }>;
+  }
+
+  // Helper: Get connector mount points and permissions granted to an agent
+  async getAgentConnectors(
+    agentId: string,
+    tuples?: ReBACTuple[]
+  ): Promise<Array<{path: string; permission: 'viewer' | 'editor' | 'owner'}>> {
+    const result = await this.getAgentResourceAccess<{mount_point: string}>(
+      agentId,
+      async () => {
+        const mounts = await this.listMounts();
+        return mounts.filter(m => m.mount_point.startsWith('/connectors/'));
+      },
+      (mount) => mount.mount_point,
+      (path) => path.startsWith('/connectors/'),
+      undefined,
+      tuples
+    );
+    
+    return result.map(r => ({ path: r.path, permission: r.permission }));
+  }
+
+  // Helper: Get workspace paths and permissions granted to an agent
+  async getAgentWorkspaces(
+    agentId: string,
+    tuples?: ReBACTuple[]
+  ): Promise<Array<{path: string; permission: 'viewer' | 'editor' | 'owner'}>> {
+    const result = await this.getAgentResourceAccess(
+      agentId,
+      async () => await this.listWorkspaces(),
+      (workspace) => workspace.path,
+      undefined,
+      undefined,
+      tuples
+    );
+    
+    return result.map(r => ({ path: r.path, permission: r.permission }));
+  }
+
+  // Helper: Check if agent has access to a directory (memory, resources) and return permission level
+  async getDirectoryAccess(
+    agentId: string,
+    directory: string,
+    tuples?: ReBACTuple[]
+  ): Promise<{ hasAccess: boolean; permission?: 'viewer' | 'editor' | 'owner' }> {
+    try {
+      // Use provided tuples if available, otherwise fetch them
+      const permissionTuples = tuples || await this.rebacListTuples({ subject: ['agent', agentId] });
+      const tuple = permissionTuples.find(t => t.object_type === 'file' && t.object_id === directory);
+
+      if (tuple) {
+        const permission = this.getPermissionLevel(tuple.relation);
+        return { hasAccess: true, permission: permission as 'viewer' | 'editor' | 'owner' };
+      }
+
+      return { hasAccess: false };
+    } catch (err) {
+      console.error(`Failed to check directory access for ${directory}:`, err);
+      return { hasAccess: false };
+    }
+  }
+
+  // Backward compatibility: Keep old method name
+  async hasDirectoryAccess(agentId: string, directory: string): Promise<boolean> {
+    const result = await this.getDirectoryAccess(agentId, directory);
+    return result.hasAccess;
+  }
+
+  // Helper: Check if agent has access to all workspaces and return permission level
+  async getAllWorkspacesAccess(
+    agentId: string,
+    tuples?: ReBACTuple[]
+  ): Promise<{ hasAccess: boolean; permission?: 'viewer' | 'editor' | 'owner' }> {
+    try {
+      // Use provided tuples if available, otherwise fetch them
+      const permissionTuples = tuples || await this.rebacListTuples({ subject: ['agent', agentId] });
+
+      // Extract user_id from agent_id (format: "user_id,agent_name")
+      const userId = agentId.split(',')[0];
+      const workspaceRootPath = `/workspace/${userId}`;
+
+      // Find tuple for /workspace/<user_id>
+      const workspaceTuple = permissionTuples.find(t => t.object_type === 'file' && t.object_id === workspaceRootPath);
+
+      if (workspaceTuple) {
+        const permission = this.getPermissionLevel(workspaceTuple.relation);
+        return { hasAccess: true, permission: permission as 'viewer' | 'editor' | 'owner' };
+      }
+
+      return { hasAccess: false };
+    } catch (err) {
+      console.error('Failed to check all workspaces access:', err);
+      return { hasAccess: false };
+    }
   }
 
   // Version History API - List all versions of a file

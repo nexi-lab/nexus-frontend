@@ -520,9 +520,12 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
           return;
         }
 
-        // For LangGraph: use endpoint_url and optional agent_id from YAML
-        // API key: use config.yaml value if provided, otherwise use environment variable
-        const langgraphApiKey = agentConfig.api_key || import.meta.env.VITE_LANGGRAPH_API_KEY || '';
+        // For LangGraph agents:
+        // - apiKey: LangGraph Cloud API key (from environment)
+        // - nexusApiKey: Agent's Nexus API key (from config.yaml, for tool calls)
+        //   Falls back to user's API key if agent doesn't have one (no-api-key agents)
+        const langgraphApiKey = import.meta.env.VITE_LANGGRAPH_API_KEY || '';
+        const nexusApiKey = agentConfig.api_key || apiKey || '';
 
         console.log('[ChatPanel] Setting config with sandboxId:', {
           sandboxId,
@@ -535,7 +538,8 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
             ...prev,
             apiUrl: agentConfig.endpoint_url,
             assistantId: agentConfig.agent_id || 'agent', // LangGraph graph/assistant ID
-            apiKey: langgraphApiKey, // LangGraph API key from config or environment
+            apiKey: langgraphApiKey, // LangGraph Cloud API key
+            nexusApiKey: nexusApiKey, // Nexus API key for tool calls
             sandboxId, // Add sandbox_id (undefined if expired)
           };
           console.log('[ChatPanel] New config after setConfig:', {
@@ -548,10 +552,8 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
         console.log('Configured LangGraph agent:', {
           apiUrl: agentConfig.endpoint_url,
           assistantId: agentConfig.agent_id || 'agent',
-          apiKey: langgraphApiKey ? `${langgraphApiKey.substring(0, 10)}...` : 'not set',
-          apiKeyLength: langgraphApiKey.length,
-          apiKeySource: agentConfig.api_key ? 'config.yaml' : 'environment',
-          envVarCheck: import.meta.env.VITE_LANGGRAPH_API_KEY ? 'set' : 'NOT SET',
+          langgraphApiKey: langgraphApiKey ? `${langgraphApiKey.substring(0, 10)}...` : 'not set',
+          nexusApiKey: nexusApiKey ? `${nexusApiKey.substring(0, 10)}...` : 'not set',
           sandboxId: sandboxId || 'not set',
         });
       } else if (agentConfig.platform === 'nexus') {
@@ -581,21 +583,44 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   const parseSimpleYaml = (yaml: string): AgentConfig => {
     const config: AgentConfig = { platform: 'nexus' };
     const lines = yaml.split('\n');
+    let inMetadata = false;
 
+    // First pass: parse top-level fields (including api_key)
     for (const line of lines) {
       if (line.startsWith('platform:')) {
         const parts = line.split(':');
         config.platform = parts.slice(1).join(':').trim();
       } else if (line.startsWith('endpoint_url:')) {
-        // Handle URLs which contain colons (e.g., http://localhost:2024)
         const parts = line.split(':');
         config.endpoint_url = parts.slice(1).join(':').trim();
-      } else if (line.startsWith('agent_id:')) {
-        const parts = line.split(':');
-        config.agent_id = parts.slice(1).join(':').trim();
       } else if (line.startsWith('api_key:')) {
         const parts = line.split(':');
         config.api_key = parts.slice(1).join(':').trim();
+      }
+    }
+
+    // Second pass: parse metadata fields (these override top-level fields)
+    inMetadata = false;
+    for (const line of lines) {
+      if (line.startsWith('metadata:')) {
+        inMetadata = true;
+        continue;
+      } else if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('\t')) {
+        inMetadata = false;
+      }
+
+      if (inMetadata && (line.startsWith('  ') || line.startsWith('\t'))) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('platform:')) {
+          const parts = trimmedLine.split(':');
+          config.platform = parts.slice(1).join(':').trim();
+        } else if (trimmedLine.startsWith('endpoint_url:')) {
+          const parts = trimmedLine.split(':');
+          config.endpoint_url = parts.slice(1).join(':').trim();
+        } else if (trimmedLine.startsWith('agent_id:')) {
+          const parts = trimmedLine.split(':');
+          config.agent_id = parts.slice(1).join(':').trim();
+        }
       }
     }
 

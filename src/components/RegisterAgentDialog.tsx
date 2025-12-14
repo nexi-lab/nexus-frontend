@@ -16,6 +16,7 @@ interface RegisterAgentDialogProps {
     name: string,
     description: string,
     generateApiKey: boolean,
+    inheritPermissions: boolean, // v0.5.1: Permission inheritance control
     config: {
       platform: string;
       endpoint_url: string;
@@ -64,6 +65,7 @@ export function RegisterAgentDialog({ open, onOpenChange, onRegisterAgent }: Reg
   const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
   const [generateApiKey, setGenerateApiKey] = useState(false);
+  const [inheritPermissions, setInheritPermissions] = useState(false); // v0.5.1: Permission inheritance control
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
@@ -147,6 +149,7 @@ export function RegisterAgentDialog({ open, onOpenChange, onRegisterAgent }: Reg
         displayName.trim(),
         description.trim(),
         generateApiKey,
+        inheritPermissions, // v0.5.1: Pass inheritance flag
         platform === 'langgraph'
           ? {
               platform,
@@ -464,13 +467,51 @@ export function RegisterAgentDialog({ open, onOpenChange, onRegisterAgent }: Reg
                     <span className="text-green-600 dark:text-green-400">✓ Recommended: Agent will use owner's credentials + X-Agent-ID header</span>
                   )}
                 </p>
+
+                {/* Inherit Permissions Option (only shown when API key is generated) */}
+                {generateApiKey && (
+                  <div className="ml-6 mt-2 space-y-2 pl-4 border-l-2 border-gray-300 dark:border-gray-700">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="inherit-permissions"
+                        checked={inheritPermissions}
+                        onChange={(e) => setInheritPermissions(e.target.checked)}
+                        disabled={isRegistering}
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor="inherit-permissions" className="text-sm font-medium">
+                        Inherit owner's permissions
+                      </label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {inheritPermissions ? (
+                        <span className="text-blue-600 dark:text-blue-400">✓ Agent inherits all your permissions</span>
+                      ) : (
+                        <span className="text-orange-600 dark:text-orange-400">⚠️ Agent starts with 0 permissions (grant via ReBAC)</span>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Info Box */}
               <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
-                <p className="font-medium">Permission Inheritance:</p>
+                <p className="font-medium">Permission Model:</p>
                 <p className="text-muted-foreground">
-                  Agents automatically inherit all permissions from their owner (you). You can grant additional permissions using ReBAC if needed.
+                  {!generateApiKey ? (
+                    <>
+                      <strong>Full Permissions:</strong> Agent uses your credentials and inherits all your permissions automatically.
+                    </>
+                  ) : inheritPermissions ? (
+                    <>
+                      <strong>Full Permissions:</strong> Agent has its own API key but inherits all your permissions.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Zero Permissions (Recommended):</strong> Agent starts with no permissions. Grant specific permissions via ReBAC for principle of least privilege.
+                    </>
+                  )}
                 </p>
               </div>
 

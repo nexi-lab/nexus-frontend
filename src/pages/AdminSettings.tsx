@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Check, Copy, Edit, Eye, EyeOff, Filter, Key, Plus, Search, Settings, Shield, Trash2, User } from 'lucide-react';
+import { ArrowLeft, Bot, Calendar, Check, Copy, Edit, Eye, EyeOff, Filter, Key, Plus, Search, Settings, Shield, Trash2, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
@@ -46,7 +46,7 @@ export function AdminSettings() {
   const [filters, setFilters] = useState({
     userId: '',
     name: '',
-    role: 'all', // 'all' | 'admin' | 'user'
+    role: 'all', // 'all' | 'admin' | 'user' | 'agent'
     status: 'active', // 'all' | 'active' | 'revoked'
   });
 
@@ -207,36 +207,44 @@ export function AdminSettings() {
     return key.slice(0, 4) + '*'.repeat(key.length - 8) + key.slice(-4);
   };
 
-  // Filter keys based on current filter state
-  const filteredKeys = keys.filter((key) => {
-    // Filter by user ID
-    if (filters.userId && !key.user_id.toLowerCase().includes(filters.userId.toLowerCase())) {
-      return false;
-    }
+  // Filter keys based on current filter state and sort by creation date (newest first)
+  const filteredKeys = keys
+    .filter((key) => {
+      // Filter by user ID
+      if (filters.userId && !key.user_id.toLowerCase().includes(filters.userId.toLowerCase())) {
+        return false;
+      }
 
-    // Filter by name
-    if (filters.name && !key.name.toLowerCase().includes(filters.name.toLowerCase())) {
-      return false;
-    }
+      // Filter by name
+      if (filters.name && !key.name.toLowerCase().includes(filters.name.toLowerCase())) {
+        return false;
+      }
 
-    // Filter by role
-    if (filters.role === 'admin' && !key.is_admin) {
-      return false;
-    }
-    if (filters.role === 'user' && key.is_admin) {
-      return false;
-    }
+      // Filter by role
+      if (filters.role === 'admin' && !key.is_admin) {
+        return false;
+      }
+      if (filters.role === 'user' && (key.is_admin || key.subject_type === 'agent')) {
+        return false;
+      }
+      if (filters.role === 'agent' && key.subject_type !== 'agent') {
+        return false;
+      }
 
-    // Filter by status
-    if (filters.status === 'active' && key.revoked) {
-      return false;
-    }
-    if (filters.status === 'revoked' && !key.revoked) {
-      return false;
-    }
+      // Filter by status
+      if (filters.status === 'active' && key.revoked) {
+        return false;
+      }
+      if (filters.status === 'revoked' && !key.revoked) {
+        return false;
+      }
 
-    return true;
-  });
+      return true;
+    })
+    .sort((a, b) => {
+      // Sort by created_at in descending order (newest first)
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
   if (!userInfo?.is_admin) {
     return (
@@ -318,6 +326,7 @@ export function AdminSettings() {
                     <SelectItem value="all">All Roles</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="agent">Agent</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -372,6 +381,11 @@ export function AdminSettings() {
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
                             <Shield className="h-3 w-3 mr-1" />
                             Admin
+                          </span>
+                        ) : key.subject_type === 'agent' ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                            <Bot className="h-3 w-3 mr-1" />
+                            Agent
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
