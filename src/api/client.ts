@@ -288,6 +288,15 @@ class NexusAPIClient {
     user_id: string;
     name: string;
     created_at: string;
+    description?: string;
+    has_api_key?: boolean;
+    inherit_permissions?: boolean;
+    api_key?: string; // API key from config.yaml if agent has one
+    platform?: string; // From config.yaml
+    endpoint_url?: string; // From config.yaml
+    config_agent_id?: string; // agent_id from config.yaml (to avoid confusion with agent_id)
+    system_prompt?: string; // From config.yaml
+    tools?: string[]; // From config.yaml
   }> {
     return await this.call('get_agent', { agent_id: agentId });
   }
@@ -587,7 +596,7 @@ class NexusAPIClient {
         return skillsResult.skills.filter(s => s.file_path);
       },
       (skill) => skill.file_path ? skill.file_path.substring(0, skill.file_path.lastIndexOf('/')) : '',
-      (path) => path.startsWith('/skills/'),
+      (path) => path.startsWith('/skills/') || path.includes('/skill/'), // Support both old (/skills/) and new (/skill/) namespace
       (skill) => skill.name,
       tuples
     );
@@ -623,10 +632,14 @@ class NexusAPIClient {
       agentId,
       async () => {
         const mounts = await this.listMounts();
-        return mounts.filter(m => m.mount_point.startsWith('/connectors/'));
+        // Filter for connectors: new convention (/tenant:<tid>/user:<uid>/connector/<name>) or old (/connectors/)
+        return mounts.filter(m => {
+          const path = m.mount_point;
+          return path.includes('/connector/') || path.startsWith('/connectors/');
+        });
       },
       (mount) => mount.mount_point,
-      (path) => path.startsWith('/connectors/'),
+      (path) => path.includes('/connector/') || path.startsWith('/connectors/'),
       undefined,
       tuples
     );
@@ -655,12 +668,27 @@ class NexusAPIClient {
   async getDirectoryAccess(
     agentId: string,
     directory: string,
-    tuples?: ReBACTuple[]
+    tuples?: ReBACTuple[],
+    tenantId?: string,
+    userId?: string
   ): Promise<{ hasAccess: boolean; permission?: 'viewer' | 'editor' | 'owner' }> {
     try {
       // Use provided tuples if available, otherwise fetch them
       const permissionTuples = tuples || await this.rebacListTuples({ subject: ['agent', agentId] });
-      const tuple = permissionTuples.find(t => t.object_type === 'file' && t.object_id === directory);
+      
+      // Construct the full path based on the new namespace convention
+      let fullPath: string;
+      if (tenantId && userId) {
+        // New convention: /tenant:<tenant_id>/user:<user_id>/<directory>
+        // Remove leading slash from directory if present
+        const dirName = directory.startsWith('/') ? directory.substring(1) : directory;
+        fullPath = `/tenant:${tenantId}/user:${userId}/${dirName}`;
+      } else {
+        // Fallback to old convention or direct path
+        fullPath = directory;
+      }
+      
+      const tuple = permissionTuples.find(t => t.object_type === 'file' && t.object_id === fullPath);
 
       if (tuple) {
         const permission = this.getPermissionLevel(tuple.relation);
@@ -1087,7 +1115,7 @@ class NexusAPIClient {
    */
   async skillsImport(params: {
     zip_data: string; // Base64 encoded
-    tier?: 'user' | 'system';
+    tier?: 'personal' | 'tenant' | 'user' | 'system'; // 'user' and 'system' for backward compatibility
     allow_overwrite?: boolean;
   }): Promise<{
     imported_skills: string[];
