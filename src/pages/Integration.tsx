@@ -48,7 +48,23 @@ export function IntegrationsPanel({
   useEffect(() => {
     loadProvidersAndCredentials();
     
-    // Reload credentials if we just completed an OAuth flow
+    // Listen for OAuth success message from popup window
+    const handleOAuthMessage = (event: MessageEvent) => {
+      // Verify message is from same origin
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data.type === 'oauth_success') {
+        // Reload credentials when OAuth completes successfully
+        loadProvidersAndCredentials();
+        toast.success(`Successfully connected to ${event.data.provider}!`);
+      } else if (event.data.type === 'oauth_error') {
+        toast.error(`OAuth failed: ${event.data.error}`);
+      }
+    };
+    
+    window.addEventListener('message', handleOAuthMessage);
+    
+    // Reload credentials if we just completed an OAuth flow (non-popup case)
     // (OAuthCallback will have already exchanged the code and stored credentials)
     const oauthCallback = new URLSearchParams(window.location.search).get('oauth_callback');
     if (oauthCallback === 'true') {
@@ -59,7 +75,11 @@ export function IntegrationsPanel({
         window.history.replaceState({}, '', urlCleanupPath);
       }
     }
-  }, []);
+    
+    return () => {
+      window.removeEventListener('message', handleOAuthMessage);
+    };
+  }, [embedded, urlCleanupPath]);
 
   const loadProvidersAndCredentials = async () => {
     setLoading(true);

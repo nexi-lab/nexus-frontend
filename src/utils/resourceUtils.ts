@@ -90,8 +90,7 @@ export async function createResource(
   name: string,
   tenantId: string,
   userId: string | null,
-  content: string | Uint8Array,
-  contentType?: string
+  content: string | Uint8Array
 ): Promise<string> {
   const resourceId = generateResourceId('resource', name);
   const path = userId
@@ -102,7 +101,7 @@ export async function createResource(
   let resourceCreated = false;
   try {
     // Step 1: Create resource
-    await filesAPI.write(path, typeof content === 'string' ? content : content.buffer);
+    await filesAPI.write(path, typeof content === 'string' ? content : content as unknown as ArrayBuffer);
     resourceCreated = true;
 
     // Step 2: CRITICAL - Grant ownership via ReBAC
@@ -134,8 +133,7 @@ export async function createResource(
  * IMPORTANT: Removes all ReBAC relationships for the resource
  */
 export async function deleteResource(
-  path: string,
-  tenantId: string
+  path: string
 ): Promise<void> {
   const filesAPI = createFilesAPI(nexusAPI);
   let resourceDeleted = false;
@@ -170,7 +168,6 @@ export async function deleteResource(
  */
 export async function deleteWorkspace(
   path: string,
-  tenantId: string,
   apiClient: NexusAPIClient
 ): Promise<void> {
   let workspaceDeleted = false;

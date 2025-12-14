@@ -193,9 +193,9 @@ export function Skill() {
               All Skills
             </Button>
             <Button
-              variant={selectedTier === 'user' ? 'default' : 'outline'}
+              variant={selectedTier === 'personal' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSelectedTier('user')}
+              onClick={() => setSelectedTier('personal')}
             >
               Personal
             </Button>

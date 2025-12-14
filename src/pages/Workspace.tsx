@@ -60,9 +60,8 @@ export function Workspace() {
     }
 
     try {
-      const tenantId = userInfo?.tenant_id || 'default';
       // Pass apiClient to use the authenticated user's API key, not from environment
-      await deleteWorkspace(path, tenantId, apiClient);
+      await deleteWorkspace(path, apiClient);
       await loadWorkspaces(); // Refresh list
     } catch (err) {
       setWorkspaceError(err instanceof Error ? err.message : 'Failed to unregister workspace');
