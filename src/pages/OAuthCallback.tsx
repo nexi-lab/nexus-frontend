@@ -19,7 +19,13 @@ export default function OAuthCallback() {
     if (error) {
       setStatus('error');
       setMessage(`OAuth error: ${error}`);
-      setTimeout(() => navigate('/integrations'), 3000);
+      // If in popup, notify parent and close
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ type: 'oauth_error', error }, window.location.origin);
+        setTimeout(() => window.close(), 2000);
+      } else {
+        setTimeout(() => navigate('/integrations'), 3000);
+      }
       return;
     }
 
@@ -27,7 +33,13 @@ export default function OAuthCallback() {
     if (!code || !state) {
       setStatus('error');
       setMessage('Missing authorization code or state parameter');
-      setTimeout(() => navigate('/integrations'), 3000);
+      // If in popup, notify parent and close
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ type: 'oauth_error', error: 'Missing code or state' }, window.location.origin);
+        setTimeout(() => window.close(), 2000);
+      } else {
+        setTimeout(() => navigate('/integrations'), 3000);
+      }
       return;
     }
 
@@ -36,7 +48,13 @@ export default function OAuthCallback() {
     if (!provider) {
       setStatus('error');
       setMessage('Missing provider information. Please try connecting again.');
-      setTimeout(() => navigate('/integrations'), 3000);
+      // If in popup, notify parent and close
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ type: 'oauth_error', error: 'Missing provider' }, window.location.origin);
+        setTimeout(() => window.close(), 2000);
+      } else {
+        setTimeout(() => navigate('/integrations'), 3000);
+      }
       return;
     }
 
@@ -61,12 +79,22 @@ export default function OAuthCallback() {
           sessionStorage.removeItem('oauth_provider');
 
           setStatus('success');
-          setMessage(`Successfully connected! Redirecting to integrations...`);
+          setMessage(`Successfully connected! Closing window...`);
 
-          // Redirect to integrations page after a short delay
-          setTimeout(() => {
-            navigate('/integrations?oauth_callback=true');
-          }, 1500);
+          // If opened in a popup, notify parent and close
+          if (window.opener && !window.opener.closed) {
+            // Notify parent window that OAuth completed successfully
+            window.opener.postMessage({ type: 'oauth_success', provider }, window.location.origin);
+            // Close the popup after a short delay
+            setTimeout(() => {
+              window.close();
+            }, 1000);
+          } else {
+            // Not in a popup, redirect normally
+            setTimeout(() => {
+              navigate('/integrations?oauth_callback=true');
+            }, 1500);
+          }
         } else {
           throw new Error('Failed to exchange authorization code');
         }
@@ -74,7 +102,13 @@ export default function OAuthCallback() {
         console.error('Failed to exchange OAuth code:', error);
         setStatus('error');
         setMessage(`Failed to complete setup: ${error.message || 'Unknown error'}`);
-        setTimeout(() => navigate('/integrations'), 3000);
+        // If in popup, notify parent and close
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'oauth_error', error: error.message || 'Unknown error' }, window.location.origin);
+          setTimeout(() => window.close(), 2000);
+        } else {
+          setTimeout(() => navigate('/integrations'), 3000);
+        }
       }
     };
 
