@@ -58,9 +58,11 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
   // Wrap submit to automatically add metadata
   const submitWithMetadata = (input: any, submitOptions?: any) => {
     // Add Nexus API key, server URL, sandbox ID, and opened file path to metadata for tool calls
+    // ALWAYS include agent's API key if provided (from agent config file)
     const metadata = {
       ...submitOptions?.metadata,
-      ...(options.nexusApiKey && { x_auth: `Bearer ${options.nexusApiKey}` }),
+      // Always add x_auth if nexusApiKey is provided (from agent config or user's key)
+      ...(options.nexusApiKey ? { x_auth: `Bearer ${options.nexusApiKey}` } : {}),
       ...(options.nexusServerUrl && { nexus_server_url: options.nexusServerUrl }),
       ...(options.sandboxId && { sandbox_id: options.sandboxId }),
       ...(options.openedFilePath && { opened_file_path: options.openedFilePath }),
@@ -72,12 +74,6 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
       ...submitOptions?.config,
       ...(options.maxSteps && { recursion_limit: options.maxSteps }),
     };
-
-    console.log('[useLangGraph] Submitting with config:', {
-      config,
-      maxSteps: options.maxSteps,
-      hasRecursionLimit: !!config.recursion_limit
-    });
 
     return stream.submit(input, {
       ...submitOptions,

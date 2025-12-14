@@ -33,6 +33,8 @@ interface Agent {
   name: string;
   description?: string;
   created_at: string;
+  has_api_key?: boolean;
+  inherit_permissions?: boolean;
 }
 
 interface SandboxConnectionStatus {
@@ -528,6 +530,48 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
                               <span className="font-medium">{agentName}</span>
                             </div>
                             {agent.description && <div className="text-sm text-muted-foreground mb-2">{agent.description}</div>}
+                            
+                            {/* Permission Information */}
+                            <div className="mt-2 mb-2">
+                              {agent.has_api_key === false && agent.inherit_permissions === true ? (
+                                <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-2 text-xs">
+                                  <div className="flex items-start gap-2">
+                                    <Info className="h-3 w-3 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                      <div className="font-medium text-blue-900 dark:text-blue-100">Inherits all owner permissions</div>
+                                      <div className="text-blue-800 dark:text-blue-200 mt-0.5">
+                                        This agent uses your credentials and has full access to all your resources.
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : agent.has_api_key === true && agent.inherit_permissions === true ? (
+                                <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md p-2 text-xs">
+                                  <div className="flex items-start gap-2">
+                                    <Info className="h-3 w-3 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                      <div className="font-medium text-green-900 dark:text-green-100">Has API key and inherits all owner permissions</div>
+                                      <div className="text-green-800 dark:text-green-200 mt-0.5">
+                                        This agent can authenticate independently and has full access to all your resources.
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : agent.has_api_key === true && agent.inherit_permissions === false ? (
+                                <div className="bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-md p-2 text-xs">
+                                  <div className="flex items-start gap-2">
+                                    <Info className="h-3 w-3 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                      <div className="font-medium text-orange-900 dark:text-orange-100">Has API key with zero permissions by default</div>
+                                      <div className="text-orange-800 dark:text-orange-200 mt-0.5">
+                                        This agent can authenticate independently but has no access unless explicitly granted.
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                            
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Calendar className="h-3 w-3" />
                               Created {new Date(agent.created_at).toLocaleDateString()}

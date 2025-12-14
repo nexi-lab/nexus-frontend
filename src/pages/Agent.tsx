@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { copyToClipboard } from '../utils';
+import { PermissionInfoBox } from '../components/PermissionInfoBox';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -13,6 +14,8 @@ interface Agent {
   name: string;
   description?: string;
   created_at: string;
+  has_api_key?: boolean;
+  inherit_permissions?: boolean;
   skills?: string[]; // Skill names the agent has access to
   skillPermissions?: Record<string, 'viewer' | 'editor' | 'owner'>; // Permission level for each skill
   connectors?: string[]; // Connector mount points the agent has access to
@@ -120,13 +123,17 @@ export function Agent() {
           // Fetch ReBAC tuples once per agent to avoid duplicate API calls
           const tuples = await apiClient.rebacListTuples({ subject: ['agent', agent.agent_id] });
           
+          // Extract user ID and tenant ID for constructing full paths
+          const userId = agent.agent_id.split(',')[0];
+          const tenantId = userInfo?.tenant_id || 'default';
+          
           // Use the same tuples for all permission checks
           const [skillData, connectorData, workspaceData, memoryAccess, resourcesAccess, allWorkspacesAccess] = await Promise.all([
             apiClient.getAgentSkills(agent.agent_id, tuples),
             apiClient.getAgentConnectors(agent.agent_id, tuples),
             apiClient.getAgentWorkspaces(agent.agent_id, tuples),
-            apiClient.getDirectoryAccess(agent.agent_id, '/memory', tuples),
-            apiClient.getDirectoryAccess(agent.agent_id, '/resources', tuples),
+            apiClient.getDirectoryAccess(agent.agent_id, '/memory', tuples, tenantId, userId),
+            apiClient.getDirectoryAccess(agent.agent_id, '/resource', tuples, tenantId, userId),
             apiClient.getAllWorkspacesAccess(agent.agent_id, tuples),
           ]);
 
@@ -204,9 +211,14 @@ export function Agent() {
     setLoadingConnectors(true);
     try {
       const mounts = await apiClient.listMounts();
-      // Filter for connectors (mounts with /connectors/ prefix)
+      // Filter for connectors (new convention: /tenant:<tid>/user:<uid>/connector/<name> or old: /connectors/)
       const connectorMounts = mounts
-        .filter(m => m.mount_point.startsWith('/connectors/'))
+        .filter(m => {
+          const path = m.mount_point;
+          // New convention: contains /connector/ (singular)
+          // Old convention: starts with /connectors/ (plural) for backward compatibility
+          return path.includes('/connector/') || path.startsWith('/connectors/');
+        })
         .map(m => ({
           mount_point: m.mount_point,
           backend_type: m.backend_type,
@@ -640,6 +652,7 @@ export function Agent() {
 
       // 3b. Handle All Workspaces Access (special case)
       const userId = editingAgentId.split(',')[0];
+      const tenantId = userInfo?.tenant_id || 'default';
       const workspaceRootPath = `/workspace/${userId}`;
       await updateSinglePathPermission(
         tuples,
@@ -651,9 +664,10 @@ export function Agent() {
       );
 
       // 4. Handle Directory Access (memory, resources) - simple add/remove
+      // Use new namespace convention: /tenant:<tenant_id>/user:<user_id>/<directory>
       const directories = [
-        { path: '/memory', current: agent.hasMemoryAccess || false, new: grantMemoryAccess },
-        { path: '/resources', current: agent.hasResourcesAccess || false, new: grantResourcesAccess },
+        { path: `/tenant:${tenantId}/user:${userId}/memory`, current: agent.hasMemoryAccess || false, new: grantMemoryAccess },
+        { path: `/tenant:${tenantId}/user:${userId}/resource`, current: agent.hasResourcesAccess || false, new: grantResourcesAccess },
       ];
 
       for (const dir of directories) {
@@ -719,12 +733,13 @@ export function Agent() {
       return;
     }
 
-    // Get user_id from userInfo
+    // Get user_id and tenant_id from userInfo
     const userId = userInfo?.user || userInfo?.subject_id;
     if (!userId) {
       setError('Unable to determine user ID. Please log in again.');
       return;
     }
+    const tenantId = userInfo?.tenant_id || 'default';
 
     // Compose full agent_id as <user_id>,<agent_name>
     const fullAgentId = `${userId},${agentName.trim()}`;
@@ -832,9 +847,10 @@ export function Agent() {
       }
 
       // Grant directory access (memory, resources)
+      // Use new namespace convention: /tenant:<tenant_id>/user:<user_id>/<directory>
       const directoryGrants = [
-        { path: '/memory', grant: grantMemoryAccess },
-        { path: '/resources', grant: grantResourcesAccess },
+        { path: `/tenant:${tenantId}/user:${userId}/memory`, grant: grantMemoryAccess },
+        { path: `/tenant:${tenantId}/user:${userId}/resource`, grant: grantResourcesAccess },
       ];
 
       for (const dir of directoryGrants) {
@@ -918,9 +934,32 @@ export function Agent() {
     return parts.length === 2 ? parts[1] : agentId;
   };
 
-  // Strip /connectors/ prefix from mount point for display
+  // Extract connector name from mount point for display
+  // Handles both new convention (/tenant:<tid>/user:<uid>/connector/<name>) and old (/connectors/<name>)
   const getConnectorDisplayName = (mountPoint: string) => {
+    // New convention: extract name from /tenant:<tid>/user:<uid>/connector/<name>
+    if (mountPoint.includes('/connector/')) {
+      const parts = mountPoint.split('/connector/');
+      if (parts.length > 1) {
+        return parts[1];
+      }
+    }
+    // Old convention: strip /connectors/ prefix
     return mountPoint.replace(/^\/connectors\//, '');
+  };
+
+  // Extract workspace name from path for display
+  // Handles both new convention (/tenant:<tid>/user:<uid>/workspace/<name>) and old format
+  const getWorkspaceDisplayName = (workspacePath: string) => {
+    // New convention: extract name from /tenant:<tid>/user:<uid>/workspace/<name>
+    if (workspacePath.includes('/workspace/')) {
+      const parts = workspacePath.split('/workspace/');
+      if (parts.length > 1) {
+        return parts[1];
+      }
+    }
+    // Fallback: use last part of path
+    return workspacePath.split('/').pop() || workspacePath;
   };
 
   // Render permission icon based on permission level
@@ -1065,30 +1104,29 @@ export function Agent() {
                               </div>
                             </div>
                             {agent.description && <div className="text-sm text-muted-foreground mb-2">{agent.description}</div>}
-
-                            {/* Check if agent inherits all permissions (has no explicit permissions) */}
-                            {(() => {
-                              const hasExplicitPermissions =
-                                (agent.skills && agent.skills.length > 0) ||
-                                (agent.connectors && agent.connectors.length > 0) ||
-                                (agent.workspaces && agent.workspaces.length > 0) ||
-                                agent.hasAllWorkspaces ||
-                                agent.hasMemoryAccess ||
-                                agent.hasResourcesAccess;
-
-                              if (!hasExplicitPermissions) {
-                                return (
-                                  <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-                                    <Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                                    <span className="text-blue-700 dark:text-blue-300">
-                                      <strong>Inherits all owner permissions</strong> - This agent uses your credentials and has full access to all your resources.
-                                    </span>
-                                  </div>
-                                );
-                              }
-
-                              return null;
-                            })()}
+                            
+                            {/* Permission Information */}
+                            {agent.has_api_key === false && agent.inherit_permissions === true && (
+                              <PermissionInfoBox
+                                variant="inherit-no-key"
+                                title="Inherits all owner permissions"
+                                description="This agent uses your credentials and has full access to all your resources."
+                              />
+                            )}
+                            {agent.has_api_key === true && agent.inherit_permissions === true && (
+                              <PermissionInfoBox
+                                variant="inherit-with-key"
+                                title="Has API key and inherits all owner permissions"
+                                description="This agent can authenticate independently and has full access to all your resources."
+                              />
+                            )}
+                            {agent.has_api_key === true && agent.inherit_permissions === false && (
+                              <PermissionInfoBox
+                                variant="key-no-inherit"
+                                title="Has API key with zero permissions by default"
+                                description="This agent can authenticate independently but has no access unless explicitly granted."
+                              />
+                            )}
 
                             {/* Compact Permissions Display */}
                             <div className="space-y-1.5 text-xs">
@@ -1120,7 +1158,7 @@ export function Agent() {
                                   <div className="flex flex-wrap gap-1">
                                     {agent.connectors.map((conn) => {
                                       const permission = agent.connectorPermissions?.[conn] || 'viewer';
-                                      const displayName = conn.replace(/^\/connectors\//, '');
+                                      const displayName = getConnectorDisplayName(conn);
                                       const colorClass =
                                         permission === 'owner'
                                           ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
@@ -1162,7 +1200,7 @@ export function Agent() {
                                     )}
                                     {agent.workspaces?.map((ws) => {
                                       const permission = agent.workspacePermissions?.[ws] || 'viewer';
-                                      const displayName = ws.split('/').pop() || ws;
+                                      const displayName = getWorkspaceDisplayName(ws);
                                       const colorClass =
                                         permission === 'owner'
                                           ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
@@ -1197,7 +1235,7 @@ export function Agent() {
                                     {agent.hasResourcesAccess && (
                                       <span className="px-1.5 py-0.5 rounded flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
                                         <PermissionIcon permission={agent.resourcesPermission || 'viewer'} />
-                                        resources
+                                        resource
                                       </span>
                                     )}
                                   </div>
@@ -1672,7 +1710,7 @@ export function Agent() {
                       <label htmlFor="resources-access" className="flex-1 cursor-pointer">
                         <div className="text-sm font-medium flex items-center gap-2">
                           <FileArchive className="h-4 w-4" />
-                          Resources (/resources)
+                          Resources (/resource)
                         </div>
                         <div className="text-xs text-muted-foreground">Agent can access resource files</div>
                       </label>
@@ -2076,7 +2114,7 @@ export function Agent() {
                               <label htmlFor="create-resources-access" className="flex-1 cursor-pointer">
                                 <div className="text-sm font-medium flex items-center gap-2">
                                   <FileArchive className="h-4 w-4" />
-                                  Resources (/resources)
+                                  Resources (/resource)
                                 </div>
                                 <div className="text-xs text-muted-foreground">Agent can access resource files</div>
                               </label>

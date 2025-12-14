@@ -30,6 +30,8 @@ interface Agent {
   name: string;
   description?: string;
   created_at: string;
+  has_api_key?: boolean;
+  inherit_permissions?: boolean;
 }
 
 interface AgentConfig {
@@ -184,7 +186,9 @@ function ChatPanelContent({
       if (!userId || !agentName) return;
 
       // Ensure the threads directory exists
-      const threadsDir = `/agent/${userId}/${agentName}/threads`;
+      // Use new namespace convention for threads directory
+      const tenantId = _userInfo?.tenant_id || 'default';
+      const threadsDir = `/tenant:${tenantId}/user:${userId}/agent/${agentName}/threads`;
       const threadDir = `${threadsDir}/${threadId}`;
 
       try {
@@ -425,50 +429,32 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     }
 
     try {
-      // Parse agent_id to get path: /agent/<user_id>/<agent_name>
-      // agent_id format: <user_id>,<agent_name>
-      // folder path: /agent/<user_id>/<agent_name>
-      const [userId, agentName] = agentId.split(',');
-      if (!userId || !agentName) {
-        console.error('Invalid agent_id format:', agentId);
+      // Use get_agent API to get all agent information including API key and config
+      const agentInfo = await apiClient.getAgent(agentId);
+      if (!agentInfo) {
+        console.error('Agent not found:', agentId);
         return;
       }
 
-      const configPath = `/agent/${userId}/${agentName}/config.yaml`;
 
-      // Read YAML config
-      const yamlContent = await filesAPI.read(configPath);
-      const yamlText = new TextDecoder().decode(yamlContent as Uint8Array);
-
-      // Parse YAML (simple parsing - production should use a YAML library)
-      const agentConfig = parseSimpleYaml(yamlText);
-      console.log('Loaded agent config:', { agentId, platform: agentConfig.platform, config: agentConfig });
+      // Extract config fields from agentInfo (these are read from config.yaml by backend)
+      // Type assertion needed because getAgent returns optional fields
+      const agentConfig: AgentConfig = {
+        platform: agentInfo.platform || 'nexus',
+        endpoint_url: agentInfo.endpoint_url,
+        agent_id: agentInfo.config_agent_id, // LangGraph assistant/graph ID from config (not the full agent_id)
+        api_key: agentInfo.api_key, // API key from config file (if agent has one)
+        system_prompt: agentInfo.system_prompt,
+        tools: agentInfo.tools,
+      };
 
       // Check if agent has a sandbox (name matches agent_id)
       let sandboxId: string | undefined;
       try {
         const sandboxResponse = await apiClient.sandboxList({ verify_status: true, status: 'active' });
-        console.log('[ChatPanel] All sandboxes from API:', {
-          count: sandboxResponse.sandboxes.length,
-          sandboxes: sandboxResponse.sandboxes.map((sb) => ({
-            sandbox_id: sb.sandbox_id,
-            name: sb.name,
-            status: sb.status,
-            provider: sb.provider,
-          })),
-          lookingForName: agentId,
-        });
-
         const agentSandbox = sandboxResponse.sandboxes.find((sb) => sb.name === agentId);
         if (agentSandbox) {
           sandboxId = agentSandbox.sandbox_id;
-          console.log('[ChatPanel] Found sandbox for agent:', {
-            agentId,
-            sandboxId,
-            provider: agentSandbox.provider,
-            status: agentSandbox.status,
-            expiresAt: agentSandbox.expires_at,
-          });
 
           // Store sandbox details in config
           const sandboxStatus = agentSandbox.status as 'running' | 'paused' | 'stopped' | 'unknown';
@@ -480,7 +466,6 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
             const expiresAt = new Date(sandboxExpiresAt);
             const now = new Date();
             if (expiresAt <= now) {
-              console.log('[ChatPanel] Sandbox has expired, marking as stopped');
               // Don't use expired sandbox
               sandboxId = undefined;
             } else {
@@ -501,12 +486,6 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
               sandboxExpiresAt,
             }));
           }
-        } else {
-          console.log('[ChatPanel] No sandbox found for agent:', agentId);
-          console.log(
-            '[ChatPanel] Available sandbox names:',
-            sandboxResponse.sandboxes.map((sb) => sb.name),
-          );
         }
       } catch (sandboxErr) {
         console.error('[ChatPanel] Failed to check for sandbox:', sandboxErr);
@@ -522,39 +501,29 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
 
         // For LangGraph agents:
         // - apiKey: LangGraph Cloud API key (from environment)
-        // - nexusApiKey: Agent's Nexus API key (from config.yaml, for tool calls)
-        //   Falls back to user's API key if agent doesn't have one (no-api-key agents)
+        // - nexusApiKey: Agent's Nexus API key (from get_agent response, for tool calls)
+        //   ALWAYS use agent's API key if available, otherwise fall back to user's API key
         const langgraphApiKey = import.meta.env.VITE_LANGGRAPH_API_KEY || '';
-        const nexusApiKey = agentConfig.api_key || apiKey || '';
+        // Use agent's API key from get_agent response (read from config.yaml by backend)
+        const nexusApiKey = agentInfo.api_key
+          ? agentInfo.api_key
+          : (apiKey || '');
 
-        console.log('[ChatPanel] Setting config with sandboxId:', {
-          sandboxId,
-          sandboxIdType: typeof sandboxId,
-          sandboxIdIsTruthy: !!sandboxId,
-        });
+        // Use config_agent_id from config file (LangGraph graph/assistant ID)
+        // Fall back to 'agent' if not specified in config
+        // IMPORTANT: Do NOT use agentInfo.agent_id (full format like "admin,UntrustedAgent")
+        // Only use config_agent_id from the config file, or default to 'agent'
+        const langgraphAssistantId = agentInfo.config_agent_id || 'agent';
 
         setConfig((prev) => {
-          const newConfig = {
+          return {
             ...prev,
             apiUrl: agentConfig.endpoint_url,
-            assistantId: agentConfig.agent_id || 'agent', // LangGraph graph/assistant ID
+            assistantId: langgraphAssistantId, // LangGraph graph/assistant ID from config
             apiKey: langgraphApiKey, // LangGraph Cloud API key
             nexusApiKey: nexusApiKey, // Nexus API key for tool calls
             sandboxId, // Add sandbox_id (undefined if expired)
           };
-          console.log('[ChatPanel] New config after setConfig:', {
-            sandboxId: newConfig.sandboxId,
-            sandboxIdType: typeof newConfig.sandboxId,
-          });
-          return newConfig;
-        });
-
-        console.log('Configured LangGraph agent:', {
-          apiUrl: agentConfig.endpoint_url,
-          assistantId: agentConfig.agent_id || 'agent',
-          langgraphApiKey: langgraphApiKey ? `${langgraphApiKey.substring(0, 10)}...` : 'not set',
-          nexusApiKey: nexusApiKey ? `${nexusApiKey.substring(0, 10)}...` : 'not set',
-          sandboxId: sandboxId || 'not set',
         });
       } else if (agentConfig.platform === 'nexus') {
         // Nexus agents - use default endpoint and full agent_id
@@ -564,11 +533,6 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
           assistantId: agentId, // Use full agent_id (<user_id>,<agent_name>)
           sandboxId, // Add sandbox_id
         }));
-        console.log('Configured Nexus agent:', {
-          apiUrl: 'http://localhost:2024',
-          assistantId: agentId,
-          sandboxId: sandboxId || 'not set',
-        });
       }
 
       // Only set selectedAgentId AFTER config is successfully loaded
@@ -577,54 +541,6 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
       console.error('Failed to load agent config:', err);
       // Don't set selectedAgentId if config loading failed
     }
-  };
-
-  // Simple YAML parser for our config format
-  const parseSimpleYaml = (yaml: string): AgentConfig => {
-    const config: AgentConfig = { platform: 'nexus' };
-    const lines = yaml.split('\n');
-    let inMetadata = false;
-
-    // First pass: parse top-level fields (including api_key)
-    for (const line of lines) {
-      if (line.startsWith('platform:')) {
-        const parts = line.split(':');
-        config.platform = parts.slice(1).join(':').trim();
-      } else if (line.startsWith('endpoint_url:')) {
-        const parts = line.split(':');
-        config.endpoint_url = parts.slice(1).join(':').trim();
-      } else if (line.startsWith('api_key:')) {
-        const parts = line.split(':');
-        config.api_key = parts.slice(1).join(':').trim();
-      }
-    }
-
-    // Second pass: parse metadata fields (these override top-level fields)
-    inMetadata = false;
-    for (const line of lines) {
-      if (line.startsWith('metadata:')) {
-        inMetadata = true;
-        continue;
-      } else if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('\t')) {
-        inMetadata = false;
-      }
-
-      if (inMetadata && (line.startsWith('  ') || line.startsWith('\t'))) {
-        const trimmedLine = line.trim();
-        if (trimmedLine.startsWith('platform:')) {
-          const parts = trimmedLine.split(':');
-          config.platform = parts.slice(1).join(':').trim();
-        } else if (trimmedLine.startsWith('endpoint_url:')) {
-          const parts = trimmedLine.split(':');
-          config.endpoint_url = parts.slice(1).join(':').trim();
-        } else if (trimmedLine.startsWith('agent_id:')) {
-          const parts = trimmedLine.split(':');
-          config.agent_id = parts.slice(1).join(':').trim();
-        }
-      }
-    }
-
-    return config;
   };
 
   // Update config when auth changes

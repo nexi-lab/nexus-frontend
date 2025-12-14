@@ -198,7 +198,7 @@ export function useCreateWorkspace() {
 
 // Register agent
 export function useRegisterAgent() {
-  const { apiClient } = useAuth();
+  const { apiClient, userInfo } = useAuth();
   const filesAPI = useFilesAPI();
   const queryClient = useQueryClient();
 
@@ -232,14 +232,16 @@ export function useRegisterAgent() {
 
       // Step 2: Create agent folder as authenticated user
       // This ensures proper permission checks and ReBAC tuple creation
+      // Use new namespace convention: /tenant:<tenant_id>/user:<user_id>/agent/<agent_id>
       const [userId, agentName] = agentId.split(',');
+      const tenantId = userInfo?.tenant_id || 'default';
       if (userId && agentName) {
-        const agentFolderPath = `/agent/${userId}/${agentName}`;
+        const agentFolderPath = `/tenant:${tenantId}/user:${userId}/agent/${agentName}`;
         try {
           await filesAPI.mkdir(agentFolderPath, { parents: true, exist_ok: true });
           // Invalidate parent directories to show new folder
-          queryClient.invalidateQueries({ queryKey: fileKeys.list(`/agent/${userId}`) });
-          queryClient.invalidateQueries({ queryKey: fileKeys.list('/agent') });
+          queryClient.invalidateQueries({ queryKey: fileKeys.list(`/tenant:${tenantId}/user:${userId}/agent`) });
+          queryClient.invalidateQueries({ queryKey: fileKeys.list(`/tenant:${tenantId}/user:${userId}`) });
         } catch (error) {
           console.error('Failed to create agent folder:', error);
           // Don't fail the entire operation if folder creation fails
