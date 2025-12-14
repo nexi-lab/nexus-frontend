@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertCircle, CheckCircle2, FileIcon, Loader2, Upload, X } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import JSZip from 'jszip';
 import {
   useUploadSkill,
   useValidateSkillZip,
@@ -22,19 +22,18 @@ type UploadStatus = 'idle' | 'validating' | 'uploading' | 'success' | 'error';
 
 export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedTier, setSelectedTier] = useState<'user' | 'system'>('system');
+  const [selectedDirectory, setSelectedDirectory] = useState<FileList | null>(null);
+  const [selectedTier, setSelectedTier] = useState<'personal' | 'tenant'>('personal');
   const [allowOverwrite, setAllowOverwrite] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [validationResult, setValidationResult] = useState<SkillValidationResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isZipping, setIsZipping] = useState(false);
 
-  const { userInfo } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const directoryInputRef = useRef<HTMLInputElement>(null);
   const uploadMutation = useUploadSkill();
   const validateMutation = useValidateSkillZip();
-
-  // Only show system tier option if user is admin
-  const isAdmin = userInfo?.is_admin || false;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -48,6 +47,7 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
     }
 
     setSelectedFile(file);
+    setSelectedDirectory(null);
     setUploadStatus('validating');
     setErrorMessage(null);
 
@@ -66,6 +66,79 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
     } catch (error) {
       setUploadStatus('error');
       setErrorMessage(error instanceof Error ? error.message : 'Validation failed');
+    }
+  };
+
+  const handleDirectorySelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setSelectedDirectory(files);
+    setSelectedFile(null);
+    const folderName = files[0].webkitRelativePath.split('/')[0] || 'skill-directory';
+    setUploadStatus('idle');
+    setErrorMessage(null);
+    setValidationResult(null);
+    setIsZipping(true);
+
+    try {
+      // Create zip from directory
+      const zip = new JSZip();
+      
+      // Add all files to zip, preserving the full directory structure
+      // The backend expects: skill-name/SKILL.md (not just SKILL.md at root)
+      const filePromises: Promise<void>[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const relativePath = file.webkitRelativePath;
+        
+        // Keep the full path including the root directory name
+        // e.g., "my-skill/SKILL.md" should stay as "my-skill/SKILL.md"
+        // Remove any leading ./ or .\ from the path
+        let normalizedPath = relativePath.replace(/^\.\//, '').replace(/^\.\\/, '');
+        
+        // Only add files (not empty paths)
+        if (normalizedPath) {
+          filePromises.push(
+            file.arrayBuffer().then((content) => {
+              zip.file(normalizedPath, content);
+            })
+          );
+        }
+      }
+
+      await Promise.all(filePromises);
+
+      // Generate zip file with .skill extension
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipFile = new File([zipBlob], `${folderName}.skill`, { type: 'application/zip' });
+      
+      setSelectedFile(zipFile);
+      setSelectedDirectory(null);
+      setIsZipping(false);
+      setUploadStatus('validating');
+
+      // Auto-validate the created zip
+      try {
+        const fileData = await readFileAsBase64(zipFile);
+        const result = await validateMutation.mutateAsync({ zipData: fileData });
+
+        setValidationResult(result);
+        if (!result.valid) {
+          setUploadStatus('error');
+          setErrorMessage(result.errors.join('; '));
+        } else {
+          setUploadStatus('idle');
+        }
+      } catch (error) {
+        setUploadStatus('error');
+        setErrorMessage(error instanceof Error ? error.message : 'Validation failed');
+      }
+    } catch (error) {
+      setIsZipping(false);
+      setUploadStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to create zip from directory');
+      setSelectedDirectory(null);
     }
   };
 
@@ -103,13 +176,18 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
 
   const handleReset = () => {
     setSelectedFile(null);
-    setSelectedTier('system');
+    setSelectedDirectory(null);
+    setSelectedTier('personal');
     setAllowOverwrite(false);
     setUploadStatus('idle');
     setValidationResult(null);
     setErrorMessage(null);
+    setIsZipping(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (directoryInputRef.current) {
+      directoryInputRef.current.value = '';
     }
   };
 
@@ -128,42 +206,77 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* File Selection */}
-          {!selectedFile ? (
-            <div
-              className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-2">
-                Click to select or drag and drop
-              </p>
-              <p className="text-xs text-muted-foreground">
-                .skill or .zip files only
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".zip,.skill"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
+          {/* File/Directory Selection */}
+          {!selectedFile && !selectedDirectory && !isZipping ? (
+            <div className="space-y-3">
+              <div
+                className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground mb-2">
+                  Click to select or drag and drop
+                </p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  .skill or .zip files
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".zip,.skill"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <div className="flex-1 border-t"></div>
+                <span className="text-xs text-muted-foreground">OR</span>
+                <div className="flex-1 border-t"></div>
+              </div>
+              
+              <div
+                className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
+                onClick={() => directoryInputRef.current?.click()}
+              >
+                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground mb-2">
+                  Click to select a directory
+                </p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Will be zipped automatically as .skill file
+                </p>
+                <input
+                  ref={directoryInputRef}
+                  type="file"
+                  {...({ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+                  className="hidden"
+                  onChange={handleDirectorySelect}
+                />
+              </div>
+            </div>
+          ) : isZipping ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground p-8 text-center">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span>Creating ZIP from directory...</span>
             </div>
           ) : (
             <>
               {/* File Info */}
-              <div className="flex items-center gap-3 p-3 bg-muted rounded">
-                <FileIcon className="h-5 w-5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{selectedFile.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(selectedFile.size / 1024).toFixed(1)} KB
-                  </p>
+              {selectedFile && (
+                <div className="flex items-center gap-3 p-3 bg-muted rounded">
+                  <FileIcon className="h-5 w-5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{selectedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(selectedFile.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={handleReset} type="button">
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="ghost" size="icon" onClick={handleReset} type="button">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+              )}
 
               {/* Validation Status */}
               {uploadStatus === 'validating' && (
@@ -221,20 +334,20 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
                 <label className="text-sm font-medium">Storage Location</label>
                 <Select
                   value={selectedTier}
-                  onValueChange={(v) => setSelectedTier(v as 'user' | 'system')}
+                  onValueChange={(v) => setSelectedTier(v as 'personal' | 'tenant')}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="user">Personal Skills (My Library)</SelectItem>
-                    {isAdmin && <SelectItem value="system">System Skills (Global Library)</SelectItem>}
+                    <SelectItem value="personal">Personal Skills</SelectItem>
+                    <SelectItem value="tenant">Tenant Skills</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {selectedTier === 'user'
-                    ? 'Only you can access this skill'
-                    : 'All users can access this skill'}
+                  {selectedTier === 'personal'
+                    ? 'Stored in your personal space: /tenant:<tenant_id>/user:<user_id>/skill/'
+                    : 'Stored in tenant space: /tenant:<tenant_id>/skill/ (shared with all users in your tenant)'}
                 </p>
               </div>
 

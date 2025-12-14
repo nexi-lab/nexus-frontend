@@ -89,7 +89,7 @@ export function useUploadSkill() {
       allowOverwrite,
     }: {
       zipData: string;
-      tier: 'user' | 'system';
+      tier: 'personal' | 'tenant';
       allowOverwrite?: boolean;
     }): Promise<SkillImportResponse> => {
       return apiClient.skillsImport({
