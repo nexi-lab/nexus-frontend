@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, Mail, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, Mail, RefreshCw, Users, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { createFilesAPI, enrichFileWithConnector } from '../api/files';
@@ -373,6 +373,7 @@ export function FileTree({
 }: FileTreeProps) {
   // Fetch connectors once globally
   const { data: connectors } = useConnectors();
+  const { userInfo } = useAuth();
 
   // Build a set of all relevant directory paths from search results
   const relevantPaths = useMemo(() => {
@@ -399,6 +400,204 @@ export function FileTree({
     return paths;
   }, [searchResults]);
 
+  // Get files for organizing into sections
+  const tenantId = userInfo?.tenant_id || 'default';
+  const userId = userInfo?.user || userInfo?.subject_id || '';
+  const userDirPath = userId ? `/tenant:${tenantId}/user:${userId}` : '';
+  const tenantDirPath = `/tenant:${tenantId}`;
+  
+  // Fetch files for different sections
+  const { data: rootFiles } = useFileList('/', !searchResults);
+  const { data: userDirFiles } = useFileList(userDirPath, !searchResults && !!userDirPath);
+  const { data: tenantDirFiles } = useFileList(tenantDirPath, !searchResults && !!tenantId);
+  
+  const enrichedRootFiles = useMemo(() => {
+    if (!rootFiles || !connectors) return rootFiles;
+    return rootFiles.map((file) => enrichFileWithConnector(file, connectors));
+  }, [rootFiles, connectors]);
+
+  const enrichedUserDirFiles = useMemo(() => {
+    if (!userDirFiles || !connectors) return userDirFiles;
+    return userDirFiles.map((file) => enrichFileWithConnector(file, connectors));
+  }, [userDirFiles, connectors]);
+
+  const enrichedTenantDirFiles = useMemo(() => {
+    if (!tenantDirFiles || !connectors) return tenantDirFiles;
+    return tenantDirFiles.map((file) => enrichFileWithConnector(file, connectors));
+  }, [tenantDirFiles, connectors]);
+
+  // Organize files into two sections: user's own space and shared
+  // Always show sections regardless of currentPath (for persistent sections)
+  const organizedSections = useMemo(() => {
+    if (searchResults) {
+      return null;
+    }
+
+    if (!userDirPath) {
+      return null; // No user info, fall back to regular view
+    }
+
+    // My Space: contents of the user's own directory (/tenant:<tid>/user:<uid>)
+    const userSpace: FileInfo[] = (enrichedUserDirFiles || []).filter((file) => file.isDirectory);
+
+    // Shared: split into same-tenant and cross-tenant
+    const sameTenantShared: FileInfo[] = [];
+    const crossTenantShared: FileInfo[] = [];
+    
+    // 1. List "/" but filter out anything with "tenant:<my_tenant_id>" (cross-tenant shared)
+    (enrichedRootFiles || []).forEach((file) => {
+      if (file.isDirectory) {
+        // Filter out anything with the user's tenant prefix
+        if (!file.path.startsWith(tenantDirPath + '/') && file.path !== tenantDirPath) {
+          crossTenantShared.push(file);
+        }
+      }
+    });
+    
+    // 2. List "tenant:<my_tenant_id>" and filter out anything with "tenant:<my_tenant_id>/user:<my_user_id>" (same-tenant shared)
+    (enrichedTenantDirFiles || []).forEach((file) => {
+      if (file.isDirectory) {
+        // Filter out the user's own directory
+        if (file.path !== userDirPath && !file.path.startsWith(userDirPath + '/')) {
+          sameTenantShared.push(file);
+        }
+      }
+    });
+
+    return { userSpace, sameTenantShared, crossTenantShared, userDirPath };
+  }, [enrichedRootFiles, enrichedTenantDirFiles, enrichedUserDirFiles, searchResults, userDirPath, tenantDirPath]);
+
+  // Always show organized sections when available (persistent sections)
+  if (organizedSections) {
+    return (
+      <div className="h-full overflow-auto">
+        {/* User's Own Space Section */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b sticky top-0 z-10">
+            <User className="h-4 w-4 text-blue-500" />
+            <span className="text-sm font-semibold text-foreground">My Space</span>
+            <span className="text-xs text-muted-foreground ml-1">({organizedSections.userSpace.length})</span>
+          </div>
+          <div className="pl-2">
+            {organizedSections.userSpace.map((file) => (
+              <TreeNode
+                key={file.path}
+                path={file.path}
+                name={file.name}
+                currentPath={currentPath}
+                onPathChange={onPathChange}
+                onFileClick={onFileClick}
+                onContextMenuAction={onContextMenuAction}
+                level={1}
+                searchResults={searchResults}
+                relevantPaths={relevantPaths}
+                creatingNewItem={creatingNewItem}
+                onCreateItem={onCreateItem}
+                onCancelCreate={onCancelCreate}
+                connectors={connectors}
+                selectedPaths={selectedPaths}
+                onToggleSelect={onToggleSelect}
+                onRangeSelect={onRangeSelect}
+                selectionMode={(selectedPaths?.size || 0) > 0}
+                backendType={file.backendType}
+              />
+            ))}
+            {organizedSections.userSpace.length === 0 && (
+              <div className="px-3 py-2 text-xs text-muted-foreground italic">No items in your space</div>
+            )}
+          </div>
+        </div>
+
+        {/* Shared Section */}
+        <div>
+          <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b sticky top-0 z-10">
+            <Users className="h-4 w-4 text-green-500" />
+            <span className="text-sm font-semibold text-foreground">Shared</span>
+            <span className="text-xs text-muted-foreground ml-1">
+              ({organizedSections.sameTenantShared.length + organizedSections.crossTenantShared.length})
+            </span>
+          </div>
+          
+          {/* Same Tenant Shared Sub-section */}
+          {organizedSections.sameTenantShared.length > 0 && (
+            <div className="mt-2">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/20 border-b">
+                <span className="text-xs font-medium text-foreground/80">Same Tenant</span>
+                <span className="text-xs text-muted-foreground ml-1">({organizedSections.sameTenantShared.length})</span>
+              </div>
+              <div className="pl-2">
+                {organizedSections.sameTenantShared.map((file) => (
+                  <TreeNode
+                    key={file.path}
+                    path={file.path}
+                    name={file.name}
+                    currentPath={currentPath}
+                    onPathChange={onPathChange}
+                    onFileClick={onFileClick}
+                    onContextMenuAction={onContextMenuAction}
+                    level={1}
+                    searchResults={searchResults}
+                    relevantPaths={relevantPaths}
+                    creatingNewItem={creatingNewItem}
+                    onCreateItem={onCreateItem}
+                    onCancelCreate={onCancelCreate}
+                    connectors={connectors}
+                    selectedPaths={selectedPaths}
+                    onToggleSelect={onToggleSelect}
+                    onRangeSelect={onRangeSelect}
+                    selectionMode={(selectedPaths?.size || 0) > 0}
+                    backendType={file.backendType}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Cross Tenant Shared Sub-section */}
+          {organizedSections.crossTenantShared.length > 0 && (
+            <div className={organizedSections.sameTenantShared.length > 0 ? "mt-2" : ""}>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/20 border-b">
+                <span className="text-xs font-medium text-foreground/80">Others</span>
+                <span className="text-xs text-muted-foreground ml-1">({organizedSections.crossTenantShared.length})</span>
+              </div>
+              <div className="pl-2">
+                {organizedSections.crossTenantShared.map((file) => (
+                  <TreeNode
+                    key={file.path}
+                    path={file.path}
+                    name={file.name}
+                    currentPath={currentPath}
+                    onPathChange={onPathChange}
+                    onFileClick={onFileClick}
+                    onContextMenuAction={onContextMenuAction}
+                    level={1}
+                    searchResults={searchResults}
+                    relevantPaths={relevantPaths}
+                    creatingNewItem={creatingNewItem}
+                    onCreateItem={onCreateItem}
+                    onCancelCreate={onCancelCreate}
+                    connectors={connectors}
+                    selectedPaths={selectedPaths}
+                    onToggleSelect={onToggleSelect}
+                    onRangeSelect={onRangeSelect}
+                    selectionMode={(selectedPaths?.size || 0) > 0}
+                    backendType={file.backendType}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {organizedSections.sameTenantShared.length === 0 && organizedSections.crossTenantShared.length === 0 && (
+            <div className="px-3 py-2 text-xs text-muted-foreground italic">No shared items</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Regular tree view for non-root paths or when search is active
   return (
     <div className="h-full overflow-auto">
       <TreeNode
