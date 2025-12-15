@@ -141,7 +141,7 @@ export function Skill() {
       // Create download link and click it
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${skillName}.zip`;
+      link.download = result.filename || `${skillName}.skill`; // Use filename from API (e.g., "skill-name.skill")
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

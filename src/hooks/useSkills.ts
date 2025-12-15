@@ -47,6 +47,7 @@ export interface SkillExportResponse {
   zip_data: string; // Base64 encoded
   size_bytes: number;
   format: string;
+  filename?: string; // Suggested filename (e.g., "skill-name.skill")
 }
 
 // List all skills
