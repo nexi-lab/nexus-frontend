@@ -197,3 +197,4 @@ export function getOwnershipLevel(path: string): 'system' | 'tenant' | 'user' | 
   if (parsed.tenantId) return 'tenant';
   return 'system';
 }
+

@@ -110,7 +110,9 @@ class NexusAPIClient {
       const response = await this.client.post<RPCResponse<T>>(`/api/nfs/${method}`, request);
 
       if (response.data.error) {
-        throw new Error(`RPC Error ${response.data.error.code}: ${response.data.error.message}`);
+        const err = response.data.error;
+        const details = err.data ? ` - ${JSON.stringify(err.data)}` : '';
+        throw new Error(`RPC Error ${err.code}: ${err.message}${details}`);
       }
 
       // Decode bytes and other special types from backend
