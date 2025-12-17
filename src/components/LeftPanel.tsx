@@ -146,6 +146,7 @@ export function LeftPanel({
       {/* Tab Header */}
       <div className="border-b bg-background/95 flex">
         <button
+          type='button'
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
             activeTab === 'explorer'
               ? 'bg-background border-b-2 border-primary text-foreground'
@@ -156,7 +157,8 @@ export function LeftPanel({
           <Files className="h-4 w-4" />
           Explorer
         </button>
-        <button
+        <button 
+          type='button'
           className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
             activeTab === 'search' ? 'bg-background border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
           }`}

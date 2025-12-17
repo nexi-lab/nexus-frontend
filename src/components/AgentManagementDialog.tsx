@@ -443,6 +443,7 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
         {/* Tabs */}
         <div className="flex border-b">
           <button
+            type='button'
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'list' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -451,6 +452,7 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
             My Agents ({userAgents.length})
           </button>
           <button
+            type='button'
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'create' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}

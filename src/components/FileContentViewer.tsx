@@ -9,6 +9,7 @@ import type { FileInfo } from '../types/file';
 import ExcelViewer from './ExcelViewer';
 import { FileVersionHistoryDialog } from './FileVersionHistoryDialog';
 import { PDFViewer } from './PDFViewer';
+import WordViewer from './WordViewer';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 
@@ -88,7 +89,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
   const content = bytesToString(contentBytes);
   const parsedMdContent = bytesToString(parsedMdBytes);
 
-  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'excel' | 'html' | 'unknown'>('unknown');
+  const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'excel' | 'word'|'html' | 'unknown'>('unknown');
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
@@ -130,6 +131,8 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
       setFileType('pdf');
     } else if (['xlsx', 'xls', 'xlsm', 'xlsb'].includes(ext)) {
       setFileType('excel');
+    } else if (['docx', 'doc'].includes(ext)) {
+      setFileType('word');
     } else if (['md', 'markdown'].includes(ext)) {
       setFileType('markdown');
     } else if (['json', 'jsonl'].includes(ext)) {
@@ -457,6 +460,35 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
             </Button>
           </div>
         );
+
+      case 'word':
+        // If we have parsed markdown content, show that instead
+        if (parsedMdContent && !parsedMdError) {
+          return (
+            <WordViewer key={filePath} contentBytes={contentBytes} />
+          );
+        }
+
+        // Loading state
+        if (parsedMdLoading) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+              <p className="text-lg font-medium">Loading Word content...</p>
+            </div>
+          );
+        }
+
+        // No parsed content available - show Word viewer
+        if (!contentBytes || !(contentBytes instanceof Uint8Array)) {
+          return (
+            <div className="p-8 text-center bg-muted/20 rounded-lg h-full flex flex-col items-center justify-center">
+              <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-muted-foreground">{contentBytes ? 'Invalid Word data format' : 'Loading Word...'}</p>
+            </div>
+          );
+        }
+        return <WordViewer key={filePath} contentBytes={contentBytes} />;
 
       case 'video':
         return (
