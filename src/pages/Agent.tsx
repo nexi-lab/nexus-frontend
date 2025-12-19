@@ -461,6 +461,26 @@ export function Agent() {
     setGrantMemoryAccess(agent.hasMemoryAccess || false);
     setGrantResourcesAccess(agent.hasResourcesAccess || false);
 
+    // Fetch agent details to get metadata (endpoint_url, platform, etc.)
+    try {
+      const agentDetails = await apiClient.getAgent(agent.agent_id);
+      if (agentDetails.endpoint_url) {
+        setEndpointUrl(agentDetails.endpoint_url);
+      } else {
+        setEndpointUrl('http://localhost:2024'); // Default
+      }
+      if (agentDetails.platform) {
+        setPlatform(agentDetails.platform);
+      }
+      if (agentDetails.config_agent_id) {
+        setLanggraphAgentId(agentDetails.config_agent_id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch agent details:', err);
+      // Use defaults if fetch fails
+      setEndpointUrl('http://localhost:2024');
+    }
+
     // Note: We can't change API key generation or inheritance for existing agents
     // These are only for new agent creation
     setGenerateApiKey(false);
@@ -614,6 +634,30 @@ export function Agent() {
       if (!agent) {
         setError('Agent not found');
         return;
+      }
+
+      // Update agent metadata (endpoint_url, platform, etc.)
+      try {
+        const metadata: Record<string, any> = {
+          platform,
+          endpoint_url: endpointUrl.trim(),
+        };
+        if (langgraphAgentId.trim()) {
+          metadata.agent_id = langgraphAgentId.trim();
+        }
+        
+        // Update agent metadata by calling registerAgent with same agent_id
+        await apiClient.registerAgent({
+          agent_id: editingAgentId,
+          name: agentName.trim(),
+          description: description.trim(),
+          generate_api_key: false, // Don't regenerate API key
+          inherit_permissions: false, // Don't change inheritance
+          metadata,
+        });
+      } catch (metadataErr) {
+        console.error('Failed to update agent metadata:', metadataErr);
+        // Continue with permission updates even if metadata update fails
       }
 
       // Get all ReBAC tuples for the agent
@@ -1454,6 +1498,21 @@ export function Agent() {
                     disabled={isRegistering}
                     rows={3}
                   />
+                </div>
+
+                {/* Endpoint URL */}
+                <div className="space-y-2">
+                  <label htmlFor="endpoint-url-edit" className="text-sm font-medium">
+                    Endpoint URL *
+                  </label>
+                  <Input
+                    id="endpoint-url-edit"
+                    placeholder="http://localhost:2024"
+                    value={endpointUrl}
+                    onChange={(e) => setEndpointUrl(e.target.value)}
+                    disabled={isRegistering}
+                  />
+                  <p className="text-xs text-muted-foreground">Agent service endpoint URL</p>
                 </div>
 
                 {/* Agent Permission Mode Indicator */}
