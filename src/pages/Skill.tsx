@@ -9,6 +9,7 @@ import { SkillUploadDialog } from '../components/SkillUploadDialog';
 import { SkillEditor } from '../components/SkillEditor';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface EditingSkill {
   name: string;
@@ -19,6 +20,7 @@ export function Skill() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { apiClient } = useAuth();
+  const { t } = useTranslation();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<EditingSkill | null>(null);
   const [selectedTier, setSelectedTier] = useState<string | undefined>(undefined);
@@ -76,7 +78,7 @@ export function Skill() {
       return result;
     },
     onSuccess: () => {
-      toast.success('Skill saved successfully');
+      toast.success(t('skill.saved'));
       // Invalidate both skills list and skill content cache
       queryClient.invalidateQueries({ queryKey: ['skills'] });
       queryClient.invalidateQueries({ queryKey: ['skillContent'] });
@@ -87,12 +89,12 @@ export function Skill() {
       // Don't close the dialog - let user verify changes and close manually
     },
     onError: (error: any) => {
-      toast.error(`Failed to save skill: ${error.message || 'Unknown error'}`);
+      toast.error(`${t('skill.saveFailed')}: ${error.message || 'Unknown error'}`);
     },
   });
 
   const handleDelete = async (skillPath: string, skillName: string) => {
-    if (!confirm(`Are you sure you want to delete the skill "${skillName}"?`)) {
+    if (!confirm(t('skill.deleteConfirm').replace('{name}', skillName))) {
       return;
     }
 
@@ -114,10 +116,10 @@ export function Skill() {
 
     try {
       await deleteMutation.mutateAsync({ skillPath: directoryPath });
-      toast.success(`Skill "${skillName}" deleted successfully`);
+      toast.success(t('skill.deleted').replace('{name}', skillName));
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to delete skill';
-      toast.error(`Failed to delete skill: ${errorMsg}`);
+      const errorMsg = error instanceof Error ? error.message : t('skill.deleteFailed');
+      toast.error(`${t('skill.deleteFailed')}: ${errorMsg}`);
     }
   };
 
@@ -147,9 +149,9 @@ export function Skill() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast.success(`Skill "${skillName}" exported successfully`);
+      toast.success(t('skill.exported').replace('{name}', skillName));
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to export skill';
+      const errorMsg = error instanceof Error ? error.message : t('skill.exportFailed');
       toast.error(errorMsg);
     }
   };
@@ -164,11 +166,11 @@ export function Skill() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <BookOpen className="h-8 w-8" />
-            <h1 className="text-2xl font-bold">Skills</h1>
+            <h1 className="text-2xl font-bold">{t('skill.title')}</h1>
           </div>
           <Button onClick={() => setUploadDialogOpen(true)}>
             <Upload className="h-4 w-4 mr-2" />
-            Upload Skill
+            {t('skill.upload')}
           </Button>
         </div>
       </header>
@@ -179,7 +181,7 @@ export function Skill() {
           {/* Introduction */}
           <div className="mb-6">
             <p className="text-muted-foreground">
-              Manage and upload skills for your Nexus instance. Skills can be personal or system-wide.
+              {t('skill.description')}
             </p>
           </div>
 
@@ -190,21 +192,21 @@ export function Skill() {
               size="sm"
               onClick={() => setSelectedTier(undefined)}
             >
-              All Skills
+              {t('skill.all')}
             </Button>
             <Button
               variant={selectedTier === 'personal' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setSelectedTier('personal')}
             >
-              Personal
+              {t('skill.personal')}
             </Button>
             <Button
               variant={selectedTier === 'system' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setSelectedTier('system')}
             >
-              System
+              {t('skill.system')}
             </Button>
           </div>
 
@@ -215,7 +217,7 @@ export function Skill() {
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center h-64">
-              <p className="text-sm text-red-600">Failed to load skills</p>
+              <p className="text-sm text-red-600">{t('skill.loadFailed')}</p>
               <p className="text-xs text-muted-foreground mt-2">
                 {error instanceof Error ? error.message : 'Unknown error'}
               </p>
@@ -223,13 +225,13 @@ export function Skill() {
           ) : !skillsData || skillsData.skills.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <FolderOpen className="h-16 w-16 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">No skills found</h3>
+              <h3 className="text-lg font-medium">{t('skill.notFound')}</h3>
               <p className="text-sm text-muted-foreground mt-2 mb-4">
-                Upload your first skill to get started
+                {t('skill.uploadFirst')}
               </p>
               <Button onClick={() => setUploadDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Upload Skill
+                {t('skill.upload')}
               </Button>
             </div>
           ) : (
@@ -261,13 +263,13 @@ export function Skill() {
 
                   {skill.author && (
                     <p className="text-xs text-muted-foreground mb-3">
-                      By {skill.author}
+                      {t('skill.by')} {skill.author}
                     </p>
                   )}
 
                   {skill.requires && skill.requires.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs text-muted-foreground mb-1">Dependencies:</p>
+                      <p className="text-xs text-muted-foreground mb-1">{t('skill.dependencies')}:</p>
                       <div className="flex flex-wrap gap-1">
                         {skill.requires.map((dep) => (
                           <span
@@ -289,7 +291,7 @@ export function Skill() {
                         onClick={() => setEditingSkill({ name: skill.name, path: skill.file_path! })}
                       >
                         <Edit className="h-3 w-3 mr-1" />
-                        Edit
+                        {t('common.edit')}
                       </Button>
                     )}
                     <Button
@@ -299,7 +301,7 @@ export function Skill() {
                       disabled={exportMutation.isPending}
                     >
                       <Download className="h-3 w-3 mr-1" />
-                      Export
+                      {t('common.export') || 'Export'}
                     </Button>
                     {skill.file_path && (
                       <Button
@@ -309,7 +311,7 @@ export function Skill() {
                         disabled={deleteMutation.isPending}
                       >
                         <Trash2 className="h-3 w-3 mr-1" />
-                        Delete
+                        {t('common.delete')}
                       </Button>
                     )}
                   </div>
@@ -330,7 +332,7 @@ export function Skill() {
       <Dialog open={!!editingSkill} onOpenChange={(open) => !open && setEditingSkill(null)}>
         <DialogContent className="max-w-[96vw] w-[96vw] h-[96vh]">
           <DialogHeader>
-            <DialogTitle>Edit Skill: {editingSkill?.name}</DialogTitle>
+            <DialogTitle>{t('skill.edit')}: {editingSkill?.name}</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-hidden">
             {isLoadingContent ? (
@@ -347,7 +349,7 @@ export function Skill() {
               />
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
-                Failed to load skill content
+                {t('skill.loadContentFailed')}
               </div>
             )}
           </div>

@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../i18n/useTranslation';
 import ThirdAuth from './ThirdAuth';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
@@ -17,6 +18,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const { t } = useTranslation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,16 +28,16 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
   const doLogin = async (apiKey: string) => {
     if (!apiKey.trim()) {
-      setError('Please enter an API key');
+      setError(t('login.enterApiKey'));
       return;
     }
     setIsLoading(true);
     try {
       await login(apiKey.trim());
       handleCancel();
-      toast.success('Login successful');
+      toast.success(t('login.success'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid API key');
+      setError(err instanceof Error ? err.message : t('login.invalidKey'));
     } finally {
       setIsLoading(false);
     }
@@ -52,12 +54,12 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       <DialogContent className="w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Login to NexusFS</DialogTitle>
-            <DialogDescription>Enter your API key to access the file system</DialogDescription>
+            <DialogTitle>{t('login.title')}</DialogTitle>
+            <DialogDescription>{t('login.description')}</DialogDescription>
           </DialogHeader>
 
           <div className="py-8">
-            <Input type="password" placeholder="Enter API Key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoFocus />
+            <Input type="password" placeholder={t('login.placeholder')} value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoFocus />
             {error && <p className="text-sm text-destructive mt-2">{error}</p>}
           </div>
 
@@ -65,11 +67,11 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
             <ThirdAuth onSuccess={handleCancel} />
             <div className="flex items-center gap-4">
               <Button type="button" variant="outline" onClick={handleCancel} disabled={isLoading}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? <Loader2 className="size-5.5 animate-spin" /> : null}
-                {isLoading ? 'Validating...' : 'Login'}
+                {isLoading ? t('login.validating') : t('common.login')}
               </Button>
             </div>
           </DialogFooter>

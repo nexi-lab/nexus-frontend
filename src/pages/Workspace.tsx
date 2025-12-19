@@ -2,6 +2,7 @@ import { ArrowLeft, Calendar, Folder, FolderPlus, Plus, Trash2 } from 'lucide-re
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../i18n/useTranslation';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -20,6 +21,7 @@ interface WorkspaceData {
 export function Workspace() {
   const navigate = useNavigate();
   const { userInfo, apiClient } = useAuth();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
 
   // Workspace list state
@@ -47,7 +49,7 @@ export function Workspace() {
       const workspaceList = await apiClient.listWorkspaces();
       setWorkspaces(workspaceList);
     } catch (err) {
-      setWorkspaceError(err instanceof Error ? err.message : 'Failed to load workspaces');
+      setWorkspaceError(err instanceof Error ? err.message : t('workspace.loadFailed'));
     } finally {
       setLoadingWorkspaces(false);
     }
@@ -55,7 +57,7 @@ export function Workspace() {
 
   const handleDeleteWorkspace = async (path: string, name: string | null) => {
     const displayName = name || path;
-    if (!confirm(`Are you sure you want to unregister workspace "${displayName}"?\n\nNote: Files will NOT be deleted, only the workspace registration.`)) {
+    if (!confirm(t('workspace.deleteConfirm').replace('{name}', displayName))) {
       return;
     }
 
@@ -64,7 +66,7 @@ export function Workspace() {
       await deleteWorkspace(path, apiClient);
       await loadWorkspaces(); // Refresh list
     } catch (err) {
-      setWorkspaceError(err instanceof Error ? err.message : 'Failed to unregister workspace');
+      setWorkspaceError(err instanceof Error ? err.message : t('workspace.deleteFailed'));
     }
   };
 
@@ -73,7 +75,7 @@ export function Workspace() {
     setError(null);
 
     if (!workspaceName.trim()) {
-      setError('Workspace name is required');
+      setError(t('workspace.nameRequired'));
       return;
     }
 
@@ -104,7 +106,7 @@ export function Workspace() {
       await loadWorkspaces(); // Refresh the list
       setActiveTab('list');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create workspace');
+      setError(err instanceof Error ? err.message : t('workspace.createFailed'));
     } finally {
       setIsCreating(false);
     }
@@ -142,11 +144,11 @@ export function Workspace() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <FolderPlus className="h-8 w-8" />
-            <h1 className="text-2xl font-bold">Workspace</h1>
+            <h1 className="text-2xl font-bold">{t('workspace.title')}</h1>
           </div>
           <Button onClick={() => setActiveTab('create')}>
             <Plus className="h-4 w-4 mr-2" />
-            New Workspace
+            {t('workspace.new')}
           </Button>
         </div>
       </header>
@@ -157,7 +159,7 @@ export function Workspace() {
           {/* Introduction */}
           <div className="mb-6">
             <p className="text-muted-foreground">
-              Manage your workspaces for organizing files and projects. Workspaces support version control through snapshots.
+              {t('workspace.description')}
             </p>
           </div>
 
@@ -170,7 +172,7 @@ export function Workspace() {
               }`}
               onClick={() => setActiveTab('list')}
             >
-              My Workspaces ({userWorkspaces.length})
+              {t('workspace.myWorkspaces')} ({userWorkspaces.length})
             </Button>
             <Button
               variant="ghost"
@@ -180,7 +182,7 @@ export function Workspace() {
               onClick={() => setActiveTab('create')}
             >
               <Plus className="h-4 w-4 mr-1" />
-              New Workspace
+              {t('workspace.new')}
             </Button>
           </div>
 
@@ -191,14 +193,14 @@ export function Workspace() {
               {workspaceError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{workspaceError}</div>}
 
               {loadingWorkspaces ? (
-                <div className="text-center py-8 text-muted-foreground">Loading workspaces...</div>
+                <div className="text-center py-8 text-muted-foreground">{t('workspace.loading')}</div>
               ) : userWorkspaces.length === 0 ? (
                 <div className="text-center py-12">
                   <Folder className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-50" />
-                  <p className="text-muted-foreground mb-4">No workspaces created yet</p>
+                  <p className="text-muted-foreground mb-4">{t('workspace.noWorkspaces')}</p>
                   <Button onClick={() => setActiveTab('create')} variant="outline">
                     <Plus className="h-4 w-4 mr-2" />
-                    Create Your First Workspace
+                    {t('workspace.createFirst')}
                   </Button>
                 </div>
               ) : (
@@ -217,7 +219,7 @@ export function Workspace() {
                           {workspace.description && <div className="text-sm text-muted-foreground mb-2">{workspace.description}</div>}
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Calendar className="h-3 w-3" />
-                            Created {new Date(workspace.created_at).toLocaleDateString()}
+                            {t('workspace.created')} {new Date(workspace.created_at).toLocaleDateString()}
                           </div>
                         </div>
                         <Button
@@ -236,7 +238,7 @@ export function Workspace() {
 
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm mt-4">
                 <p className="text-blue-900 dark:text-blue-100">
-                  <strong>About workspaces:</strong> Workspaces organize your files and enable snapshots for version control. Workspaces are created using the multi-tenant namespace convention with automatic ReBAC ownership.
+                  <strong>{t('workspace.about')}</strong> {t('workspace.aboutDesc')}
                 </p>
               </div>
             </div>
@@ -247,27 +249,27 @@ export function Workspace() {
                 {/* Workspace Name */}
                 <div className="space-y-2">
                   <label htmlFor="workspace-name" className="text-sm font-medium">
-                    Workspace Name *
+                    {t('workspace.name')} *
                   </label>
                   <Input
                     id="workspace-name"
-                    placeholder="my-project"
+                    placeholder={t('workspace.namePlaceholder')}
                     value={workspaceName}
                     onChange={(e) => setWorkspaceName(e.target.value)}
                     disabled={isCreating}
                     className="font-mono"
                   />
-                  <p className="text-xs text-muted-foreground">Workspace name (will be automatically placed in tenant/user namespace with UUID suffix)</p>
+                  <p className="text-xs text-muted-foreground">{t('workspace.nameDescription')}</p>
                 </div>
 
                 {/* Description */}
                 <div className="space-y-2">
                   <label htmlFor="workspace-description" className="text-sm font-medium">
-                    Description
+                    {t('workspace.descriptionLabel')}
                   </label>
                   <Textarea
                     id="workspace-description"
-                    placeholder="Project description..."
+                    placeholder={t('workspace.descriptionPlaceholder')}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     disabled={isCreating}
@@ -277,10 +279,9 @@ export function Workspace() {
 
                 {/* Info Box */}
                 <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
-                  <p className="font-medium">What are workspaces?</p>
+                  <p className="font-medium">{t('workspace.whatAre')}</p>
                   <p className="text-muted-foreground">
-                    Workspaces are registered directories that support version control through snapshots. You can create snapshots, restore to previous
-                    versions, and compare changes.
+                    {t('workspace.whatAreDesc')}
                   </p>
                 </div>
 
@@ -289,10 +290,10 @@ export function Workspace() {
                 {/* Submit Button */}
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={resetForm} disabled={isCreating}>
-                    Reset
+                    {t('workspace.reset')}
                   </Button>
                   <Button type="submit" disabled={isCreating}>
-                    {isCreating ? 'Creating...' : 'Create Workspace'}
+                    {isCreating ? t('workspace.creating') : t('workspace.create')}
                   </Button>
                 </div>
               </div>

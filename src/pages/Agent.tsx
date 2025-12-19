@@ -2,6 +2,7 @@ import { Bot, Calendar, Check, Copy, Eye, EyeOff, Info, MessageSquare, Plug, Plu
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../i18n/useTranslation';
 import { copyToClipboard } from '../utils';
 import { PermissionInfoBox } from '../components/PermissionInfoBox';
 import { Button } from '../components/ui/button';
@@ -48,6 +49,7 @@ const AVAILABLE_PLATFORMS = [
 export function Agent() {
   const navigate = useNavigate();
   const { userInfo, apiClient, apiKey } = useAuth();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'list' | 'edit' | 'create'>('list');
 
   // Agent list state
@@ -433,7 +435,7 @@ export function Agent() {
 
 
   const handleDeleteAgent = async (agentId: string, agentName: string) => {
-    if (!confirm(`Are you sure you want to delete agent "${agentName}"?`)) {
+    if (!confirm(t('agent.deleteConfirm').replace('{name}', agentName))) {
       return;
     }
 
@@ -441,7 +443,7 @@ export function Agent() {
       await apiClient.deleteAgent(agentId);
       await loadAgents(); // Refresh list
     } catch (err) {
-      setAgentError(err instanceof Error ? err.message : 'Failed to delete agent');
+      setAgentError(err instanceof Error ? err.message : t('agent.deleteFailed'));
     }
   };
 
@@ -1033,11 +1035,11 @@ export function Agent() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <Bot className="h-8 w-8" />
-            <h1 className="text-2xl font-bold">Agents</h1>
+            <h1 className="text-2xl font-bold">{t('agent.title')}</h1>
           </div>
           <Button onClick={() => setActiveTab('create')}>
             <Plus className="h-4 w-4 mr-2" />
-            Register Agent
+            {t('agent.create')}
           </Button>
         </div>
       </header>
@@ -1048,7 +1050,7 @@ export function Agent() {
           {/* Introduction */}
           <div className="mb-6">
             <p className="text-muted-foreground">
-              Manage your AI agents for delegation and multi-agent workflows. Agents inherit all your permissions.
+              {t('agent.description') || 'Manage your AI agents for delegation and multi-agent workflows. Agents inherit all your permissions.'}
             </p>
           </div>
 
@@ -1061,7 +1063,7 @@ export function Agent() {
               }`}
               onClick={() => setActiveTab('list')}
             >
-              My Agents ({userAgents.length})
+              {t('agent.myAgents')} ({userAgents.length})
             </Button>
             <Button
               variant="ghost"
@@ -1072,7 +1074,7 @@ export function Agent() {
               disabled={!editingAgentId}
             >
               <Bot className="h-4 w-4 mr-1" />
-              Edit Agent
+              {t('agent.edit')}
             </Button>
             <Button
               variant="ghost"
@@ -1087,7 +1089,7 @@ export function Agent() {
               }}
             >
               <Plus className="h-4 w-4 mr-1" />
-              Register New Agent
+              {t('agent.create')}
             </Button>
           </div>
 
@@ -1098,14 +1100,14 @@ export function Agent() {
               {agentError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{agentError}</div>}
 
               {loadingAgents ? (
-                <div className="text-center py-8 text-muted-foreground">Loading agents...</div>
+                <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
               ) : userAgents.length === 0 ? (
                 <div className="text-center py-12">
                   <Bot className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-50" />
-                  <p className="text-muted-foreground mb-4">No agents registered yet</p>
+                  <p className="text-muted-foreground mb-4">{t('agent.noAgents')}</p>
                   <Button onClick={() => setActiveTab('create')} variant="outline">
                     <Plus className="h-4 w-4 mr-2" />
-                    Register Your First Agent
+                    {t('agent.createFirst')}
                   </Button>
                 </div>
               ) : (
@@ -1239,7 +1241,7 @@ export function Agent() {
                                         }`}
                                       >
                                         <PermissionIcon permission={agent.allWorkspacesPermission || 'viewer'} />
-                                        All
+                                        {t('agent.all')}
                                       </span>
                                     )}
                                     {agent.workspaces?.map((ws) => {
@@ -1273,13 +1275,13 @@ export function Agent() {
                                     {agent.hasMemoryAccess && (
                                       <span className="px-1.5 py-0.5 rounded flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
                                         <PermissionIcon permission={agent.memoryPermission || 'viewer'} />
-                                        memory
+                                        {t('landing.memory')}
                                       </span>
                                     )}
                                     {agent.hasResourcesAccess && (
                                       <span className="px-1.5 py-0.5 rounded flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
                                         <PermissionIcon permission={agent.resourcesPermission || 'viewer'} />
-                                        resource
+                                        {t('agent.resource')}
                                       </span>
                                     )}
                                   </div>
@@ -1295,7 +1297,7 @@ export function Agent() {
                               onClick={() => navigate(`/?agent=${agent.agent_id}`)}
                             >
                               <MessageSquare className="h-4 w-4 mr-1" />
-                              Use Agent
+                              {t('agent.useAgent')}
                             </Button>
                             <Button
                               variant="outline"
@@ -1303,7 +1305,7 @@ export function Agent() {
                               onClick={() => handleEditAgent(agent)}
                             >
                               <Bot className="h-4 w-4 mr-1" />
-                              Edit Agent
+                              {t('agent.edit')}
                             </Button>
                             <Button
                               variant="ghost"
@@ -1467,7 +1469,7 @@ export function Agent() {
                 {/* Agent Name */}
                 <div className="space-y-2">
                   <label htmlFor="agent-name" className="text-sm font-medium">
-                    Agent Name *
+                    {t('agent.name')} *
                   </label>
                   <div className="flex items-center gap-0">
                     <span className="px-3 py-2 bg-muted text-muted-foreground border border-r-0 rounded-l-md font-mono text-sm">
@@ -1482,13 +1484,13 @@ export function Agent() {
                       className="font-mono rounded-l-none"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">Agent name cannot be changed</p>
+                  <p className="text-xs text-muted-foreground">{t('agent.nameCannotChange')}</p>
                 </div>
 
                 {/* Description */}
                 <div className="space-y-2">
                   <label htmlFor="agent-description" className="text-sm font-medium">
-                    Description
+                    {t('agent.descriptionLabel')}
                   </label>
                   <Textarea
                     id="agent-description"
@@ -1503,7 +1505,7 @@ export function Agent() {
                 {/* Endpoint URL */}
                 <div className="space-y-2">
                   <label htmlFor="endpoint-url-edit" className="text-sm font-medium">
-                    Endpoint URL *
+                    {t('agent.endpoint')} *
                   </label>
                   <Input
                     id="endpoint-url-edit"
@@ -1531,11 +1533,10 @@ export function Agent() {
                         <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                         <div className="flex-1 space-y-2">
                           <div className="font-medium text-blue-900 dark:text-blue-100">
-                            This agent inherits all owner permissions
+                            {t('agent.inheritsOwner')}
                           </div>
                           <p className="text-sm text-blue-700 dark:text-blue-300">
-                            This agent currently uses your credentials and has full access to all your resources.
-                            To restrict access, grant specific permissions below using the principle of least privilege.
+                            {t('agent.inheritsOwnerDesc')}
                           </p>
                         </div>
                       </div>
@@ -1547,10 +1548,10 @@ export function Agent() {
                       <Check className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1 space-y-2">
                         <div className="font-medium text-green-900 dark:text-green-100">
-                          Explicit permissions configured
+                          {t('agent.explicitPermissions')}
                         </div>
                         <p className="text-sm text-green-700 dark:text-green-300">
-                          This agent has specific permissions granted below. It can only access the resources you've explicitly allowed.
+                          {t('agent.explicitPermissionsDesc')}
                         </p>
                       </div>
                     </div>
@@ -1559,11 +1560,11 @@ export function Agent() {
 
                 {/* Skills Selection */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Skills Access</label>
+                  <label className="text-sm font-medium">{t('agent.skillsAccess')}</label>
                   {loadingSkills ? (
-                    <div className="text-sm text-muted-foreground">Loading skills...</div>
+                    <div className="text-sm text-muted-foreground">{t('agent.loadingSkills')}</div>
                   ) : skills.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No skills available</div>
+                    <div className="text-sm text-muted-foreground">{t('agent.noSkillsAvailable')}</div>
                   ) : (
                     <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto">
                       {skills.map((skill) => (
@@ -1595,7 +1596,7 @@ export function Agent() {
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Select skills to grant READ-ONLY access. The agent will be able to use these skills.
+                    {t('agent.selectSkillsDesc')}
                   </p>
                 </div>
 
@@ -1603,12 +1604,12 @@ export function Agent() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
                     <Plug className="h-4 w-4" />
-                    Connectors Access
+                    {t('agent.connectorsAccess')}
                   </label>
                   {loadingConnectors ? (
-                    <div className="text-sm text-muted-foreground">Loading connectors...</div>
+                    <div className="text-sm text-muted-foreground">{t('agent.loadingConnectors')}</div>
                   ) : connectors.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No connectors available</div>
+                    <div className="text-sm text-muted-foreground">{t('agent.noConnectorsAvailable')}</div>
                   ) : (
                     <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto">
                       {connectors.map((connector) => (
@@ -1633,8 +1634,8 @@ export function Agent() {
                               className="text-xs px-2 py-1 border rounded bg-background"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <option value="viewer">Read-Only</option>
-                              <option value="editor">Read-Write</option>
+                              <option value="viewer">{t('agent.readOnly')}</option>
+                              <option value="editor">{t('agent.readWrite')}</option>
                             </select>
                           )}
                         </div>
@@ -1642,7 +1643,7 @@ export function Agent() {
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Select connectors and choose permission level (Read-Only or Read-Write).
+                    {t('agent.selectConnectorsDesc')}
                   </p>
                 </div>
 
@@ -1650,7 +1651,7 @@ export function Agent() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
                     <Folder className="h-4 w-4" />
-                    Workspaces Access
+                    {t('agent.workspacesAccess')}
                   </label>
 
                   {/* All Workspaces Option */}
@@ -1665,8 +1666,8 @@ export function Agent() {
                         className="h-4 w-4 mt-0.5"
                       />
                       <label htmlFor="grant-all-workspaces" className="flex-1 cursor-pointer">
-                        <div className="text-sm font-medium">Grant access to ALL workspaces</div>
-                        <div className="text-xs text-muted-foreground">Base permission for all current and future workspaces</div>
+                        <div className="text-sm font-medium">{t('agent.grantAllWorkspaces')}</div>
+                        <div className="text-xs text-muted-foreground">{t('agent.allWorkspacesDesc')}</div>
                       </label>
                       {grantAllWorkspaces && (
                         <select
@@ -1685,11 +1686,11 @@ export function Agent() {
 
                   {/* Individual Workspaces - Always shown */}
                   <div>
-                    <label className="text-sm font-medium">Individual Workspace Permissions (Optional)</label>
+                    <label className="text-sm font-medium">{t('agent.individualWorkspaces')}</label>
                     {loadingWorkspaces ? (
-                      <div className="text-sm text-muted-foreground mt-2">Loading workspaces...</div>
+                      <div className="text-sm text-muted-foreground mt-2">{t('agent.loadingWorkspaces')}</div>
                     ) : workspaces.length === 0 ? (
-                      <div className="text-sm text-muted-foreground mt-2">No workspaces available</div>
+                      <div className="text-sm text-muted-foreground mt-2">{t('agent.noWorkspacesAvailable')}</div>
                     ) : (
                       <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto mt-2">
                         {workspaces.map((workspace) => (
@@ -1728,8 +1729,8 @@ export function Agent() {
 
                   <p className="text-xs text-muted-foreground">
                     {grantAllWorkspaces
-                      ? '✓ All workspaces access enabled. Individual permissions can override or enhance the base permission (e.g., read-only for all, read-write for specific workspaces).'
-                      : 'Grant base access to all workspaces, or select individual workspaces for granular control.'}
+                      ? t('agent.allWorkspacesEnabled')
+                      : t('agent.grantBaseAccess')}
                   </p>
                 </div>
 
@@ -1776,7 +1777,7 @@ export function Agent() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Grant READ-ONLY access to entire directories.
+                    {t('agent.grantDirectoryDesc')}
                   </p>
                 </div>
 
@@ -1793,10 +1794,10 @@ export function Agent() {
                     }}
                     disabled={isRegistering}
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
                   <Button type="submit" disabled={isRegistering}>
-                    {isRegistering ? 'Updating...' : 'Update Agent'}
+                    {isRegistering ? t('common.loading') : t('common.save')}
                   </Button>
                 </div>
               </div>
@@ -1808,7 +1809,7 @@ export function Agent() {
                 {/* Platform Selection */}
                 {activeTab === 'create' && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Platform *</label>
+                    <label className="text-sm font-medium">{t('agent.platform')} *</label>
                     <div className="grid grid-cols-2 gap-3">
                       {AVAILABLE_PLATFORMS.map((platformOption) => (
                         <button
@@ -1849,7 +1850,7 @@ export function Agent() {
                 {/* Agent Name */}
                 <div className="space-y-2">
                   <label htmlFor="agent-name" className="text-sm font-medium">
-                    Agent Name *
+                    {t('agent.name')} *
                   </label>
                   <div className="flex items-center gap-0">
                     <span className="px-3 py-2 bg-muted text-muted-foreground border border-r-0 rounded-l-md font-mono text-sm">
@@ -1857,7 +1858,7 @@ export function Agent() {
                     </span>
                     <Input
                       id="agent-name"
-                      placeholder="data_analyst"
+                      placeholder={t('agent.namePlaceholder')}
                       value={agentName}
                       onChange={(e) => setAgentName(e.target.value.toLowerCase())}
                       disabled={isRegistering}
@@ -1865,18 +1866,18 @@ export function Agent() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Unique name for your agent (lowercase, alphanumeric, underscores, hyphens only)
+                    {t('agent.nameDescription')}
                   </p>
                 </div>
 
                 {/* Description */}
                 <div className="space-y-2">
                   <label htmlFor="agent-description" className="text-sm font-medium">
-                    Description
+                    {t('agent.descriptionLabel')}
                   </label>
                   <Textarea
                     id="agent-description"
-                    placeholder="A general assistant that helps with various tasks..."
+                    placeholder={t('agent.descriptionPlaceholder')}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     disabled={isRegistering}
@@ -1887,7 +1888,7 @@ export function Agent() {
                 {/* Endpoint URL */}
                 <div className="space-y-2">
                   <label htmlFor="endpoint-url" className="text-sm font-medium">
-                    Endpoint URL *
+                    {t('agent.endpoint')} *
                   </label>
                   <Input
                     id="endpoint-url"
@@ -1902,7 +1903,7 @@ export function Agent() {
                 {/* Agent ID */}
                 <div className="space-y-2">
                   <label htmlFor="langgraph-agent-id" className="text-sm font-medium">
-                    Agent ID
+                    {t('agent.agentId')}
                   </label>
                   <Input
                     id="langgraph-agent-id"
@@ -1911,7 +1912,7 @@ export function Agent() {
                     onChange={(e) => setLanggraphAgentId(e.target.value)}
                     disabled={isRegistering}
                   />
-                  <p className="text-xs text-muted-foreground">Agent identifier for routing (default: agent)</p>
+                  <p className="text-xs text-muted-foreground">{t('agent.agentIdDescription')}</p>
                 </div>
 
                 {/* Generate API Key Option */}
@@ -1926,14 +1927,14 @@ export function Agent() {
                         className="h-4 w-4"
                       />
                       <label htmlFor="generate-api-key" className="text-sm font-medium">
-                        Generate API key for agent
+                        {t('agent.generateApiKey')}
                       </label>
                     </div>
                     <p className="text-xs text-muted-foreground ml-6">
                       {generateApiKey ? (
-                        <span className="text-orange-600 dark:text-orange-400">Agent will have its own API key (for independent authentication)</span>
+                        <span className="text-orange-600 dark:text-orange-400">{t('agent.ownApiKey')}</span>
                       ) : (
-                        <span className="text-green-600 dark:text-green-400">Recommended: Agent will use owner's credentials + X-Agent-ID header</span>
+                        <span className="text-green-600 dark:text-green-400">{t('agent.recommendedAuth')}</span>
                       )}
                     </p>
 
@@ -1950,14 +1951,14 @@ export function Agent() {
                             className="h-4 w-4"
                           />
                           <label htmlFor="inherit-permissions" className="text-sm font-medium">
-                            Inherit owner's permissions
+                            {t('agent.inheritPermissionsDesc')}
                           </label>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {inheritPermissions ? (
-                            <span className="text-blue-600 dark:text-blue-400">✓ Agent inherits all your permissions</span>
+                            <span className="text-blue-600 dark:text-blue-400">{t('agent.inheritsAll')}</span>
                           ) : (
-                            <span className="text-orange-600 dark:text-orange-400">⚠️ Agent starts with 0 permissions (grant via ReBAC)</span>
+                            <span className="text-orange-600 dark:text-orange-400">{t('agent.zeroPermissions')}</span>
                           )}
                         </p>
                       </div>
@@ -1966,11 +1967,11 @@ export function Agent() {
                     {/* Skills Selection - Only show when API key is generated AND inheritance is disabled */}
                     {generateApiKey && !inheritPermissions && (
                       <div className="ml-6 mt-2 space-y-2 pl-4 border-l-2 border-gray-300 dark:border-gray-700">
-                        <label className="text-sm font-medium">Grant Skills Access (Optional)</label>
+                        <label className="text-sm font-medium">{t('agent.grantSkills')}</label>
                         {loadingSkills ? (
-                          <div className="text-sm text-muted-foreground">Loading skills...</div>
+                          <div className="text-sm text-muted-foreground">{t('agent.loadingSkills')}</div>
                         ) : skills.length === 0 ? (
-                          <div className="text-sm text-muted-foreground">No skills available</div>
+                          <div className="text-sm text-muted-foreground">{t('agent.noSkillsAvailable')}</div>
                         ) : (
                           <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto">
                             {skills.map((skill) => (
@@ -2002,19 +2003,19 @@ export function Agent() {
                           </div>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          Select skills to grant READ-ONLY access. The agent will be able to use these skills.
+                          {t('agent.selectSkillsDesc')}
                         </p>
 
                         {/* Connectors Selection */}
                         <div className="mt-4">
                           <label className="text-sm font-medium flex items-center gap-2">
                             <Plug className="h-4 w-4" />
-                            Grant Connectors Access (Optional)
+                            {t('agent.grantConnectors')}
                           </label>
                           {loadingConnectors ? (
-                            <div className="text-sm text-muted-foreground mt-2">Loading connectors...</div>
+                            <div className="text-sm text-muted-foreground mt-2">{t('agent.loadingConnectors')}</div>
                           ) : connectors.length === 0 ? (
-                            <div className="text-sm text-muted-foreground mt-2">No connectors available</div>
+                            <div className="text-sm text-muted-foreground mt-2">{t('agent.noConnectorsAvailable')}</div>
                           ) : (
                             <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto mt-2">
                               {connectors.map((connector) => (
@@ -2048,7 +2049,7 @@ export function Agent() {
                             </div>
                           )}
                           <p className="text-xs text-muted-foreground mt-2">
-                            Select connectors and choose permission level (Read-Only or Read-Write).
+                            {t('agent.selectConnectorsDesc')}
                           </p>
                         </div>
 
@@ -2056,7 +2057,7 @@ export function Agent() {
                         <div className="mt-4">
                           <label className="text-sm font-medium flex items-center gap-2">
                             <Folder className="h-4 w-4" />
-                            Grant Workspaces Access (Optional)
+                            {t('agent.workspacesAccess')}
                           </label>
 
                           {/* All Workspaces Option */}
@@ -2071,8 +2072,8 @@ export function Agent() {
                                 className="h-4 w-4 mt-0.5"
                               />
                               <label htmlFor="create-grant-all-workspaces" className="flex-1 cursor-pointer">
-                                <div className="text-sm font-medium">Grant access to ALL workspaces</div>
-                                <div className="text-xs text-muted-foreground">Base permission for all current and future workspaces</div>
+                                <div className="text-sm font-medium">{t('agent.grantAllWorkspaces')}</div>
+                                <div className="text-xs text-muted-foreground">{t('agent.allWorkspacesDesc')}</div>
                               </label>
                               {grantAllWorkspaces && (
                                 <select
@@ -2091,11 +2092,11 @@ export function Agent() {
 
                           {/* Individual Workspaces - Always shown */}
                           <div className="mt-2">
-                            <label className="text-sm font-medium">Individual Workspace Permissions (Optional)</label>
+                            <label className="text-sm font-medium">{t('agent.individualWorkspaces')}</label>
                             {loadingWorkspaces ? (
-                              <div className="text-sm text-muted-foreground mt-2">Loading workspaces...</div>
+                              <div className="text-sm text-muted-foreground mt-2">{t('agent.loadingWorkspaces')}</div>
                             ) : workspaces.length === 0 ? (
-                              <div className="text-sm text-muted-foreground mt-2">No workspaces available</div>
+                              <div className="text-sm text-muted-foreground mt-2">{t('agent.noWorkspacesAvailable')}</div>
                             ) : (
                               <div className="space-y-2 border rounded-lg p-3 bg-muted/50 max-h-64 overflow-y-auto mt-2">
                                 {workspaces.map((workspace) => (
@@ -2134,14 +2135,14 @@ export function Agent() {
 
                           <p className="text-xs text-muted-foreground mt-2">
                             {grantAllWorkspaces
-                              ? '✓ All workspaces access enabled. Individual permissions can override or enhance the base permission (e.g., read-only for all, read-write for specific workspaces).'
-                              : 'Grant base access to all workspaces, or select individual workspaces for granular control.'}
+                              ? t('agent.allWorkspacesEnabled')
+                              : t('agent.grantBaseAccess')}
                           </p>
                         </div>
 
                         {/* Directory Access */}
                         <div className="mt-4">
-                          <label className="text-sm font-medium">Grant Directory Access (Optional)</label>
+                          <label className="text-sm font-medium">{t('agent.grantDirectory')}</label>
                           <div className="space-y-2 border rounded-lg p-3 bg-muted/50 mt-2">
                             <div className="flex items-center gap-2">
                               <input
@@ -2155,9 +2156,9 @@ export function Agent() {
                               <label htmlFor="create-memory-access" className="flex-1 cursor-pointer">
                                 <div className="text-sm font-medium flex items-center gap-2">
                                   <Database className="h-4 w-4" />
-                                  Memory (/memory)
+                                  {t('agent.memory')}
                                 </div>
-                                <div className="text-xs text-muted-foreground">Agent can access memory storage</div>
+                                <div className="text-xs text-muted-foreground">{t('agent.memoryDesc')}</div>
                               </label>
                             </div>
 
@@ -2173,14 +2174,14 @@ export function Agent() {
                               <label htmlFor="create-resources-access" className="flex-1 cursor-pointer">
                                 <div className="text-sm font-medium flex items-center gap-2">
                                   <FileArchive className="h-4 w-4" />
-                                  Resources (/resource)
+                                  {t('agent.resources')}
                                 </div>
-                                <div className="text-xs text-muted-foreground">Agent can access resource files</div>
+                                <div className="text-xs text-muted-foreground">{t('agent.resourcesDesc')}</div>
                               </label>
                             </div>
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">
-                            Grant READ-ONLY access to entire directories.
+                            {t('agent.grantDirectoryDesc')}
                           </p>
                         </div>
                       </div>
@@ -2189,20 +2190,14 @@ export function Agent() {
 
                 {/* Info Box */}
                 <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
-                  <p className="font-medium">Permission Model:</p>
+                  <p className="font-medium">{t('agent.permissionModel')}</p>
                   <p className="text-muted-foreground">
                     {!generateApiKey ? (
-                      <>
-                        <strong>Full Permissions:</strong> Agent uses your credentials and inherits all your permissions automatically.
-                      </>
+                      t('agent.fullPermissionsAuto')
                     ) : inheritPermissions ? (
-                      <>
-                        <strong>Full Permissions:</strong> Agent has its own API key but inherits all your permissions.
-                      </>
+                      t('agent.fullPermissionsKey')
                     ) : (
-                      <>
-                        <strong>Zero Permissions (Recommended):</strong> Agent starts with no permissions. Grant specific permissions via ReBAC for principle of least privilege.
-                      </>
+                      t('agent.zeroPermissionsRec')
                     )}
                   </p>
                 </div>
@@ -2220,10 +2215,10 @@ export function Agent() {
                     }}
                     disabled={isRegistering}
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
                   <Button type="submit" disabled={isRegistering}>
-                    {isRegistering ? 'Registering...' : 'Register Agent'}
+                    {isRegistering ? t('agent.registering') : t('agent.register')}
                   </Button>
                 </div>
               </div>

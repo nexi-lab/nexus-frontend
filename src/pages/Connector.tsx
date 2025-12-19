@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../i18n/useTranslation';
 import { fileKeys } from '../hooks/useFiles';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
@@ -55,6 +56,7 @@ const BACKEND_NAMES: Record<string, string> = {
 export function Connector() {
   const navigate = useNavigate();
   const { apiClient } = useAuth();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const filesAPI = createFilesAPI(apiClient);
   const [activeTab, setActiveTab] = useState<'connectors' | 'integrations'>('connectors');
@@ -82,14 +84,14 @@ export function Connector() {
       return await filesAPI.loadConnector(mount_point);
     },
     onSuccess: async (_mountId, mount_point) => {
-      toast.success(`Connector loaded successfully: ${mount_point}`);
+      toast.success(t('connector.loaded').replace('{mount}', mount_point));
       // Invalidate queries to refresh the UI
       await queryClient.invalidateQueries({ queryKey: fileKeys.connectors() });
       await queryClient.invalidateQueries({ queryKey: ['saved_connectors'] });
       await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
     },
     onError: (error: any, mount_point) => {
-      toast.error(`Failed to load connector ${mount_point}: ${error.message || 'Unknown error'}`);
+      toast.error(t('connector.loadFailed').replace('{mount}', mount_point) + `: ${error.message || 'Unknown error'}`);
     },
     onSettled: () => {
       setLoadingConnector(null);
@@ -127,14 +129,14 @@ export function Connector() {
       return await filesAPI.deleteSavedConnector(mount_point);
     },
     onSuccess: async (_result, mount_point) => {
-      toast.success(`Connector deleted successfully: ${mount_point}`);
+      toast.success(t('connector.deleted').replace('{mount}', mount_point));
       // Invalidate queries to refresh the UI
       await queryClient.invalidateQueries({ queryKey: ['saved_connectors'] });
       await queryClient.invalidateQueries({ queryKey: fileKeys.connectors() });
       await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
     },
     onError: (error: any, mount_point) => {
-      toast.error(`Failed to delete connector ${mount_point}: ${error.message || 'Unknown error'}`);
+      toast.error(t('connector.deleteFailed').replace('{mount}', mount_point) + `: ${error.message || 'Unknown error'}`);
     },
     onSettled: () => {
       setDeletingConnector(null);
@@ -142,7 +144,7 @@ export function Connector() {
   });
 
   const handleDeleteConnector = (mount_point: string) => {
-    if (window.confirm(`Are you sure you want to delete the connector "${mount_point}"? This will:\n- Remove the saved connector configuration\n- Delete the connector directory and all its contents\n- Deactivate the connector if it's currently active\n\nThis action cannot be undone.`)) {
+    if (window.confirm(t('connector.deleteConfirm').replace('{mount}', mount_point))) {
       deleteConnectorMutation.mutate(mount_point);
     }
   };
@@ -159,11 +161,11 @@ export function Connector() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <Cloud className="h-8 w-8" />
-            <h1 className="text-2xl font-bold">Connector</h1>
+            <h1 className="text-2xl font-bold">{t('connector.title')}</h1>
           </div>
           <Button onClick={() => setAddConnectorDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Add Connector
+            {t('connector.add')}
           </Button>
         </div>
       </header>
@@ -174,7 +176,7 @@ export function Connector() {
           {/* Introduction */}
           <div className="mb-6">
             <p className="text-muted-foreground">
-              Manage your connectors to connect external backends with Nexus. Saved connectors persist across server restarts.
+              {t('connector.description')}
             </p>
           </div>
 
@@ -185,7 +187,7 @@ export function Connector() {
               size="sm"
               onClick={() => setActiveTab('connectors')}
             >
-              Connectors
+              {t('connector.connectors')}
             </Button>
             <Button
               variant={activeTab === 'integrations' ? 'default' : 'outline'}
@@ -193,7 +195,7 @@ export function Connector() {
               onClick={() => setActiveTab('integrations')}
             >
               <Link2 className="h-4 w-4 mr-2" />
-              Integrations
+              {t('connector.integrations')}
             </Button>
           </div>
 
@@ -204,25 +206,25 @@ export function Connector() {
               {/* Saved Connectors List */}
           <div className="rounded-lg border bg-card">
             <div className="p-4 border-b">
-              <h2 className="text-lg font-semibold">Saved Connectors</h2>
+              <h2 className="text-lg font-semibold">{t('connector.saved')}</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 {savedConnectors.length > 0
-                  ? `${savedConnectors.length} connector${savedConnectors.length !== 1 ? 's' : ''} configured`
-                  : 'No connectors configured yet'}
+                  ? t('connector.configured').replace('{count}', savedConnectors.length.toString()).replace('{plural}', savedConnectors.length !== 1 ? 's' : '')
+                  : t('connector.noConfigured')}
               </p>
             </div>
             <div className="p-4">
               {isLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-sm text-muted-foreground">Loading connectors...</span>
+                  <span className="ml-2 text-sm text-muted-foreground">{t('connector.loading')}</span>
                 </div>
               ) : savedConnectors.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-sm text-muted-foreground mb-4">No saved connectors found</p>
+                  <p className="text-sm text-muted-foreground mb-4">{t('connector.noSaved')}</p>
                   <Button onClick={() => setAddConnectorDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Your First Connector
+                    {t('connector.addFirst')}
                   </Button>
                 </div>
               ) : (
@@ -268,17 +270,17 @@ export function Connector() {
                                 {isActive && (
                                   <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200 flex items-center gap-1 flex-shrink-0">
                                     <Play className="h-3 w-3" />
-                                    Active
+                                    {t('connector.active')}
                                   </span>
                                 )}
                                 {!isActive && (
                                   <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 flex-shrink-0">
-                                    Not Loaded
+                                    {t('connector.notLoaded')}
                                   </span>
                                 )}
                               </div>
                               <p className="text-sm text-muted-foreground mb-2">
-                                {backendName} {connector.readonly && '(Read-only)'}
+                                {backendName} {connector.readonly && `(${t('connector.readOnly')})`}
                               </p>
                               {connector.description && (
                                 <p className="text-xs text-muted-foreground mb-2">{connector.description}</p>
@@ -324,12 +326,12 @@ export function Connector() {
                                 {loadingConnector === connector.mount_point ? (
                                   <>
                                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Loading...
+                                    {t('common.loading')}
                                   </>
                                 ) : (
                                   <>
                                     <Play className="h-4 w-4 mr-2" />
-                                    Load
+                                    {t('connector.load')}
                                   </>
                                 )}
                               </Button>
@@ -337,7 +339,7 @@ export function Connector() {
                             {isActive && (
                               <Button variant="outline" size="sm" disabled>
                                 <Play className="h-4 w-4 mr-2" />
-                                Active
+                                {t('connector.active')}
                               </Button>
                             )}
                             <Button

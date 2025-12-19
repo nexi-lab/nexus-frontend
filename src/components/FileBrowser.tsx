@@ -22,14 +22,17 @@ import { ManagePermissionsDialog } from './ManagePermissionsDialog';
 import { ConnectorManagementDialog } from './ConnectorManagementDialog';
 import { RenameDialog } from './RenameDialog';
 import { StoreMemoryDialog } from './StoreMemoryDialog';
+import { LanguageSelector } from './LanguageSelector';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from './ui/button';
+import { useTranslation } from '../i18n/useTranslation';
 
 export function FileBrowser() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, logout, apiClient, userInfo } = useAuth();
+  const { t } = useTranslation();
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [currentPath, setCurrentPath] = useState('/');
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null);
@@ -246,7 +249,7 @@ export function FileBrowser() {
             <div className="flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-destructive">Authentication Error</p>
+                <p className="text-sm font-semibold text-destructive">{t('landing.authError')}</p>
                 <p className="text-xs text-destructive/80">{authError.message}</p>
               </div>
             </div>
@@ -259,7 +262,7 @@ export function FileBrowser() {
               }}
               className="text-destructive hover:text-destructive hover:bg-destructive/10"
             >
-              Update API Key
+              {t('landing.updateApiKey')}
             </Button>
           </div>
         </div>
@@ -270,46 +273,46 @@ export function FileBrowser() {
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4 flex-1">
             <img src="/nexus-logo.png" alt="Nexus Logo" className="h-10 w-10" />
-            <h1 className="text-2xl font-bold">Nexus</h1>
+            <h1 className="text-2xl font-bold">{t('landing.nexus')}</h1>
           </div>
           <div className="flex gap-2 items-center">
             {isAuthenticated ? (
               <>
                 {userInfo?.user && (
                   <span className="text-sm text-muted-foreground mr-2">
-                    <span className="font-medium">User:</span> {userInfo.user}
+                    <span className="font-medium">{t('landing.user')}:</span> {userInfo.user}
                     {userInfo.tenant_id && (
                       <>
                         <span className="mx-2">|</span>
-                        <span className="font-medium">Tenant:</span> {userInfo.tenant_id}
+                        <span className="font-medium">{t('landing.tenant')}:</span> {userInfo.tenant_id}
                       </>
                     )}
                   </span>
                 )}
                 <Button variant="ghost" size="sm" onClick={() => navigate('/workspace')}>
                   <FolderPlus className="h-4 w-4 mr-2" />
-                  Workspace
+                  {t('landing.workspace')}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/memory')}>
                   <Brain className="h-4 w-4 mr-2" />
-                  Memory
+                  {t('landing.memory')}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/agent')}>
                   <Bot className="h-4 w-4 mr-2" />
-                  Agent
+                  {t('landing.agent')}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/connector')}>
                   <Cloud className="h-4 w-4 mr-2" />
-                  Connector
+                  {t('landing.connector')}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => navigate('/skill')}>
                   <BookOpen className="h-4 w-4 mr-2" />
-                  Skill
+                  {t('landing.skill')}
                 </Button>
                 {userInfo?.is_admin && (
                   <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
                     <Settings className="h-4 w-4 mr-2" />
-                    Admin
+                    {t('landing.admin')}
                   </Button>
                 )}
                 <Button
@@ -319,12 +322,13 @@ export function FileBrowser() {
                     setLoginDialogOpen(true);
                   }}
                 >
-                  Logout
+                  {t('common.logout')}
                 </Button>
               </>
             ) : (
-              <Button onClick={() => setLoginDialogOpen(true)}>Login</Button>
+              <Button onClick={() => setLoginDialogOpen(true)}>{t('common.login')}</Button>
             )}
+            <LanguageSelector />
             <ThemeToggle />
             <Button variant="ghost" size="icon" asChild>
               <a href="https://github.com/nexi-lab/nexus" target="_blank" rel="noopener noreferrer" aria-label="View on GitHub">
@@ -348,8 +352,8 @@ export function FileBrowser() {
           variant="ghost"
           size="icon"
           type="button"
-          aria-label={chatPanelOpen ? 'Hide AI panel' : 'Show AI panel'}
-          title={chatPanelOpen ? 'Hide AI panel' : 'Show AI panel'}
+          aria-label={chatPanelOpen ? t('landing.hideAiPanel') : t('landing.showAiPanel')}
+          title={chatPanelOpen ? t('landing.hideAiPanel') : t('landing.showAiPanel')}
           onClick={() => setChatPanelOpen((v) => !v)}
           className="flex-shrink-0"
         >
@@ -395,18 +399,18 @@ export function FileBrowser() {
       {/* Footer */}
       <footer className="border-t bg-muted/20 px-4 py-2">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="font-medium">Nexus</div>
+          <div className="font-medium">{t('landing.nexus')}</div>
           <div className="flex gap-3">
             <a href="https://github.com/nexi-lab/nexus" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
-              Docs
+              {t('landing.docs')}
             </a>
             <span>|</span>
             <a href="https://nexus.nexilab.co/health" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
-              API
+              {t('landing.api')}
             </a>
             <span>|</span>
             <a href="https://github.com/nexi-lab/nexus/issues" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
-              Help
+              {t('landing.help')}
             </a>
           </div>
         </div>

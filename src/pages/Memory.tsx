@@ -2,6 +2,7 @@ import { ArrowLeft, Brain, Calendar, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../i18n/useTranslation';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
@@ -37,6 +38,7 @@ interface StoredMemory {
 export function Memory() {
   const navigate = useNavigate();
   const { userInfo, apiClient } = useAuth();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'stored'>('list');
 
   // Memory list state
@@ -100,7 +102,7 @@ export function Memory() {
       const memoryList = await apiClient.listRegisteredMemories();
       setMemories(memoryList);
     } catch (err) {
-      setMemoryError(err instanceof Error ? err.message : 'Failed to load memories');
+      setMemoryError(err instanceof Error ? err.message : t('memory.loadFailed'));
     } finally {
       setLoadingMemories(false);
     }
@@ -118,7 +120,7 @@ export function Memory() {
       });
       setStoredMemories(sortedMemories);
     } catch (err) {
-      setStoredMemoryError(err instanceof Error ? err.message : 'Failed to load stored memories');
+      setStoredMemoryError(err instanceof Error ? err.message : t('memory.loadFailed'));
     } finally {
       setLoadingStoredMemories(false);
     }
@@ -139,7 +141,7 @@ export function Memory() {
 
   const handleDeleteMemory = async (path: string, name: string | null) => {
     const displayName = name || path;
-    if (!confirm(`Are you sure you want to unregister memory "${displayName}"?\n\nNote: Files will NOT be deleted, only the memory registration.`)) {
+    if (!confirm(t('memory.unregisterConfirm').replace('{name}', displayName))) {
       return;
     }
 
@@ -147,7 +149,7 @@ export function Memory() {
       await apiClient.unregisterMemory(path);
       await loadMemories();
     } catch (err) {
-      setMemoryError(err instanceof Error ? err.message : 'Failed to unregister memory');
+      setMemoryError(err instanceof Error ? err.message : t('memory.unregisterFailed'));
     }
   };
 
@@ -158,7 +160,7 @@ export function Memory() {
 
   const handleDeleteStoredMemory = async (memoryId: string, content: string) => {
     const preview = content.length > 50 ? content.substring(0, 50) + '...' : content;
-    if (!confirm(`Are you sure you want to delete this memory?\n\n"${preview}"\n\nThis action cannot be undone.`)) {
+    if (!confirm(t('memory.deleteConfirm').replace('{preview}', preview))) {
       return;
     }
 
@@ -166,7 +168,7 @@ export function Memory() {
       await apiClient.deleteMemory(memoryId);
       await loadStoredMemories();
     } catch (err) {
-      setStoredMemoryError(err instanceof Error ? err.message : 'Failed to delete memory');
+      setStoredMemoryError(err instanceof Error ? err.message : t('memory.deleteFailed'));
     }
   };
 
@@ -180,7 +182,7 @@ export function Memory() {
     try {
       await apiClient.approveMemory(memoryId);
     } catch (err) {
-      setStoredMemoryError(err instanceof Error ? err.message : 'Failed to approve memory');
+      setStoredMemoryError(err instanceof Error ? err.message : t('memory.deleteFailed'));
       await loadStoredMemories();
     }
   };
@@ -195,7 +197,7 @@ export function Memory() {
     try {
       await apiClient.deactivateMemory(memoryId);
     } catch (err) {
-      setStoredMemoryError(err instanceof Error ? err.message : 'Failed to reject memory');
+      setStoredMemoryError(err instanceof Error ? err.message : t('memory.deleteFailed'));
       await loadStoredMemories();
     }
   };
@@ -205,12 +207,12 @@ export function Memory() {
     setError(null);
 
     if (!path.trim()) {
-      setError('Memory path suffix is required');
+      setError(t('memory.pathRequired'));
       return;
     }
 
     if (path.trim().startsWith('/')) {
-      setError('Path should not start with "/" (prefix is auto-added)');
+      setError(t('memory.pathNoSlash'));
       return;
     }
 
@@ -237,7 +239,7 @@ export function Memory() {
       await loadMemories();
       setActiveTab('list');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register memory');
+      setError(err instanceof Error ? err.message : t('memory.registerFailed'));
     } finally {
       setIsCreating(false);
     }
@@ -276,11 +278,11 @@ export function Memory() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <Brain className="h-8 w-8" />
-            <h1 className="text-2xl font-bold">Memory</h1>
+            <h1 className="text-2xl font-bold">{t('memory.title')}</h1>
           </div>
           <Button onClick={() => setActiveTab('create')}>
             <Plus className="h-4 w-4 mr-2" />
-            Register Memory
+            {t('memory.register')}
           </Button>
         </div>
       </header>
@@ -291,7 +293,7 @@ export function Memory() {
           {/* Introduction */}
           <div className="mb-6">
             <p className="text-muted-foreground">
-              Manage memory namespaces for AI agent learning and knowledge storage. Memory records are stored in the database with identity-based access control.
+              {t('memory.description')}
             </p>
           </div>
 
@@ -304,7 +306,7 @@ export function Memory() {
               }`}
               onClick={() => setActiveTab('list')}
             >
-              Namespaces ({userMemories.length})
+              {t('memory.myMemories')} ({userMemories.length})
             </Button>
             <Button
               variant="ghost"
@@ -313,7 +315,7 @@ export function Memory() {
               }`}
               onClick={() => setActiveTab('stored')}
             >
-              Stored Memories ({storedMemories.length})
+              {t('memory.storedMemories')} ({storedMemories.length})
             </Button>
             <Button
               variant="ghost"
@@ -323,7 +325,7 @@ export function Memory() {
               onClick={() => setActiveTab('create')}
             >
               <Plus className="h-4 w-4 mr-1" />
-              Register Memory
+              {t('memory.registerNew')}
             </Button>
           </div>
 
@@ -334,7 +336,7 @@ export function Memory() {
               {storedMemoryError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{storedMemoryError}</div>}
 
               {loadingStoredMemories ? (
-                <div className="text-center py-8 text-muted-foreground">Loading stored memories...</div>
+                <div className="text-center py-8 text-muted-foreground">{t('memory.loading')}</div>
               ) : storedMemories.length === 0 ? (
                 <div className="text-center py-12">
                   <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-50" />
@@ -441,14 +443,14 @@ export function Memory() {
               {memoryError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{memoryError}</div>}
 
               {loadingMemories ? (
-                <div className="text-center py-8 text-muted-foreground">Loading memories...</div>
+                <div className="text-center py-8 text-muted-foreground">{t('memory.loading')}</div>
               ) : userMemories.length === 0 ? (
                 <div className="text-center py-12">
                   <Brain className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-50" />
-                  <p className="text-muted-foreground mb-4">No memories registered yet</p>
+                  <p className="text-muted-foreground mb-4">{t('memory.noMemories')}</p>
                   <Button onClick={() => setActiveTab('create')} variant="outline">
                     <Plus className="h-4 w-4 mr-2" />
-                    Register Your First Memory
+                    {t('memory.registerFirst')}
                   </Button>
                 </div>
               ) : (
@@ -519,7 +521,7 @@ export function Memory() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label htmlFor="memory-path" className="text-sm font-medium">
-                    Memory Path *
+                    {t('memory.path')} *
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="px-3 py-2 bg-muted text-muted-foreground rounded-md border font-mono text-sm whitespace-nowrap">
@@ -527,14 +529,14 @@ export function Memory() {
                     </span>
                     <Input
                       id="memory-path"
-                      placeholder="e.g., global/preferences"
+                      placeholder={t('memory.pathPlaceholder')}
                       value={path}
                       onChange={(e) => setPath(e.target.value)}
                       disabled={isCreating}
                       className="font-mono flex-1"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground mb-2">Enter the path suffix (prefix is auto-added)</p>
+                  <p className="text-xs text-muted-foreground mb-2">{t('memory.pathDescription')}</p>
 
                   <div className="space-y-1.5">
                     <p className="text-xs font-medium text-muted-foreground">Quick Templates:</p>
@@ -590,32 +592,31 @@ export function Memory() {
                     }}
                     disabled={isCreating}
                   />
-                  <p className="text-xs text-muted-foreground">Leave empty to auto-generate from path (e.g., "global/preferences" → "Preferences")</p>
+                  <p className="text-xs text-muted-foreground">{t('memory.nameDescription')}</p>
                 </div>
 
                 <div className="space-y-2">
                   <label htmlFor="memory-description" className="text-sm font-medium">
-                    Description (Optional)
+                    {t('memory.descriptionLabel')} ({t('common.close')})
                   </label>
                   <Textarea
                     id="memory-description"
-                    placeholder="Description of this memory path..."
+                    placeholder={t('memory.descriptionPlaceholder')}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     disabled={isCreating}
                     rows={3}
                   />
-                  <p className="text-xs text-muted-foreground">What is this memory path for?</p>
                 </div>
 
                 {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{error}</div>}
 
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={resetForm} disabled={isCreating}>
-                    Reset
+                    {t('workspace.reset')}
                   </Button>
                   <Button type="submit" disabled={isCreating}>
-                    {isCreating ? 'Registering...' : 'Register Memory'}
+                    {isCreating ? t('memory.registering') : t('memory.registerNew')}
                   </Button>
                 </div>
               </div>
