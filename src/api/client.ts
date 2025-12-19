@@ -12,6 +12,18 @@ export type ReBACTuple = {
   created_at: string | null;
 };
 
+// Custom error class for authentication errors
+export class AuthenticationError extends Error {
+  constructor(message: string = 'Invalid or missing API key. Please check your API key and try again.') {
+    super(message);
+    this.name = 'AuthenticationError';
+    // Maintains proper stack trace for where our error was thrown (only available on V8)
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, AuthenticationError);
+    }
+  }
+}
+
 class NexusAPIClient {
   private client: AxiosInstance;
   private requestId = 0;
@@ -26,6 +38,22 @@ class NexusAPIClient {
         ...(apiKey && { Authorization: `Bearer ${apiKey}` }),
       },
     });
+
+    // Add response interceptor to catch 401 errors globally
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          // Check if API key is missing or invalid
+          const hasApiKey = !!apiKey;
+          const errorMessage = hasApiKey
+            ? 'API key is invalid or expired. Please check your API key and try again.'
+            : 'API key is missing. Please provide a valid API key to access this resource.';
+          throw new AuthenticationError(errorMessage);
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
   getBaseURL(): string {
@@ -119,7 +147,19 @@ class NexusAPIClient {
       const decodedResult = this.decodeResult(response.data.result);
       return decodedResult as T;
     } catch (error) {
+      // Re-throw AuthenticationError as-is (from interceptor)
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
       if (axios.isAxiosError(error)) {
+        // Check for 401 status code
+        if (error.response?.status === 401) {
+          const hasApiKey = !!this.client.defaults.headers.common['Authorization'];
+          const errorMessage = hasApiKey
+            ? 'API key is invalid or expired. Please check your API key and try again.'
+            : 'API key is missing. Please provide a valid API key to access this resource.';
+          throw new AuthenticationError(errorMessage);
+        }
         throw new Error(`Network error: ${error.message}${error.response?.data ? ` - ${JSON.stringify(error.response.data)}` : ''}`);
       }
       throw error;
@@ -135,7 +175,19 @@ class NexusAPIClient {
       const response = await this.client.get('/health');
       return response.data;
     } catch (error) {
+      // Re-throw AuthenticationError as-is (from interceptor)
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
       if (axios.isAxiosError(error)) {
+        // Check for 401 status code
+        if (error.response?.status === 401) {
+          const hasApiKey = !!this.client.defaults.headers.common['Authorization'];
+          const errorMessage = hasApiKey
+            ? 'API key is invalid or expired. Please check your API key and try again.'
+            : 'API key is missing. Please provide a valid API key to access this resource.';
+          throw new AuthenticationError(errorMessage);
+        }
         throw new Error(
           `Health check failed: ${error.message}${
             error.response?.data ? ` - ${JSON.stringify(error.response.data)}` : ''
@@ -159,9 +211,17 @@ class NexusAPIClient {
       const response = await this.client.get('/api/auth/whoami');
       return response.data;
     } catch (error) {
+      // Re-throw AuthenticationError as-is (from interceptor)
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 401) {
-          throw new Error('Invalid or missing API key');
+          const hasApiKey = !!this.client.defaults.headers.common['Authorization'];
+          const errorMessage = hasApiKey
+            ? 'API key is invalid or expired. Please check your API key and try again.'
+            : 'API key is missing. Please provide a valid API key to access this resource.';
+          throw new AuthenticationError(errorMessage);
         }
         throw new Error(`Authentication error: ${error.message}${error.response?.data?.message ? ` - ${error.response.data.message}` : ''}`);
       }

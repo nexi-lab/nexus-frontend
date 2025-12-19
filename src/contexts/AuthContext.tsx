@@ -30,6 +30,22 @@ const getApiURL = () => {
   // First try localStorage (user-configured URL)
   const storedUrl = localStorage.getItem(API_URL_STORAGE_KEY);
   if (storedUrl) {
+    // Auto-upgrade HTTP to HTTPS for production deployments
+    // This fixes Mixed Content errors when frontend is served over HTTPS
+    if (storedUrl.startsWith('http://') && window.location.protocol === 'https:') {
+      const httpsUrl = storedUrl.replace('http://', 'https://');
+      // Remove port 8080 if present (nginx handles this)
+      const cleanedUrl = httpsUrl.replace(':8080', '');
+      localStorage.setItem(API_URL_STORAGE_KEY, cleanedUrl);
+      return cleanedUrl;
+    }
+    // If stored URL is an IP address but we have a domain in env, use the domain
+    // This fixes ERR_CERT_COMMON_NAME_INVALID when SSL cert is for domain, not IP
+    const envUrl = (import.meta as any).env.VITE_NEXUS_API_URL;
+    if (envUrl && storedUrl.includes('34.182.34.94')) {
+      localStorage.setItem(API_URL_STORAGE_KEY, envUrl);
+      return envUrl;
+    }
     return storedUrl;
   }
 

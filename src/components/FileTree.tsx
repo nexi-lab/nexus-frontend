@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, Mail, RefreshCw, Users, User } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { AlertCircle, ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, Mail, RefreshCw, Users, User } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { AuthenticationError } from '../api/client';
 import { createFilesAPI, enrichFileWithConnector } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { fileKeys, useConnectors, useFileList } from '../hooks/useFiles';
@@ -152,7 +153,17 @@ function TreeNode({
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Use regular file listing for all paths
-  const { data: rawFiles, isLoading } = useFileList(path, isExpanded);
+  const { data: rawFiles, isLoading, error } = useFileList(path, isExpanded);
+
+  // Show authentication error if present
+  useEffect(() => {
+    if (error instanceof AuthenticationError && isExpanded) {
+      toast.error(error.message, {
+        duration: 5000,
+        description: 'Please check your API key in the connection settings.',
+      });
+    }
+  }, [error, isExpanded]);
 
   // Handle sync connector - call actual sync_mount API
   const handleSyncConnector = async (e: React.MouseEvent) => {
@@ -176,7 +187,14 @@ function TreeNode({
 
       toast.success(`Synced ${path}: ${filesScanned} files scanned, ${filesCreated} created, ${filesUpdated} updated, ${filesDeleted} deleted`);
     } catch (error) {
-      toast.error(`Failed to sync ${path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof AuthenticationError) {
+        toast.error(error.message, {
+          duration: 5000,
+          description: 'Please check your API key in the connection settings.',
+        });
+      } else {
+        toast.error(`Failed to sync ${path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -281,7 +299,16 @@ function TreeNode({
         </div>
       </FileContextMenu>
 
-      {isExpanded && !isLoading && (
+      {isExpanded && !isLoading && error && error instanceof AuthenticationError && (
+        <div className="px-2 py-2 text-xs text-destructive bg-destructive/10 rounded-md mx-2 my-1" style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}>
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="flex-1">{error.message}</span>
+          </div>
+        </div>
+      )}
+
+      {isExpanded && !isLoading && !error && (
         <div>
           {directories.map((dir) => (
             <TreeNode

@@ -15,13 +15,29 @@ import OAuthCallback from './pages/OAuthCallback';
 import './index.css';
 import { Toaster } from 'sonner';
 import { GOOGLE_CLIENT_ID } from './utils/config';
+import { AuthenticationError } from './api/client';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1,
+      retry: (_failureCount, error) => {
+        // Don't retry on authentication errors
+        if (error instanceof AuthenticationError) {
+          return false;
+        }
+        return _failureCount < 1;
+      },
       staleTime: 30000, // 30 seconds
+    },
+    mutations: {
+      retry: (_failureCount, error) => {
+        // Don't retry on authentication errors
+        if (error instanceof AuthenticationError) {
+          return false;
+        }
+        return false; // Don't retry mutations by default
+      },
     },
   },
 });

@@ -1,11 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
+import { AlertCircle, BookOpen, Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { AuthenticationError } from '../api/client';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
-import { fileKeys, useCreateDirectory, useDeleteFile, useUploadFile } from '../hooks/useFiles';
+import { fileKeys, useConnectors, useCreateDirectory, useDeleteFile, useFileList, useUploadFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
 import { copyToClipboard } from '../utils';
 import { Breadcrumb } from './Breadcrumb';
@@ -48,6 +49,11 @@ export function FileBrowser() {
   const deleteMutation = useDeleteFile();
   const uploadMutation = useUploadFile();
   const createDirMutation = useCreateDirectory();
+  
+  // Check for authentication errors on initial load
+  const { error: rootError } = useFileList('/', true);
+  const { error: connectorsError } = useConnectors(true);
+  const authError = rootError instanceof AuthenticationError ? rootError : (connectorsError instanceof AuthenticationError ? connectorsError : null);
 
   // Handle agent selection from URL parameters
   useEffect(() => {
@@ -233,12 +239,38 @@ export function FileBrowser() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
+      {/* Global Authentication Error Banner */}
+      {authError && (
+        <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-3">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-destructive">Authentication Error</p>
+                <p className="text-xs text-destructive/80">{authError.message}</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                logout();
+                setLoginDialogOpen(true);
+              }}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              Update API Key
+            </Button>
+          </div>
+        </div>
+      )}
+      
       {/* Header */}
       <header className="relative z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4 flex-1">
             <img src="/nexus-logo.png" alt="Nexus Logo" className="h-10 w-10" />
-            <h1 className="text-2xl font-bold">Nexus Hub</h1>
+            <h1 className="text-2xl font-bold">Nexus</h1>
           </div>
           <div className="flex gap-2 items-center">
             {isAuthenticated ? (
@@ -363,7 +395,7 @@ export function FileBrowser() {
       {/* Footer */}
       <footer className="border-t bg-muted/20 px-4 py-2">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="font-medium">Nexus Hub</div>
+          <div className="font-medium">Nexus</div>
           <div className="flex gap-3">
             <a href="https://github.com/nexi-lab/nexus" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
               Docs

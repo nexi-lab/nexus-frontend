@@ -1,7 +1,8 @@
-import { Code, Download, Edit, FileIcon, FileJson, FileText, Film, History, Image as ImageIcon, Loader2, Save, Trash2, X } from 'lucide-react';
+import { AlertCircle, Code, Download, Edit, FileIcon, FileJson, FileText, Film, History, Image as ImageIcon, Loader2, Save, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { AuthenticationError } from '../api/client';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { useDeleteFile, useFileContent, useUpdateFile } from '../hooks/useFiles';
@@ -261,11 +262,22 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
     }
 
     if (error) {
+      const isAuthError = error instanceof AuthenticationError;
       return (
         <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <p className="text-destructive mb-2">Failed to load file</p>
-            <p className="text-sm text-muted-foreground">{error instanceof Error ? error.message : 'Unknown error'}</p>
+          <div className="text-center max-w-md p-6">
+            <AlertCircle className={`h-12 w-12 mx-auto mb-4 ${isAuthError ? 'text-destructive' : 'text-muted-foreground'}`} />
+            <p className={`text-lg font-semibold mb-2 ${isAuthError ? 'text-destructive' : 'text-foreground'}`}>
+              {isAuthError ? 'Authentication Error' : 'Failed to load file'}
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : 'Unknown error'}
+            </p>
+            {isAuthError && (
+              <p className="text-xs text-muted-foreground">
+                Please check your API key in the connection settings or login dialog.
+              </p>
+            )}
           </div>
         </div>
       );
