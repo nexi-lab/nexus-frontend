@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, BookOpen, Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
+import { AlertCircle, BookOpen, Bot, Brain, Cloud, FolderPlus, Settings, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
@@ -17,7 +17,6 @@ import type { ContextMenuAction } from './FileContextMenu';
 import { FileUpload } from './FileUpload';
 import { FileVersionHistoryDialog } from './FileVersionHistoryDialog';
 import { LeftPanel } from './LeftPanel';
-import { LoginDialog } from './LoginDialog';
 import { ManagePermissionsDialog } from './ManagePermissionsDialog';
 import { ConnectorManagementDialog } from './ConnectorManagementDialog';
 import { RenameDialog } from './RenameDialog';
@@ -31,7 +30,7 @@ export function FileBrowser() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated, logout, apiClient, userInfo } = useAuth();
+  const { isAuthenticated, isUserAuthenticated, logout, apiClient, userInfo, userAccount, userLogout } = useAuth();
   const { t } = useTranslation();
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [currentPath, setCurrentPath] = useState('/');
@@ -45,8 +44,8 @@ export function FileBrowser() {
   const [managePermissionsFile, setManagePermissionsFile] = useState<FileInfo | null>(null);
   const [versionHistoryFile, setVersionHistoryFile] = useState<FileInfo | null>(null);
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null);
-  const [loginDialogOpen, setLoginDialogOpen] = useState(!isAuthenticated);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
+  const [welcomeApiKey, setWelcomeApiKey] = useState<{ apiKey: string; tenantId: string } | null>(null);
   const [initialSelectedAgentId, setInitialSelectedAgentId] = useState<string | undefined>(undefined);
 
   const deleteMutation = useDeleteFile();
@@ -257,8 +256,13 @@ export function FileBrowser() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                logout();
-                setLoginDialogOpen(true);
+                // Use appropriate logout function
+                if (isUserAuthenticated) {
+                  userLogout();
+                } else {
+                  logout();
+                }
+                navigate('/login');
               }}
               className="text-destructive hover:text-destructive hover:bg-destructive/10"
             >
@@ -276,15 +280,16 @@ export function FileBrowser() {
             <h1 className="text-2xl font-bold">{t('landing.nexus')}</h1>
           </div>
           <div className="flex gap-2 items-center">
-            {isAuthenticated ? (
+            {(isAuthenticated || isUserAuthenticated) ? (
               <>
-                {userInfo?.user && (
+                {/* Show user info from OAuth account or API key auth */}
+                {(userAccount?.email || userInfo?.user) && (
                   <span className="text-sm text-muted-foreground mr-2">
-                    <span className="font-medium">{t('landing.user')}:</span> {userInfo.user}
-                    {userInfo.tenant_id && (
+                    <span className="font-medium">{t('landing.user')}:</span> {userAccount?.email || userInfo?.user}
+                    {(userAccount?.tenant_id || userInfo?.tenant_id) && (
                       <>
                         <span className="mx-2">|</span>
-                        <span className="font-medium">{t('landing.tenant')}:</span> {userInfo.tenant_id}
+                        <span className="font-medium">{t('landing.tenant')}:</span> {userAccount?.tenant_id || userInfo?.tenant_id}
                       </>
                     )}
                   </span>
@@ -309,24 +314,33 @@ export function FileBrowser() {
                   <BookOpen className="h-4 w-4 mr-2" />
                   {t('landing.skill')}
                 </Button>
-                {userInfo?.is_admin && (
+                {(userAccount?.is_global_admin || userInfo?.is_admin) && (
                   <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
                     <Settings className="h-4 w-4 mr-2" />
                     {t('landing.admin')}
                   </Button>
                 )}
+                <Button variant="ghost" size="sm" onClick={() => navigate('/profile')}>
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => {
-                    logout();
-                    setLoginDialogOpen(true);
+                    // Use appropriate logout function
+                    if (isUserAuthenticated) {
+                      userLogout();
+                    } else {
+                      logout();
+                    }
+                    navigate('/login');
                   }}
                 >
                   {t('common.logout')}
                 </Button>
               </>
             ) : (
-              <Button onClick={() => setLoginDialogOpen(true)}>{t('common.login')}</Button>
+              <Button onClick={() => navigate('/login')}>{t('common.login')}</Button>
             )}
             <LanguageSelector />
             <ThemeToggle />
@@ -417,8 +431,6 @@ export function FileBrowser() {
       </footer>
 
       {/* Dialogs */}
-      <LoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} />
-
       <FileUpload open={uploadDialogOpen} onOpenChange={setUploadDialogOpen} currentPath={uploadTargetPath} />
 
       <CreateFolderDialog open={createFolderDialogOpen} onOpenChange={setCreateFolderDialogOpen} currentPath={currentPath} />

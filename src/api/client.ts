@@ -229,6 +229,291 @@ class NexusAPIClient {
     }
   }
 
+  // ===== User Authentication Methods =====
+
+  /**
+   * Register a new user account.
+   *
+   * @param params - Registration parameters
+   * @returns User information and JWT token
+   */
+  async authRegister(params: {
+    email: string;
+    password: string;
+    username?: string;
+    display_name?: string;
+  }): Promise<{
+    user_id: string;
+    email: string;
+    username: string | null;
+    display_name: string | null;
+    token: string;
+    message: string;
+  }> {
+    const response = await this.client.post('/auth/register', params);
+    return response.data;
+  }
+
+  /**
+   * Login with email/username and password.
+   *
+   * @param params - Login credentials
+   * @returns User information and JWT token
+   */
+  async authLogin(params: {
+    identifier: string; // email or username
+    password: string;
+  }): Promise<{
+    token: string;
+    user: {
+      user_id: string;
+      email: string;
+      username: string | null;
+      display_name: string | null;
+      avatar_url: string | null;
+      primary_auth_method: string;
+      is_global_admin: boolean;
+      email_verified: boolean;
+      api_key: string | null;
+      tenant_id: string | null;
+      created_at: string;
+      last_login_at: string | null;
+    };
+    message: string;
+  }> {
+    const response = await this.client.post('/auth/login', params);
+    return response.data;
+  }
+
+  /**
+   * Get current user profile.
+   *
+   * @returns Current user information
+   */
+  async authGetProfile(): Promise<{
+    user_id: string;
+    email: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    primary_auth_method: string;
+    is_global_admin: boolean;
+    email_verified: boolean;
+    api_key: string | null;
+    tenant_id: string | null;
+    created_at: string;
+    last_login_at: string | null;
+  }> {
+    const response = await this.client.get('/auth/me');
+    return response.data;
+  }
+
+  /**
+   * Update current user profile.
+   *
+   * @param params - Profile update parameters
+   * @returns Updated user information
+   */
+  async authUpdateProfile(params: {
+    display_name?: string;
+    avatar_url?: string;
+  }): Promise<{
+    user_id: string;
+    email: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    primary_auth_method: string;
+    is_global_admin: boolean;
+    email_verified: boolean;
+    api_key: string | null;
+    tenant_id: string | null;
+    created_at: string;
+    last_login_at: string | null;
+  }> {
+    const response = await this.client.patch('/auth/me', params);
+    return response.data;
+  }
+
+  /**
+   * Get current user information.
+   *
+   * @returns Current user account information
+   */
+  async authGetMe(): Promise<{
+    user_id: string;
+    email: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    primary_auth_method: string;
+    is_global_admin: boolean;
+    email_verified: boolean;
+    api_key: string | null;
+    tenant_id: string | null;
+    created_at: string;
+    last_login_at: string | null;
+  }> {
+    const response = await this.client.get('/auth/me');
+    return response.data;
+  }
+
+  /**
+   * Change user password.
+   *
+   * @param params - Password change parameters
+   * @returns Success status
+   */
+  async authChangePassword(params: {
+    old_password: string;
+    new_password: string;
+  }): Promise<{
+    message: string;
+    success: boolean;
+  }> {
+    const response = await this.client.post('/auth/change-password', params);
+    return response.data;
+  }
+
+  /**
+   * Update API client token (for use after login).
+   *
+   * @param token - JWT token
+   */
+  setAuthToken(token: string | null) {
+    if (token) {
+      this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      delete this.client.defaults.headers.common['Authorization'];
+    }
+  }
+
+  /**
+   * Get Google OAuth authorization URL.
+   */
+  async authGoogleAuthorize(): Promise<{
+    auth_url: string;
+    state: string;
+    message: string;
+  }> {
+    const response = await this.client.get('/auth/oauth/google/authorize');
+    return response.data;
+  }
+
+  /**
+   * Check OAuth user and get confirmation data if new user.
+   */
+  async authOAuthCheck(params: {
+    provider: string;
+    code: string;
+    state: string;
+  }): Promise<
+    | {
+        needs_confirmation: false;
+        token: string;
+        user: {
+          user_id: string;
+          email: string;
+          username: string | null;
+          display_name: string | null;
+          avatar_url: string | null;
+          primary_auth_method: string;
+          is_global_admin: boolean;
+          email_verified: boolean;
+          created_at: string;
+          last_login_at: string | null;
+        };
+        is_new_user: boolean;
+        api_key: string | null;
+        tenant_id: string | null;
+        message: string;
+      }
+    | {
+        needs_confirmation: true;
+        pending_token: string;
+        user_info: {
+          email: string;
+          display_name: string | null;
+          avatar_url: string | null;
+          oauth_provider: string;
+          oauth_code: string;
+          oauth_state: string | null;
+        };
+        tenant_info: {
+          tenant_id: string;
+          name: string;
+          domain: string | null;
+          description: string | null;
+          is_personal: boolean;
+          can_edit_name: boolean;
+        };
+        message: string;
+      }
+  > {
+    const response = await this.client.post('/auth/oauth/check', params);
+    return response.data;
+  }
+
+  /**
+   * Confirm OAuth user registration after reviewing info.
+   */
+  async authOAuthConfirm(params: {
+    pending_token: string;
+    tenant_name?: string | null;
+    tenant_slug?: string | null;
+  }): Promise<{
+    token: string;
+    user: {
+      user_id: string;
+      email: string;
+      username: string | null;
+      display_name: string | null;
+      avatar_url: string | null;
+      primary_auth_method: string;
+      is_global_admin: boolean;
+      email_verified: boolean;
+      created_at: string;
+      last_login_at: string | null;
+    };
+    is_new_user: boolean;
+    api_key: string | null;
+    tenant_id: string | null;
+    message: string;
+  }> {
+    const response = await this.client.post('/auth/oauth/confirm', params);
+    return response.data;
+  }
+
+  /**
+   * Handle OAuth callback.
+   */
+  async authOAuthCallback(params: {
+    provider: string;
+    code: string;
+    state: string;
+  }): Promise<{
+    token: string;
+    user: {
+      user_id: string;
+      email: string;
+      username: string | null;
+      display_name: string | null;
+      avatar_url: string | null;
+      primary_auth_method: string;
+      is_global_admin: boolean;
+      email_verified: boolean;
+      created_at: string;
+      last_login_at: string | null;
+    };
+    is_new_user: boolean;
+    api_key: string | null;
+    tenant_id: string | null;
+    message: string;
+  }> {
+    const response = await this.client.post('/auth/oauth/callback', params);
+    return response.data;
+  }
+
   // Admin API - Create a new API key for a user
   async adminCreateKey(params: {
     user_id: string;

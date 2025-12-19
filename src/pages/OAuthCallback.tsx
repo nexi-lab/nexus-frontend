@@ -1,16 +1,104 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import OAuthConfirmation from './OAuthConfirmation';
+
+type ConfirmationData = {
+  pending_token: string;
+  user_info: {
+    email: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    oauth_provider: string;
+    oauth_code: string;
+    oauth_state: string | null;
+  };
+  tenant_info: {
+    tenant_id: string;
+    name: string;
+    domain: string | null;
+    description: string | null;
+    is_personal: boolean;
+    can_edit_name: boolean;
+  };
+};
 
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { apiClient } = useAuth();
-  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
+  const [status, setStatus] = useState<'processing' | 'success' | 'error' | 'confirmation'>('processing');
   const [message, setMessage] = useState('Processing OAuth callback...');
+  const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
+
+  // Prevent double-calling in React StrictMode (development)
+  const hasProcessedRef = useRef(false);
+
+  const handleUserAuthCallback = async (code: string, state: string) => {
+    try {
+      setStatus('processing');
+      setMessage('Signing in with Google...');
+
+      // Use the new check endpoint to see if user needs confirmation
+      const response = await apiClient.authOAuthCheck({
+        provider: 'google',
+        code,
+        state,
+      });
+
+      // Check if confirmation is needed
+      if (response.needs_confirmation) {
+        // New user - show confirmation page
+        setStatus('confirmation');
+        setConfirmationData({
+          pending_token: response.pending_token,
+          user_info: response.user_info,
+          tenant_info: response.tenant_info,
+        });
+        return;
+      }
+
+      // Existing user - complete login immediately
+      const token = response.token;
+      const userAccount = response.user;
+
+      localStorage.setItem('nexus_jwt_token', token);
+      localStorage.setItem('nexus_user_account', JSON.stringify(userAccount));
+
+      // Store API key and tenant ID (for both new and existing users)
+      if (response.api_key) {
+        localStorage.setItem('nexus_user_api_key', response.api_key);
+      }
+      if (response.tenant_id) {
+        localStorage.setItem('nexus_tenant_id', response.tenant_id);
+      }
+
+      // Clear sessionStorage
+      sessionStorage.removeItem('oauth_state');
+
+      setStatus('success');
+      setMessage('Successfully signed in! Redirecting...');
+
+      // Redirect to home page - the auth context will pick up the token from localStorage
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
+    } catch (error: any) {
+      console.error('Failed to complete Google sign-in:', error);
+      setStatus('error');
+      setMessage(`Failed to sign in: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
+      setTimeout(() => navigate('/login'), 3000);
+    }
+  };
 
   useEffect(() => {
+    // Prevent double-calling in React 18 StrictMode
+    if (hasProcessedRef.current) {
+      return;
+    }
+    hasProcessedRef.current = true;
+
     const code = searchParams.get('code');
     const state = searchParams.get('state');
     const error = searchParams.get('error');
@@ -24,7 +112,9 @@ export default function OAuthCallback() {
         window.opener.postMessage({ type: 'oauth_error', error }, window.location.origin);
         setTimeout(() => window.close(), 2000);
       } else {
-        setTimeout(() => navigate('/integrations'), 3000);
+        // Check if this is user auth or backend integration
+        const isUserAuth = sessionStorage.getItem('oauth_state');
+        setTimeout(() => navigate(isUserAuth ? '/login' : '/integrations'), 3000);
       }
       return;
     }
@@ -38,8 +128,19 @@ export default function OAuthCallback() {
         window.opener.postMessage({ type: 'oauth_error', error: 'Missing code or state' }, window.location.origin);
         setTimeout(() => window.close(), 2000);
       } else {
-        setTimeout(() => navigate('/integrations'), 3000);
+        const isUserAuth = sessionStorage.getItem('oauth_state');
+        setTimeout(() => navigate(isUserAuth ? '/login' : '/integrations'), 3000);
       }
+      return;
+    }
+
+    // Check if this is user authentication (Google SSO login) or backend integration
+    const userAuthState = sessionStorage.getItem('oauth_state');
+    const isUserAuth = userAuthState === state;
+
+    if (isUserAuth) {
+      // Handle user authentication callback
+      handleUserAuthCallback(code, state);
       return;
     }
 
@@ -114,6 +215,11 @@ export default function OAuthCallback() {
 
     exchangeCode();
   }, [searchParams, navigate, apiClient]);
+
+  // Show confirmation page for new users
+  if (status === 'confirmation' && confirmationData) {
+    return <OAuthConfirmation confirmationData={confirmationData} />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
