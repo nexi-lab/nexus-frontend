@@ -2,7 +2,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { FileBrowser } from './components/FileBrowser';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AdminSettings } from './pages/AdminSettings';
@@ -13,6 +13,9 @@ import { Agent } from './pages/Agent';
 import { Workspace } from './pages/Workspace';
 import { Memory } from './pages/Memory';
 import OAuthCallback from './pages/OAuthCallback';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import UserProfile from './pages/UserProfile';
 import './index.css';
 import { Toaster } from 'sonner';
 import { GOOGLE_CLIENT_ID } from './utils/config';
@@ -43,6 +46,16 @@ const queryClient = new QueryClient({
   },
 });
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isUserAuthenticated } = useAuth();
+
+  if (!isUserAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppContent() {
   const { resolvedTheme } = useTheme();
 
@@ -62,16 +75,21 @@ function AppContent() {
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<FileBrowser />} />
-              <Route path="/admin" element={<AdminSettings />} />
-              <Route path="/integration" element={<Integration />} />
-              <Route path="/connector" element={<Connector />} />
-              <Route path="/skill" element={<Skill />} />
-              <Route path="/agent" element={<Agent />} />
-              <Route path="/workspace" element={<Workspace />} />
-              <Route path="/memory" element={<Memory />} />
+              <Route path="/" element={<ProtectedRoute><FileBrowser /></ProtectedRoute>} />
+              <Route path="/admin" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
+              <Route path="/integration" element={<ProtectedRoute><Integration /></ProtectedRoute>} />
+              <Route path="/connector" element={<ProtectedRoute><Connector /></ProtectedRoute>} />
+              <Route path="/skill" element={<ProtectedRoute><Skill /></ProtectedRoute>} />
+              <Route path="/agent" element={<ProtectedRoute><Agent /></ProtectedRoute>} />
+              <Route path="/workspace" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
+              <Route path="/memory" element={<ProtectedRoute><Memory /></ProtectedRoute>} />
               <Route path="/mounts" element={<Navigate to="/connector" replace />} />
               <Route path="/oauth/callback" element={<OAuthCallback />} />
+
+              {/* User Authentication Routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
         </QueryClientProvider>
