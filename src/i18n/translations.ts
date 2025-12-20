@@ -630,3 +630,4 @@ export const translations: Record<'en' | 'ch', Record<TranslationKey, string>> =
     'connector.deleteFailed': '删除连接器失败 {mount}',
   },
 };
+
