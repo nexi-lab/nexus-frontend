@@ -45,7 +45,6 @@ export function FileBrowser() {
   const [versionHistoryFile, setVersionHistoryFile] = useState<FileInfo | null>(null);
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
-  const [welcomeApiKey, setWelcomeApiKey] = useState<{ apiKey: string; tenantId: string } | null>(null);
   const [initialSelectedAgentId, setInitialSelectedAgentId] = useState<string | undefined>(undefined);
 
   const deleteMutation = useDeleteFile();
