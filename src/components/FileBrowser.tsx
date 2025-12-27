@@ -319,9 +319,9 @@ export function FileBrowser() {
                     {t('landing.admin')}
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => navigate('/profile')}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/settings')}>
                   <User className="h-4 w-4 mr-2" />
-                  Profile
+                  Settings
                 </Button>
                 <Button
                   variant="outline"

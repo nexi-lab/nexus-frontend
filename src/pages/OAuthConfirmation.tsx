@@ -72,8 +72,13 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
       });
 
       // Store JWT token and user account
+      const userAccount = {
+        ...response.user,
+        api_key: response.api_key, // Include API key in userAccount object
+        tenant_id: response.tenant_id, // Include tenant ID in userAccount object
+      };
       localStorage.setItem('nexus_jwt_token', response.token);
-      localStorage.setItem('nexus_user_account', JSON.stringify(response.user));
+      localStorage.setItem('nexus_user_account', JSON.stringify(userAccount));
 
       // Store API key and tenant ID
       if (response.api_key) {

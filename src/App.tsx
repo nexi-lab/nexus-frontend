@@ -15,7 +15,7 @@ import { Memory } from './pages/Memory';
 import OAuthCallback from './pages/OAuthCallback';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import UserProfile from './pages/UserProfile';
+import Settings from './pages/Settings';
 import './index.css';
 import { Toaster } from 'sonner';
 import { GOOGLE_CLIENT_ID } from './utils/config';
@@ -89,7 +89,8 @@ function AppContent() {
               {/* User Authentication Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+              <Route path="/profile" element={<Navigate to="/settings" replace />} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
         </QueryClientProvider>

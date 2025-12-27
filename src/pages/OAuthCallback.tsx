@@ -61,7 +61,11 @@ export default function OAuthCallback() {
 
       // Existing user - complete login immediately
       const token = response.token;
-      const userAccount = response.user;
+      const userAccount = {
+        ...response.user,
+        api_key: response.api_key, // Include API key in userAccount object
+        tenant_id: response.tenant_id, // Include tenant ID in userAccount object
+      };
 
       localStorage.setItem('nexus_jwt_token', token);
       localStorage.setItem('nexus_user_account', JSON.stringify(userAccount));
