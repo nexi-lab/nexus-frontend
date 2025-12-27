@@ -44,6 +44,7 @@ interface AuthContextType {
   userLogout: () => void;
   updateUserProfile: (displayName?: string, avatarUrl?: string) => Promise<UserAccount>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -347,6 +348,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const deleteAccount = async (): Promise<void> => {
+    if (!userAccount) {
+      throw new Error('No user account found');
+    }
+
+    // Call deprovision_user RPC method
+    await apiClient.call('deprovision_user', {
+      user_id: userAccount.user_id,
+      tenant_id: userAccount.tenant_id,
+      delete_user_record: true,
+      force: false,
+    });
+
+    // Clear all local state and logout
+    userLogout();
+  };
+
   const value: AuthContextType = {
     // API Key authentication
     apiKey,
@@ -366,6 +384,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     userLogout,
     updateUserProfile,
     changePassword,
+    deleteAccount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
