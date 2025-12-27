@@ -29,7 +29,7 @@ class NexusAPIClient {
   private requestId = 0;
   private baseURL: string;
 
-  constructor(baseURL: string = 'http://localhost:8080', apiKey?: string) {
+  constructor(baseURL: string = 'http://localhost:2026', apiKey?: string) {
     this.baseURL = baseURL;
     this.client = axios.create({
       baseURL,

@@ -3,7 +3,7 @@
 ## Prerequisites
 
 1. **Node.js 18+** installed
-2. **Nexus RPC server** running on port 8080
+2. **Nexus RPC server** running on port 2026
 
 ## Step 1: Start the Nexus RPC Server
 
@@ -18,16 +18,16 @@ source .venv/bin/activate  # On macOS/Linux
 .venv\Scripts\activate  # On Windows
 
 # Start the RPC server
-python -m nexus.cli server --port 8080
+python -m nexus.cli server --port 2026
 
 # Or use the CLI
-nexus server --port 8080
+nexus server --port 2026
 ```
 
 You should see:
 ```
-Starting Nexus RPC server on 0.0.0.0:8080
-Endpoint: http://0.0.0.0:8080/api/nfs/{method}
+Starting Nexus RPC server on 0.0.0.0:2026
+Endpoint: http://0.0.0.0:2026/api/nfs/{method}
 ```
 
 ## Step 2: Install Frontend Dependencies
@@ -45,13 +45,13 @@ The `.env` file is already created with defaults. You can connect to either:
 
 ### Option A: Local Server (Default)
 ```env
-VITE_API_URL=http://localhost:8080
+VITE_API_URL=http://localhost:2026
 VITE_API_KEY=
 ```
 
 ### Option B: Deployed GCP Server
 ```env
-VITE_API_URL=http://35.230.4.67:8080
+VITE_API_URL=http://35.230.4.67:2026
 VITE_API_KEY=
 ```
 
@@ -103,7 +103,7 @@ Open your browser to: **http://localhost:5173**
 **Error**: Network error or "Connection refused"
 
 **Solution**:
-1. Verify Nexus RPC server is running on port 8080
+1. Verify Nexus RPC server is running on port 2026
 2. Check the `.env` file has correct `VITE_API_URL`
 3. Restart the dev server after changing `.env`
 

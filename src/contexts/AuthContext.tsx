@@ -63,8 +63,8 @@ const getApiURL = () => {
     // This fixes Mixed Content errors when frontend is served over HTTPS
     if (storedUrl.startsWith('http://') && window.location.protocol === 'https:') {
       const httpsUrl = storedUrl.replace('http://', 'https://');
-      // Remove port 8080 if present (nginx handles this)
-      const cleanedUrl = httpsUrl.replace(':8080', '');
+      // Remove port 2026 if present (nginx handles this)
+      const cleanedUrl = httpsUrl.replace(':2026', '');
       localStorage.setItem(API_URL_STORAGE_KEY, cleanedUrl);
       return cleanedUrl;
     }
@@ -82,7 +82,7 @@ const getApiURL = () => {
   const apiURL =
     (import.meta as any).env.VITE_NEXUS_API_URL !== undefined && (import.meta as any).env.VITE_NEXUS_API_URL !== ''
       ? (import.meta as any).env.VITE_NEXUS_API_URL
-      : 'http://localhost:8080'; // Default to localhost:8080 if not configured
+      : 'http://localhost:2026'; // Default to localhost:2026 if not configured
   return apiURL;
 };
 
