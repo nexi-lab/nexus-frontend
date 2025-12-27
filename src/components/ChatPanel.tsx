@@ -363,7 +363,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     assistantId: 'agent',
     apiKey: apiKey || '', // Will be LangGraph key for LangGraph agents
     nexusApiKey: apiKey || '', // Nexus API key for tool calls
-    nexusServerUrl: import.meta.env.VITE_NEXUS_SERVER_URL || import.meta.env.VITE_API_URL || 'http://localhost:8080', // Nexus backend URL for LangGraph to connect
+    nexusServerUrl: import.meta.env.VITE_NEXUS_SERVER_URL || import.meta.env.VITE_API_URL || 'http://localhost:2026', // Nexus backend URL for LangGraph to connect
     sandboxId: undefined, // Sandbox ID for code execution
     threadId: undefined, // Start with no thread
     userId: userInfo?.subject_id || '',

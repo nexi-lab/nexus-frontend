@@ -22,9 +22,9 @@ RUN npm ci --prefer-offline --no-audit
 COPY . .
 
 # Build argument for backend API URL (can be overridden at build time)
-ARG VITE_NEXUS_API_URL=http://localhost:8080
+ARG VITE_NEXUS_API_URL=http://localhost:2026
 ARG VITE_LANGGRAPH_API_URL=http://localhost:2024
-ARG VITE_NEXUS_SERVER_URL=http://nexus:8080
+ARG VITE_NEXUS_SERVER_URL=http://nexus:2026
 
 # Create environment file for Docker build (overrides any local env files)
 RUN echo "VITE_NEXUS_API_URL=${VITE_NEXUS_API_URL}" > .env.production.local && \

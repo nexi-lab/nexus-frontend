@@ -103,7 +103,7 @@ Once configured, deployments happen automatically:
 2. **GitHub Actions will:**
    - Checkout code
    - Install dependencies
-   - Build production bundle with `VITE_API_URL=http://35.230.4.67:8080`
+   - Build production bundle with `VITE_API_URL=http://35.230.4.67:2026`
    - Deploy to Firebase Hosting
 
 3. **Monitor progress:**
@@ -140,7 +140,7 @@ firebase deploy --only hosting
 
 ### [.env.production](.env.production)
 - Production environment variables
-- Backend API: `http://35.230.4.67:8080`
+- Backend API: `http://35.230.4.67:2026`
 
 ### [.github/workflows/firebase-deploy.yml](.github/workflows/firebase-deploy.yml)
 - GitHub Actions workflow
@@ -159,7 +159,7 @@ Check the build logs in GitHub Actions. Common issues:
 ### Deployment Succeeds but Site is Broken
 
 1. **API Connection Issues:**
-   - Check if backend is accessible: `curl http://35.230.4.67:8080/health`
+   - Check if backend is accessible: `curl http://35.230.4.67:2026/health`
    - Verify CORS settings on backend allow Firebase domain
 
 2. **Routing Issues:**
@@ -185,7 +185,7 @@ firebase use YOUR_PROJECT_ID
 ## Security Notes
 
 1. **API Endpoint Security:**
-   - Currently using HTTP: `http://35.230.4.67:8080`
+   - Currently using HTTP: `http://35.230.4.67:2026`
    - **RECOMMENDED:** Migrate to HTTPS for production
    - Consider setting up Cloud Load Balancer with SSL
 
@@ -218,4 +218,4 @@ Typical costs for low-medium traffic: **$0-5/month**
 
 - Firebase Docs: https://firebase.google.com/docs/hosting
 - GitHub Actions Logs: https://github.com/nexi-lab/nexus-frontend/actions
-- Nexus Backend: http://35.230.4.67:8080
+- Nexus Backend: http://35.230.4.67:2026
