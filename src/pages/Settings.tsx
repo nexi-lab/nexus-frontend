@@ -4,10 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { Copy, Eye, EyeOff, Check, ArrowLeft, User, Key, LogOut } from 'lucide-react';
 import { copyToClipboard } from '../utils';
 import { Button } from '../components/ui/button';
+import { DeleteAccountDialog } from '../components/DeleteAccountDialog';
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { userAccount, isUserAuthenticated, changePassword, userLogout, logout } = useAuth();
+  const { userAccount, isUserAuthenticated, changePassword, deleteAccount, userLogout, logout } = useAuth();
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -19,6 +20,8 @@ export default function Settings() {
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isUserAuthenticated) {
@@ -79,6 +82,17 @@ export default function Settings() {
       return '*'.repeat(key.length);
     }
     return key.slice(0, 8) + '*'.repeat(key.length - 16) + key.slice(-8);
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteAccount();
+      // Redirect to login page (will happen automatically after userLogout in deleteAccount)
+      navigate('/login');
+    } catch (error) {
+      // Error will be handled by the dialog component
+      throw error;
+    }
   };
 
   if (!userAccount) {
@@ -310,7 +324,30 @@ export default function Settings() {
                 </form>
               </div>
             )}
+
+            {/* Delete Account - Danger Zone */}
+            <div className="px-6 py-4 border-t-2 border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20">
+              <h2 className="text-lg font-medium text-red-900 dark:text-red-100 mb-2">Danger Zone</h2>
+              <p className="text-sm text-red-800 dark:text-red-200 mb-4">
+                Permanently delete your account and all associated data. This action cannot be undone.
+              </p>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete My Account
+              </Button>
+            </div>
           </div>
+
+          {/* Delete Account Dialog */}
+          <DeleteAccountDialog
+            open={deleteDialogOpen}
+            onOpenChange={setDeleteDialogOpen}
+            onConfirm={handleDeleteAccount}
+            userEmail={userAccount.email}
+          />
         </div>
       </main>
     </div>

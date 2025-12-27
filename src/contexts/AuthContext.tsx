@@ -44,6 +44,7 @@ interface AuthContextType {
   userLogout: () => void;
   updateUserProfile: (displayName?: string, avatarUrl?: string) => Promise<UserAccount>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -163,6 +164,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     fetchUserData();
   }, []); // Only run once on mount
+
+  // Sync userInfo from userAccount for OAuth users
+  // This ensures FileTree and other components that rely on userInfo work properly
+  useEffect(() => {
+    if (userAccount) {
+      const derivedUserInfo: UserInfo = {
+        subject_type: 'user',
+        subject_id: userAccount.user_id,
+        tenant_id: userAccount.tenant_id || undefined,
+        is_admin: userAccount.is_global_admin,
+        user: userAccount.user_id,
+      };
+      setUserInfo(derivedUserInfo);
+      localStorage.setItem(USER_INFO_STORAGE_KEY, JSON.stringify(derivedUserInfo));
+    }
+  }, [userAccount]);
 
   const login = async (newApiKey: string): Promise<UserInfo> => {
     // Create a temporary client with the new API key
@@ -303,8 +320,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userLogout = () => {
     setJwtToken(null);
     setUserAccount(null);
+    setUserInfo(null);
     localStorage.removeItem(JWT_TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_ACCOUNT_STORAGE_KEY);
+    localStorage.removeItem(USER_INFO_STORAGE_KEY);
     localStorage.removeItem('nexus_user_api_key');
     localStorage.removeItem('nexus_tenant_id');
     apiClient.setAuthToken(null);
@@ -329,6 +348,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const deleteAccount = async (): Promise<void> => {
+    if (!userAccount) {
+      throw new Error('No user account found');
+    }
+
+    // Call deprovision_user RPC method
+    await apiClient.call('deprovision_user', {
+      user_id: userAccount.user_id,
+      tenant_id: userAccount.tenant_id,
+      delete_user_record: true,
+      force: false,
+    });
+
+    // Clear all local state and logout
+    userLogout();
+  };
+
   const value: AuthContextType = {
     // API Key authentication
     apiKey,
@@ -348,6 +384,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     userLogout,
     updateUserProfile,
     changePassword,
+    deleteAccount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
