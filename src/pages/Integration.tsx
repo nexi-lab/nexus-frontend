@@ -120,9 +120,11 @@ export function IntegrationsPanel({
     // For both new connections and reconnections, immediately get auth URL and open it
     try {
       setLoading(true);
+      // Use dynamic redirect URI based on current origin
+      const redirectUri = `${window.location.origin}/oauth/callback`;
       const result = await apiClient.call<{ url: string; state: string }>('oauth_get_auth_url', {
         provider: providerName,
-        redirect_uri: 'http://localhost:5173/oauth/callback',
+        redirect_uri: redirectUri,
       });
       
       // Store provider and state for callback handling

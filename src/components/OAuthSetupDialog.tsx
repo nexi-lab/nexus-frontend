@@ -121,9 +121,11 @@ export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provid
       }
 
       // No credentials exist - proceed with OAuth flow
+      // Use dynamic redirect URI based on current origin
+      const redirectUri = `${window.location.origin}/oauth/callback`;
       const result = await apiClient.call<{ url: string; state: string }>('oauth_get_auth_url', {
         provider: providerName,
-        redirect_uri: 'http://localhost:5173/oauth/callback',
+        redirect_uri: redirectUri,
       });
       
       setAuthUrl(result.url);
