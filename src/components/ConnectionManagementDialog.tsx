@@ -10,11 +10,13 @@ import {
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { useAuth } from '../contexts/AuthContext'
-import { Loader2, CheckCircle2, XCircle, Wifi, WifiOff } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, Wifi, WifiOff, Eye, EyeOff, Copy, Check } from 'lucide-react'
 
 interface ConnectionManagementDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  selectedAgentId: string | null // Current agent to view
+  agentApiKey?: string // Agent's API key from backend config
 }
 
 interface ConnectionStatus {
@@ -25,32 +27,41 @@ interface ConnectionStatus {
   userInfo?: any
 }
 
-export function ConnectionManagementDialog({ open, onOpenChange }: ConnectionManagementDialogProps) {
-  const { apiKey, userInfo, apiClient, updateConnection } = useAuth()
+export function ConnectionManagementDialog({ open, onOpenChange, selectedAgentId, agentApiKey }: ConnectionManagementDialogProps) {
+  const { userInfo, apiClient } = useAuth()
   const [serverUrl, setServerUrl] = useState('')
   const [newApiKey, setNewApiKey] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  // Load current settings when dialog opens
+  // Load agent settings from backend when dialog opens
   useEffect(() => {
-    if (open) {
+    if (open && selectedAgentId) {
+      // Use current server URL and agent's API key from backend config
       const currentUrl = apiClient.getBaseURL()
       setServerUrl(currentUrl || '')
-      setNewApiKey(apiKey || '')
+      setNewApiKey(agentApiKey || '')
       setError(null)
 
-      // Get current connection status
-      checkConnectionStatus()
+      // Get current connection status with the agent's API key directly
+      checkConnectionStatus(agentApiKey)
     }
-  }, [open, apiClient, apiKey])
+  }, [open, selectedAgentId, apiClient, agentApiKey])
 
-  const checkConnectionStatus = async () => {
+  const checkConnectionStatus = async (apiKeyToUse?: string) => {
     try {
-      const health = await apiClient.health()
-      const whoami = await apiClient.whoami()
+      // Use agent's API key to check connection status
+      const { default: NexusAPIClient } = await import('../api/client')
+      const testClient = new NexusAPIClient(
+        apiClient.getBaseURL() || undefined,
+        apiKeyToUse || newApiKey || undefined // Use passed key or state
+      )
+
+      const health = await testClient.health()
+      const whoami = await testClient.whoami()
 
       setConnectionStatus({
         connected: health.status === 'healthy',
@@ -64,6 +75,16 @@ export function ConnectionManagementDialog({ open, onOpenChange }: ConnectionMan
         connected: false,
         message: err instanceof Error ? err.message : 'Connection failed',
       })
+    }
+  }
+
+  const handleCopyApiKey = async () => {
+    try {
+      await navigator.clipboard.writeText(newApiKey)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
     }
   }
 
@@ -122,43 +143,6 @@ export function ConnectionManagementDialog({ open, onOpenChange }: ConnectionMan
     }
   }
 
-  const handleSave = async () => {
-    setError(null)
-    setIsLoading(true)
-
-    try {
-      // Validate inputs
-      if (!serverUrl.trim()) {
-        setError('Server URL is required')
-        setIsLoading(false)
-        return
-      }
-
-      if (!newApiKey.trim()) {
-        setError('API key is required')
-        setIsLoading(false)
-        return
-      }
-
-      // Update connection in AuthContext
-      await updateConnection(serverUrl.trim(), newApiKey.trim())
-
-      // Close dialog
-      onOpenChange(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update connection')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleCancel = () => {
-    setServerUrl('')
-    setNewApiKey('')
-    setError(null)
-    setConnectionStatus(null)
-    onOpenChange(false)
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,7 +159,7 @@ export function ConnectionManagementDialog({ open, onOpenChange }: ConnectionMan
             Nexus Connection Settings
           </DialogTitle>
           <DialogDescription>
-            Configure your connection to the Nexus server
+            View this agent's Nexus connection settings and test the connection.
           </DialogDescription>
         </DialogHeader>
 
@@ -219,49 +203,81 @@ export function ConnectionManagementDialog({ open, onOpenChange }: ConnectionMan
             </div>
           )}
 
-          {/* Current Connection Info */}
-          {userInfo && (
+          {/* Agent Connection Info */}
+          {connectionStatus?.authenticated && connectionStatus.userInfo && (
             <div className="p-3 rounded-md bg-muted/50 text-sm space-y-1">
-              <p className="font-medium">Current Connection:</p>
+              <p className="font-medium">Agent Connection:</p>
               <div className="text-xs text-muted-foreground space-y-0.5 font-mono">
-                <p>Server: {apiClient.getBaseURL() || 'Same origin'}</p>
-                <p>User: {userInfo.user || userInfo.subject_id}</p>
-                {userInfo.tenant_id && <p>Tenant: {userInfo.tenant_id}</p>}
+                <p>Server: {serverUrl}</p>
+                <p>Identity: {connectionStatus.userInfo.subject_id}</p>
+                {connectionStatus.userInfo.tenant_id && <p>Tenant: {connectionStatus.userInfo.tenant_id}</p>}
               </div>
             </div>
           )}
 
-          {/* Server URL Input */}
+          {/* Server URL (Read-only) */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
               Server URL
             </label>
             <Input
               type="url"
-              placeholder="https://nexus.nexilab.co"
               value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-              disabled={isLoading}
+              readOnly
+              disabled
+              className="bg-muted"
             />
             <p className="text-xs text-muted-foreground">
-              The URL of your Nexus server (e.g., https://nexus.nexilab.co)
+              The Nexus server this agent connects to
             </p>
           </div>
 
-          {/* API Key Input */}
+          {/* API Key (Read-only with show/hide and copy) */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              API Key
+              Agent API Key
             </label>
-            <Input
-              type="password"
-              placeholder="nxa_..."
-              value={newApiKey}
-              onChange={(e) => setNewApiKey(e.target.value)}
-              disabled={isLoading}
-            />
+            <div className="relative">
+              <Input
+                type="text"
+                value={showApiKey ? newApiKey : '•'.repeat(newApiKey.length)}
+                readOnly
+                className="bg-muted font-mono text-xs pr-20"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  title={showApiKey ? 'Hide API key' : 'Show API key'}
+                >
+                  {showApiKey ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={handleCopyApiKey}
+                  title="Copy API key"
+                  disabled={!newApiKey}
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Your Nexus API key for authentication
+              This agent's API key from backend config (read-only)
             </p>
           </div>
 
@@ -270,7 +286,7 @@ export function ConnectionManagementDialog({ open, onOpenChange }: ConnectionMan
             type="button"
             variant="outline"
             onClick={handleTestConnection}
-            disabled={isTesting || isLoading || !serverUrl.trim()}
+            disabled={isTesting || !serverUrl.trim() || !newApiKey.trim()}
             className="w-full"
           >
             {isTesting ? (
@@ -292,22 +308,8 @@ export function ConnectionManagementDialog({ open, onOpenChange }: ConnectionMan
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={handleCancel} disabled={isLoading}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={isLoading || !serverUrl.trim() || !newApiKey.trim()}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save & Connect'
-            )}
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            Close
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -146,12 +146,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const tempClient = new NexusAPIClient(getApiURL(), undefined);
         tempClient.setAuthToken(jwtToken);
 
-        // Fetch fresh user data from backend
-        const freshUserData = await tempClient.authGetMe();
+        // Fetch user info using whoami (simpler and more reliable than /auth/me)
+        const whoamiData = await tempClient.whoami();
 
-        // Update user account with fresh data
-        setUserAccount(freshUserData);
-        localStorage.setItem(USER_ACCOUNT_STORAGE_KEY, JSON.stringify(freshUserData));
+        // Set userInfo directly from whoami response
+        if (whoamiData.authenticated) {
+          const userInfoData: UserInfo = {
+            subject_type: whoamiData.subject_type,
+            subject_id: whoamiData.subject_id,
+            tenant_id: whoamiData.tenant_id,
+            is_admin: whoamiData.is_admin,
+            user: whoamiData.user || whoamiData.subject_id,
+          };
+          setUserInfo(userInfoData);
+          localStorage.setItem(USER_INFO_STORAGE_KEY, JSON.stringify(userInfoData));
+
+          // Keep userAccount in sync (for OAuth users who need email, display_name, etc.)
+          // This is a simplified version - full account data comes from OAuth login response
+          if (userAccount) {
+            // Update tenant_id in userAccount from whoami (source of truth)
+            const updatedAccount = {
+              ...userAccount,
+              tenant_id: whoamiData.tenant_id || null,
+            };
+            setUserAccount(updatedAccount);
+            localStorage.setItem(USER_ACCOUNT_STORAGE_KEY, JSON.stringify(updatedAccount));
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch user data:', error);
         // If token is invalid/expired, clear auth state
@@ -165,10 +186,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUserData();
   }, []); // Only run once on mount
 
-  // Sync userInfo from userAccount for OAuth users
+  // Sync userInfo from userAccount for OAuth users (when userAccount changes from login)
   // This ensures FileTree and other components that rely on userInfo work properly
   useEffect(() => {
-    if (userAccount) {
+    if (userAccount && !userInfo) {
+      // Only set if userInfo is not already set (from fetchUserData above)
       const derivedUserInfo: UserInfo = {
         subject_type: 'user',
         subject_id: userAccount.user_id,
@@ -179,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserInfo(derivedUserInfo);
       localStorage.setItem(USER_INFO_STORAGE_KEY, JSON.stringify(derivedUserInfo));
     }
-  }, [userAccount]);
+  }, [userAccount, userInfo]);
 
   const login = async (newApiKey: string): Promise<UserInfo> => {
     // Create a temporary client with the new API key

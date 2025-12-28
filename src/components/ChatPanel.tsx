@@ -354,7 +354,10 @@ function ChatPanelContent({
 }
 
 export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFilePath }: ChatPanelProps) {
-  const { apiKey, userInfo, apiClient, isAuthenticated } = useAuth();
+  const { apiKey, userInfo, apiClient, userAccount } = useAuth();
+  // User's personal API key: prefer userAccount.api_key (OAuth users), fallback to apiKey (direct API key auth)
+  const userPersonalApiKey = userAccount?.api_key || apiKey || '';
+  // filesAPI always uses user's API key from AuthContext (not agent's key)
   const filesAPI = createFilesAPI(apiClient);
   const registerAgentMutation = useRegisterAgent();
 
@@ -377,9 +380,11 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   // Agent management state
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [selectedAgentApiKey, setSelectedAgentApiKey] = useState<string>(''); // Agent's API key from backend config
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [agentManagementDialogOpen, setAgentManagementDialogOpen] = useState(false);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
+  const [agentConnectionStatus, setAgentConnectionStatus] = useState<'connected' | 'disconnected' | 'checking' | null>(null);
   const [sandboxDialogOpen, setSandboxDialogOpen] = useState(false);
   const [isOpenHistory, setIsOpenHistory] = useState(false);
   const [sandboxConnecting, setSandboxConnecting] = useState(false);
@@ -421,6 +426,30 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     }
   };
 
+  // Test agent connection with its API key
+  const testAgentConnection = async (agentApiKey: string) => {
+    setAgentConnectionStatus('checking');
+    try {
+      // Create a temporary client with the agent's API key
+      const { default: NexusAPIClient } = await import('../api/client');
+      const tempClient = new NexusAPIClient(apiClient.getBaseURL() || undefined, agentApiKey);
+
+      // Test connection with whoami
+      const result = await tempClient.whoami();
+
+      if (result.authenticated) {
+        setAgentConnectionStatus('connected');
+        console.log('Agent connection successful:', result);
+      } else {
+        setAgentConnectionStatus('disconnected');
+        console.error('Agent authentication failed');
+      }
+    } catch (error) {
+      setAgentConnectionStatus('disconnected');
+      console.error('Agent connection failed:', error);
+    }
+  };
+
   // Load agent configuration when selected
   const handleAgentSelect = async (agentId: string) => {
     if (!agentId) {
@@ -436,6 +465,8 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
         return;
       }
 
+      // Normalize API key - treat "NOT SET" as undefined
+      const normalizedAgentApiKey = agentInfo.api_key && agentInfo.api_key !== 'NOT SET' ? agentInfo.api_key : undefined;
 
       // Extract config fields from agentInfo (these are read from config.yaml by backend)
       // Type assertion needed because getAgent returns optional fields
@@ -503,11 +534,13 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
         // - apiKey: LangGraph Cloud API key (from environment)
         // - nexusApiKey: Agent's Nexus API key (from get_agent response, for tool calls)
         //   ALWAYS use agent's API key if available, otherwise fall back to user's API key
+        //   NOTE: This is ONLY for LangGraph tool calls, NOT for frontend file operations
+        //   Frontend (FileTree, etc.) always uses the user's API key from AuthContext
         const langgraphApiKey = import.meta.env.VITE_LANGGRAPH_API_KEY || '';
-        // Use agent's API key from get_agent response (read from config.yaml by backend)
-        const nexusApiKey = agentInfo.api_key
-          ? agentInfo.api_key
-          : (apiKey || '');
+
+        // Use agent's API key from backend config directly
+        // Use normalized API key (already checked for "NOT SET" above)
+        const nexusApiKey = normalizedAgentApiKey || userPersonalApiKey;
 
         // Use config_agent_id from config file (LangGraph graph/assistant ID)
         // Fall back to 'agent' if not specified in config
@@ -527,18 +560,35 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
         });
       } else if (agentConfig.platform === 'nexus') {
         // Nexus agents - use default endpoint and full agent_id
+        // Use agent's API key from backend config, fallback to user's API key
+        // Use normalized API key (already checked for "NOT SET" above)
+        const nexusApiKey = normalizedAgentApiKey || userPersonalApiKey;
+
         setConfig((prev) => ({
           ...prev,
           apiUrl: 'http://localhost:2024',
           assistantId: agentId, // Use full agent_id (<user_id>,<agent_name>)
+          nexusApiKey: nexusApiKey, // Nexus API key for tool calls
           sandboxId, // Add sandbox_id
         }));
       }
 
       // Only set selectedAgentId AFTER config is successfully loaded
       setSelectedAgentId(agentId);
+      // Store the agent's API key from backend config (for Connection Settings dialog)
+      // Use normalized API key (already checked for "NOT SET" above)
+      setSelectedAgentApiKey(normalizedAgentApiKey || '');
+
+      // Test agent connection with its API key from backend
+      const testApiKey = normalizedAgentApiKey || userPersonalApiKey;
+      if (testApiKey) {
+        await testAgentConnection(testApiKey);
+      } else {
+        setAgentConnectionStatus('disconnected');
+      }
     } catch (err) {
       console.error('Failed to load agent config:', err);
+      setAgentConnectionStatus('disconnected');
       // Don't set selectedAgentId if config loading failed
     }
   };
@@ -834,15 +884,32 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Chat Assistant</h2>
           <div className="flex gap-2">
-            {/* Connection Status Indicator */}
+            {/* Connection Settings (Per-Agent) */}
             <Button
               variant="ghost"
               size="icon"
               type="button"
               onClick={() => setConnectionDialogOpen(true)}
-              title={isAuthenticated ? 'Connected to Nexus' : 'Not connected'}
+              disabled={!selectedAgentId}
+              title={
+                !selectedAgentId
+                  ? 'Select an agent first'
+                  : agentConnectionStatus === 'connected'
+                  ? 'Agent connected to Nexus'
+                  : agentConnectionStatus === 'disconnected'
+                  ? 'Agent connection failed'
+                  : 'View agent Nexus connection'
+              }
             >
-              {isAuthenticated ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
+              {agentConnectionStatus === 'checking' ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : agentConnectionStatus === 'connected' ? (
+                <Wifi className="h-4 w-4 text-green-500" />
+              ) : agentConnectionStatus === 'disconnected' ? (
+                <WifiOff className="h-4 w-4 text-red-500" />
+              ) : (
+                <Wifi className="h-4 w-4" />
+              )}
             </Button>
             {/* Sandbox Status Indicator */}
             <Button
@@ -877,7 +944,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
 
         {/* Agent Selector and New Chat */}
         <div className="flex items-center gap-2">
-          <div className="flex-1">
+          <div className="flex-1 flex items-center gap-2">
             {agents.length === 0 && !loadingAgents ? (
               <button
                 onClick={() => setAgentManagementDialogOpen(true)}
@@ -888,33 +955,37 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
                 <span className="text-sm text-muted-foreground">No agents - Register one to start</span>
               </button>
             ) : (
-              <Select value={selectedAgentId} onValueChange={handleAgentSelect} disabled={loadingAgents}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingAgents ? 'Loading agents...' : 'Select an agent'}>
-                    {selectedAgentId ? (
-                      <div className="flex items-center gap-2">
-                        <Bot className="h-3.5 w-3.5" />
-                        <span className="truncate">{selectedAgentId.split(',')[1] || selectedAgentId}</span>
-                      </div>
-                    ) : (
-                      'Select an agent'
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {agents.map((agent) => {
-                    const agentName = agent.agent_id.split(',')[1] || agent.agent_id;
-                    return (
-                      <SelectItem key={agent.agent_id} value={agent.agent_id}>
-                        <div className="flex items-center gap-2">
-                          <Bot className="h-3.5 w-3.5" />
-                          <span>{agentName}</span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <>
+                <div className="flex-1">
+                  <Select value={selectedAgentId} onValueChange={handleAgentSelect} disabled={loadingAgents}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingAgents ? 'Loading agents...' : 'Select an agent'}>
+                        {selectedAgentId ? (
+                          <div className="flex items-center gap-2">
+                            <Bot className="h-3.5 w-3.5" />
+                            <span className="truncate">{selectedAgentId.split(',')[1] || selectedAgentId}</span>
+                          </div>
+                        ) : (
+                          'Select an agent'
+                        )}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agents.map((agent) => {
+                        const agentName = agent.agent_id.split(',')[1] || agent.agent_id;
+                        return (
+                          <SelectItem key={agent.agent_id} value={agent.agent_id}>
+                            <div className="flex items-center gap-2">
+                              <Bot className="h-3.5 w-3.5" />
+                              <span>{agentName}</span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
           </div>
           <Button variant="outline" size="sm" type="button" onClick={handleNewChat} title="New Chat">
@@ -938,8 +1009,13 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
         onAgentSelect={handleAgentSelect}
       />
 
-      {/* Connection Management Dialog */}
-      <ConnectionManagementDialog open={connectionDialogOpen} onOpenChange={setConnectionDialogOpen} />
+      {/* Connection Management Dialog - View agent Nexus connection settings */}
+      <ConnectionManagementDialog
+        open={connectionDialogOpen}
+        onOpenChange={setConnectionDialogOpen}
+        selectedAgentId={selectedAgentId}
+        agentApiKey={selectedAgentApiKey}
+      />
 
       {/* Sandbox Status Dialog */}
       <Dialog open={sandboxDialogOpen} onOpenChange={setSandboxDialogOpen}>
