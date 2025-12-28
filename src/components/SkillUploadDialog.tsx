@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertCircle, CheckCircle2, FileIcon, Loader2, Upload, X } from 'lucide-react';
-import JSZip from 'jszip';
 import {
   useUploadSkill,
   useValidateSkillZip,
   type SkillValidationResponse,
 } from '../hooks/useSkills';
+import { createSkillZipFromFileList } from '../utils/skillPackaging';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -75,44 +75,15 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
 
     setSelectedDirectory(files);
     setSelectedFile(null);
-    const folderName = files[0].webkitRelativePath.split('/')[0] || 'skill-directory';
     setUploadStatus('idle');
     setErrorMessage(null);
     setValidationResult(null);
     setIsZipping(true);
 
     try {
-      // Create zip from directory
-      const zip = new JSZip();
-      
-      // Add all files to zip, preserving the full directory structure
-      // The backend expects: skill-name/SKILL.md (not just SKILL.md at root)
-      const filePromises: Promise<void>[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const relativePath = file.webkitRelativePath;
-        
-        // Keep the full path including the root directory name
-        // e.g., "my-skill/SKILL.md" should stay as "my-skill/SKILL.md"
-        // Remove any leading ./ or .\ from the path
-        let normalizedPath = relativePath.replace(/^\.\//, '').replace(/^\.\\/, '');
-        
-        // Only add files (not empty paths)
-        if (normalizedPath) {
-          filePromises.push(
-            file.arrayBuffer().then((content) => {
-              zip.file(normalizedPath, content);
-            })
-          );
-        }
-      }
+      // Create ZIP from directory using shared utility
+      const { zipBase64, skillName, zipFile } = await createSkillZipFromFileList(files);
 
-      await Promise.all(filePromises);
-
-      // Generate zip file with .skill extension
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const zipFile = new File([zipBlob], `${folderName}.skill`, { type: 'application/zip' });
-      
       setSelectedFile(zipFile);
       setSelectedDirectory(null);
       setIsZipping(false);
@@ -120,8 +91,7 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
 
       // Auto-validate the created zip
       try {
-        const fileData = await readFileAsBase64(zipFile);
-        const result = await validateMutation.mutateAsync({ zipData: fileData });
+        const result = await validateMutation.mutateAsync({ zipData: zipBase64 });
 
         setValidationResult(result);
         if (!result.valid) {

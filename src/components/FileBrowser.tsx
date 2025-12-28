@@ -3,12 +3,14 @@ import { AlertCircle, BookOpen, Bot, Brain, Cloud, FolderPlus, Settings, User } 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { toast } from 'sonner';
 import { AuthenticationError } from '../api/client';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { fileKeys, useConnectors, useCreateDirectory, useDeleteFile, useFileList, useUploadFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
 import { copyToClipboard } from '../utils';
+import { createSkillZipFromDirectory } from '../utils/skillPackaging';
 import { Breadcrumb } from './Breadcrumb';
 import { ChatPanel } from './ChatPanel';
 import { CreateFolderDialog } from './CreateFolderDialog';
@@ -229,6 +231,35 @@ export function FileBrowser() {
               console.error('Failed to remove connector:', error);
               alert(`Failed to remove connector: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
+          }
+        }
+        break;
+
+      case 'add-skill-to-personal':
+        if (file.isDirectory && userInfo) {
+          try {
+            toast.info(`Reading skill metadata from "${file.name}"...`);
+
+            // Create skill ZIP package from directory using shared utility
+            const { zipBase64, skillName } = await createSkillZipFromDirectory(file.path, filesAPI);
+
+            // Import to personal tier using the skills API
+            toast.info(`Adding "${skillName}" to your personal skills...`);
+            await apiClient.skillsImport({
+              zip_data: zipBase64,
+              tier: 'personal',
+              allow_overwrite: false,
+            });
+
+            // Show success message
+            toast.success(`Skill "${skillName}" has been added to your personal skills!`);
+
+            // Invalidate skills cache and file list
+            queryClient.invalidateQueries({ queryKey: ['skills'] });
+            queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+          } catch (error) {
+            console.error('Failed to add skill to personal:', error);
+            toast.error(`Failed to add skill: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
         }
         break;

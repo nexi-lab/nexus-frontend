@@ -1,4 +1,4 @@
-import { Cloud, Copy, Download, Edit, File, FileText, FolderPlus, History, Search, Shield, Trash2, Upload, XCircle } from 'lucide-react';
+import { BookOpen, Cloud, Copy, Download, Edit, File, FileText, FolderPlus, History, Search, Shield, Trash2, Upload, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { FileInfo } from '../types/file';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from './ui/context-menu';
@@ -17,15 +17,17 @@ export type ContextMenuAction =
   | 'copy-relative-path'
   | 'manage-permissions'
   | 'add-connector'
-  | 'remove-connector';
+  | 'remove-connector'
+  | 'add-skill-to-personal';
 
 interface FileContextMenuProps {
   children: ReactNode;
   file: FileInfo;
   onAction: (action: ContextMenuAction, file: FileInfo) => void;
+  isSkillFolder?: boolean;
 }
 
-export function FileContextMenu({ children, file, onAction }: FileContextMenuProps) {
+export function FileContextMenu({ children, file, onAction, isSkillFolder }: FileContextMenuProps) {
   const handleAction = (action: ContextMenuAction) => {
     onAction(action, file);
   };
@@ -37,6 +39,15 @@ export function FileContextMenu({ children, file, onAction }: FileContextMenuPro
         {file.isDirectory ? (
           // Folder context menu
           <>
+            {isSkillFolder && (
+              <>
+                <ContextMenuItem onClick={() => handleAction('add-skill-to-personal')}>
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Add Skill to My Skills
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            )}
             <ContextMenuItem onClick={() => handleAction('find-in-folder')}>
               <Search className="mr-2 h-4 w-4" />
               Find in Folder

@@ -1,5 +1,5 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, Mail, RefreshCw, Users, User } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, BookOpen, ChevronDown, ChevronRight, Cloud, Database, FileText, Folder, FolderOpen, HardDrive, Mail, RefreshCw, Users, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AuthenticationError } from '../api/client';
@@ -29,6 +29,7 @@ function isParsedFile(fileName: string): boolean {
 function isDotFile(fileName: string): boolean {
   return fileName.startsWith('.');
 }
+
 
 // Helper function to get folder/backend icon based on backend type
 function getFolderIcon(backendType?: string, isExpanded?: boolean) {
@@ -155,6 +156,22 @@ function TreeNode({
   // Use regular file listing for all paths
   const { data: rawFiles, isLoading, error } = useFileList(path, isExpanded);
 
+  // Check if this folder contains SKILL.md
+  const skillMdPath = `${path}/SKILL.md`.replace(/\/+/g, '/');
+  const { data: isSkillFolder = false } = useQuery({
+    queryKey: ['skillExists', skillMdPath],
+    queryFn: async () => {
+      try {
+        return await filesAPI.exists(skillMdPath);
+      } catch (error) {
+        // If there's an error checking existence, assume it's not a skill folder
+        return false;
+      }
+    },
+    staleTime: 30000, // Cache for 30 seconds
+    gcTime: 60000, // Keep in cache for 1 minute
+  });
+
   // Show authentication error if present
   useEffect(() => {
     if (error instanceof AuthenticationError && isExpanded) {
@@ -242,7 +259,7 @@ function TreeNode({
 
   return (
     <div>
-      <FileContextMenu file={dirFileInfo} onAction={(action, file) => onContextMenuAction?.(action, file)}>
+      <FileContextMenu file={dirFileInfo} onAction={(action, file) => onContextMenuAction?.(action, file)} isSkillFolder={isSkillFolder}>
         <div
           className={cn(
             'group flex items-center gap-1 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 rounded-md transition-colors',
@@ -284,7 +301,11 @@ function TreeNode({
           ) : (
             <ChevronRight className="h-4 w-4 flex-shrink-0" />
           )}
-          {getFolderIcon(dirFileInfo.backendType, isExpanded)}
+          {isSkillFolder ? (
+            <BookOpen className="h-4 w-4 text-amber-500 flex-shrink-0" />
+          ) : (
+            getFolderIcon(dirFileInfo.backendType, isExpanded)
+          )}
           <span className="truncate">{name}</span>
           {backendType && backendType !== 'LocalBackend' && (
             <button
