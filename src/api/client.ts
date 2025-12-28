@@ -1058,7 +1058,8 @@ class NexusAPIClient {
   // Helper: Check if agent has access to all workspaces and return permission level
   async getAllWorkspacesAccess(
     agentId: string,
-    tuples?: ReBACTuple[]
+    tuples?: ReBACTuple[],
+    tenantId?: string
   ): Promise<{ hasAccess: boolean; permission?: 'viewer' | 'editor' | 'owner' }> {
     try {
       // Use provided tuples if available, otherwise fetch them
@@ -1066,10 +1067,20 @@ class NexusAPIClient {
 
       // Extract user_id from agent_id (format: "user_id,agent_name")
       const userId = agentId.split(',')[0];
-      const workspaceRootPath = `/workspace/${userId}`;
 
-      // Find tuple for /workspace/<user_id>
-      const workspaceTuple = permissionTuples.find(t => t.object_type === 'file' && t.object_id === workspaceRootPath);
+      // Check new convention path first: /tenant:<tenant_id>/user:<user_id>/workspace
+      const newWorkspaceRootPath = tenantId ? `/tenant:${tenantId}/user:${userId}/workspace` : null;
+      // Fall back to old convention: /workspace/<user_id>
+      const oldWorkspaceRootPath = `/workspace/${userId}`;
+
+      // Find tuple for workspace root (try new convention first, then old)
+      let workspaceTuple = newWorkspaceRootPath
+        ? permissionTuples.find(t => t.object_type === 'file' && t.object_id === newWorkspaceRootPath)
+        : undefined;
+
+      if (!workspaceTuple) {
+        workspaceTuple = permissionTuples.find(t => t.object_type === 'file' && t.object_id === oldWorkspaceRootPath);
+      }
 
       if (workspaceTuple) {
         const permission = this.getPermissionLevel(workspaceTuple.relation);

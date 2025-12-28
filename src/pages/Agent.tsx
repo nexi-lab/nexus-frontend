@@ -136,7 +136,7 @@ export function Agent() {
             apiClient.getAgentWorkspaces(agent.agent_id, tuples),
             apiClient.getDirectoryAccess(agent.agent_id, '/memory', tuples, tenantId, userId),
             apiClient.getDirectoryAccess(agent.agent_id, '/resource', tuples, tenantId, userId),
-            apiClient.getAllWorkspacesAccess(agent.agent_id, tuples),
+            apiClient.getAllWorkspacesAccess(agent.agent_id, tuples, tenantId),
           ]);
 
           // Extract skill names and permissions
@@ -697,9 +697,11 @@ export function Agent() {
       );
 
       // 3b. Handle All Workspaces Access (special case)
-      const userId = editingAgentId.split(',')[0];
+      // Use logged-in user's ID, not the agent's owner ID
+      const loggedInUserId = userInfo?.user || userInfo?.subject_id;
       const tenantId = userInfo?.tenant_id || 'default';
-      const workspaceRootPath = `/workspace/${userId}`;
+      // Use new namespace convention: /tenant:<tenant_id>/user:<user_id>/workspace
+      const workspaceRootPath = `/tenant:${tenantId}/user:${loggedInUserId}/workspace`;
       await updateSinglePathPermission(
         tuples,
         workspaceRootPath,
@@ -712,8 +714,8 @@ export function Agent() {
       // 4. Handle Directory Access (memory, resources) - simple add/remove
       // Use new namespace convention: /tenant:<tenant_id>/user:<user_id>/<directory>
       const directories = [
-        { path: `/tenant:${tenantId}/user:${userId}/memory`, current: agent.hasMemoryAccess || false, new: grantMemoryAccess },
-        { path: `/tenant:${tenantId}/user:${userId}/resource`, current: agent.hasResourcesAccess || false, new: grantResourcesAccess },
+        { path: `/tenant:${tenantId}/user:${loggedInUserId}/memory`, current: agent.hasMemoryAccess || false, new: grantMemoryAccess },
+        { path: `/tenant:${tenantId}/user:${loggedInUserId}/resource`, current: agent.hasResourcesAccess || false, new: grantResourcesAccess },
       ];
 
       for (const dir of directories) {
@@ -879,7 +881,8 @@ export function Agent() {
       // Grant all-workspaces access if requested
       if (grantAllWorkspaces) {
         try {
-          const workspaceRootPath = `/workspace/${userId}`;
+          // Use new namespace convention: /tenant:<tenant_id>/user:<user_id>/workspace
+          const workspaceRootPath = `/tenant:${tenantId}/user:${userId}/workspace`;
           const relation = allWorkspacesPermission === 'editor' ? 'direct_editor' : 'direct_viewer';
           await apiClient.rebacCreate({
             subject: ['agent', fullAgentId],

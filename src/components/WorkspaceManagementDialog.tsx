@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
+import { userPath, generateResourceId } from '../utils/pathUtils';
 
 interface WorkspaceManagementDialogProps {
   open: boolean;
@@ -85,15 +86,18 @@ export function WorkspaceManagementDialog({ open, onOpenChange, onCreateWorkspac
       return;
     }
 
-    // Get user_id from userInfo
+    // Get user_id and tenant_id from userInfo
     const userId = userInfo?.user || userInfo?.subject_id;
+    const tenantId = userInfo?.tenant_id || 'default';
     if (!userId) {
       setError('Unable to determine user ID. Please log in again.');
       return;
     }
 
-    // Compose full path as /workspace/<user_id>/<workspace_name>
-    const fullPath = `/workspace/${userId}/${workspaceName.trim()}`;
+    // Generate workspace ID and compose full path using new convention
+    // /tenant:<tenant_id>/user:<user_id>/workspace/<workspace_id>
+    const workspaceId = generateResourceId('workspace', workspaceName.trim());
+    const fullPath = userPath(tenantId, userId, 'workspace', workspaceId);
 
     setIsCreating(true);
 
@@ -129,10 +133,14 @@ export function WorkspaceManagementDialog({ open, onOpenChange, onCreateWorkspac
     return parts[parts.length - 1] || path;
   };
 
-  // Filter to only show user's workspaces
+  // Filter to only show user's workspaces (support both old and new conventions)
   const userWorkspaces = workspaces.filter((ws) => {
     const userId = userInfo?.user || userInfo?.subject_id;
-    return ws.path.startsWith(`/workspace/${userId}/`);
+    const tenantId = userInfo?.tenant_id || 'default';
+    // Old convention: /workspace/<user_id>/<workspace_name>
+    // New convention: /tenant:<tenant_id>/user:<user_id>/workspace/<workspace_id>
+    return ws.path.startsWith(`/workspace/${userId}/`) ||
+           ws.path.includes(`/tenant:${tenantId}/user:${userId}/workspace/`);
   });
 
   return (
