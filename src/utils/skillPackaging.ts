@@ -1,5 +1,10 @@
 import JSZip from 'jszip';
-import type { FilesAPI } from '../api/files';
+
+// Type for the FilesAPI interface used in this module
+interface FilesAPI {
+  read(path: string): Promise<Uint8Array>;
+  list(path: string, options?: { recursive?: boolean; details?: boolean }): Promise<Array<{ path: string; isDirectory: boolean }>>;
+}
 
 /**
  * Parse skill name from SKILL.md content

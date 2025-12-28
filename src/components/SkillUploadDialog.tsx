@@ -82,7 +82,7 @@ export function SkillUploadDialog({ open, onOpenChange }: SkillUploadDialogProps
 
     try {
       // Create ZIP from directory using shared utility
-      const { zipBase64, skillName, zipFile } = await createSkillZipFromFileList(files);
+      const { zipBase64, zipFile } = await createSkillZipFromFileList(files);
 
       setSelectedFile(zipFile);
       setSelectedDirectory(null);
