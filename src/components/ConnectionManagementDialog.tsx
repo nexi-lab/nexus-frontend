@@ -28,7 +28,7 @@ interface ConnectionStatus {
 }
 
 export function ConnectionManagementDialog({ open, onOpenChange, selectedAgentId, agentApiKey }: ConnectionManagementDialogProps) {
-  const { userInfo, apiClient } = useAuth()
+  const { apiClient } = useAuth()
   const [serverUrl, setServerUrl] = useState('')
   const [newApiKey, setNewApiKey] = useState('')
   const [error, setError] = useState<string | null>(null)
