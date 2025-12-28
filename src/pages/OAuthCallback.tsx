@@ -260,10 +260,13 @@ export default function OAuthCallback() {
         console.log('[OAuth Popup] Calling oauthExchangeCode with:', { provider, hasCode: !!code, hasState: !!state });
 
         // Exchange code - email will be fetched automatically from provider
+        // Use dynamic redirect URI based on current origin
+        const redirectUri = `${window.location.origin}/oauth/callback`;
         const result = await clientToUse.oauthExchangeCode({
           provider,
           code,
           state,
+          redirect_uri: redirectUri,
           // user_email is optional - backend will fetch it from provider
         });
 
