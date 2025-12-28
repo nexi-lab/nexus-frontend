@@ -180,37 +180,55 @@ export function ConnectorManagementDialog({
       });
       console.log('Connector loaded:', loadResult);
 
-      // Finally, sync the connector to import existing files (only for cloud backends)
-      if (params.backend_type.includes('connector') || params.backend_type.includes('gcs')) {
-        try {
-          const syncResult = await apiClient.call<{
-            files_found?: number;
-            files_added?: number;
-            files_updated?: number;
-            files_scanned?: number;
-            files_created?: number;
-            errors: number;
-          }>('sync_mount', {
-            mount_point: params.mount_point,
-            recursive: true,
-          });
-          console.log('Connector synced:', syncResult);
-          return { connectorPath: loadResult, syncResult };
-        } catch (syncError) {
-          console.warn('Sync failed but connector was created:', syncError);
-          return { connectorPath: loadResult, syncResult: null };
-        }
+      // Start sync in the background (don't await) for cloud backends
+      const shouldSync = params.backend_type.includes('connector') || params.backend_type.includes('gcs');
+      if (shouldSync) {
+        // Fire and forget - sync runs in background
+        apiClient.call<{
+          files_found?: number;
+          files_added?: number;
+          files_updated?: number;
+          files_scanned?: number;
+          files_created?: number;
+          errors: number;
+        }>('sync_mount', {
+          mount_point: params.mount_point,
+          recursive: true,
+        }).then((syncResult) => {
+          console.log('Background sync completed:', syncResult);
+          const filesScanned = syncResult.files_scanned || syncResult.files_found || 0;
+          const filesAdded = syncResult.files_created || syncResult.files_added || 0;
+          toast.success(
+            `Sync completed for ${params.mount_point}`,
+            {
+              description: `${filesScanned} files scanned, ${filesAdded} imported`,
+            }
+          );
+          // Refresh file lists after sync completes
+          queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+        }).catch((syncError) => {
+          console.error('Background sync failed:', syncError);
+          toast.error(
+            `Sync failed for ${params.mount_point}`,
+            {
+              description: syncError.message || 'Unknown error',
+            }
+          );
+        });
       }
 
-      return { connectorPath: loadResult, syncResult: null };
+      return { connectorPath: loadResult, startedSync: shouldSync };
     },
     onSuccess: async (result) => {
-      const { connectorPath, syncResult } = result as any;
+      const { connectorPath, startedSync } = result as any;
 
-      if (syncResult) {
-        const filesScanned = syncResult.files_scanned || syncResult.files_found || 0;
-        const filesAdded = syncResult.files_created || syncResult.files_added || 0;
-        toast.success(`Connector created and synced: ${connectorPath}\n${filesScanned} files scanned, ${filesAdded} imported`);
+      if (startedSync) {
+        toast.success(
+          `Connector created: ${connectorPath}`,
+          {
+            description: 'Sync started in background. You\'ll be notified when complete.',
+          }
+        );
       } else {
         toast.success(`Connector created successfully: ${connectorPath}`);
       }
@@ -239,6 +257,7 @@ export function ConnectorManagementDialog({
     setReadonly(false);
     setGcsConfig({ bucket: '', project_id: '', prefix: '', access_token: '' });
     setGdriveConfig({ user_email: '', root_folder: 'nexus-data' });
+    setGmailConfig({ user_email: '', max_message_per_label: 200 });
     onOpenChange(false);
   };
 
@@ -246,11 +265,11 @@ export function ConnectorManagementDialog({
     // For Google Drive, check if OAuth credentials exist
     if (backend === 'gdrive_connector') {
       try {
-        const credentials = await apiClient.oauthListCredentials({ 
+        const credentials = await apiClient.oauthListCredentials({
           provider: 'google-drive',
-          include_revoked: false 
+          include_revoked: false
         });
-        
+
         // Find active credential for current user
         const activeCredential = credentials.find((cred) => {
           if (cred.revoked) return false;
@@ -259,7 +278,7 @@ export function ConnectorManagementDialog({
           }
           return cred.user_email === currentUserId;
         });
-        
+
         if (!activeCredential) {
           // No OAuth credential - redirect to integrations page
           toast.info('Please connect Google Drive in Integrations first');
@@ -273,7 +292,38 @@ export function ConnectorManagementDialog({
         return;
       }
     }
-    
+
+    // For Gmail, check if OAuth credentials exist
+    if (backend === 'gmail_connector') {
+      try {
+        const credentials = await apiClient.oauthListCredentials({
+          provider: 'gmail',
+          include_revoked: false
+        });
+
+        // Find active credential for current user
+        const activeCredential = credentials.find((cred) => {
+          if (cred.revoked) return false;
+          if (cred.user_id) {
+            return cred.user_id === currentUserId;
+          }
+          return cred.user_email === currentUserId;
+        });
+
+        if (!activeCredential) {
+          // No OAuth credential - redirect to integrations page
+          toast.info('Please connect Gmail in Integrations first');
+          onOpenChange(false);
+          navigate('/integrations');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to check Gmail credentials:', error);
+        toast.error('Failed to check OAuth credentials. Please try again.');
+        return;
+      }
+    }
+
     setSelectedBackend(backend);
     setStep('configure');
   };

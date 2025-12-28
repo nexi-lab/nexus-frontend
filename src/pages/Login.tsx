@@ -34,6 +34,8 @@ export default function Login() {
       const response = await apiClient.authGoogleAuthorize();
       // Store state in sessionStorage for verification after callback
       sessionStorage.setItem('oauth_state', response.state);
+      // IMPORTANT: Clear oauth_provider to ensure this is treated as user auth, not integration
+      sessionStorage.removeItem('oauth_provider');
       // Redirect to Google OAuth
       window.location.href = response.auth_url;
     } catch (err: any) {
