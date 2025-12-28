@@ -118,24 +118,24 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl w-full space-y-8">
         <div className="text-center">
           <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-gray-100">
             Confirm Your Information
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             Please review your account information before continuing
           </p>
         </div>
 
-        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden">
           {/* User Information Section */}
-          <div className="px-6 py-6 border-b border-gray-200">
+          <div className="px-6 py-6 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center mb-4">
               <User className="h-5 w-5 text-gray-400 mr-2" />
-              <h3 className="text-lg font-medium text-gray-900">User Information</h3>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">User Information</h3>
             </div>
             <div className="flex items-start space-x-4">
               {user_info.avatar_url && (
@@ -147,14 +147,14 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
               )}
               <div className="flex-1">
                 <div className="mb-3">
-                  <label className="block text-sm font-medium text-gray-500">Name</label>
-                  <p className="mt-1 text-base text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Name</label>
+                  <p className="mt-1 text-base text-gray-900 dark:text-gray-100">
                     {user_info.display_name || 'Not provided'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-500">Email</label>
-                  <p className="mt-1 text-base text-gray-900">{user_info.email}</p>
+                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Email</label>
+                  <p className="mt-1 text-base text-gray-900 dark:text-gray-100">{user_info.email}</p>
                 </div>
               </div>
             </div>
@@ -164,18 +164,18 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
           <div className="px-6 py-6">
             <div className="flex items-center mb-4">
               <Building2 className="h-5 w-5 text-gray-400 mr-2" />
-              <h3 className="text-lg font-medium text-gray-900">Organization Information</h3>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Organization Information</h3>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-500">Type</label>
+                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Type</label>
                 <div className="mt-1 flex items-center">
                   <span
                     className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                       tenant_info.is_personal
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-purple-100 text-purple-800'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                        : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
                     }`}
                   >
                     {tenant_info.is_personal ? 'Personal Organization' : 'Company Organization'}
@@ -186,10 +186,10 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
               <div>
                 <label
                   htmlFor="tenant-slug"
-                  className="block text-sm font-medium text-gray-500"
+                  className="block text-sm font-medium text-gray-500 dark:text-gray-400"
                 >
                   Organization Slug
-                  <span className="ml-2 text-xs text-blue-600">(You can customize this)</span>
+                  <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(You can customize this)</span>
                 </label>
                 <div className="mt-1">
                   <input
@@ -198,14 +198,14 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
                     value={tenantSlug}
                     onChange={(e) => handleSlugChange(e.target.value.toLowerCase())}
                     placeholder="Enter organization slug"
-                    className={`block w-full px-3 py-2 border rounded-md shadow-sm font-mono text-sm focus:ring-blue-500 focus:border-blue-500 ${
-                      slugError ? 'border-red-300' : 'border-gray-300'
+                    className={`block w-full px-3 py-2 border rounded-md shadow-sm font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500 ${
+                      slugError ? 'border-red-300 dark:border-red-700' : 'border-gray-300 dark:border-gray-600'
                     }`}
                   />
                   {slugError ? (
-                    <p className="mt-1 text-xs text-red-600">{slugError}</p>
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{slugError}</p>
                   ) : (
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       Used in URLs and API calls (3-63 chars, lowercase alphanumeric + hyphens)
                     </p>
                   )}
@@ -213,18 +213,18 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-500">Domain</label>
-                <p className="mt-1 text-base text-gray-900">{tenant_info.domain}</p>
+                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Domain</label>
+                <p className="mt-1 text-base text-gray-900 dark:text-gray-100">{tenant_info.domain}</p>
               </div>
 
               <div>
                 <label
                   htmlFor="tenant-name"
-                  className="block text-sm font-medium text-gray-500"
+                  className="block text-sm font-medium text-gray-500 dark:text-gray-400"
                 >
                   Organization Name
                   {tenant_info.can_edit_name && (
-                    <span className="ml-2 text-xs text-blue-600">(You can customize this)</span>
+                    <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(You can customize this)</span>
                   )}
                 </label>
                 {tenant_info.can_edit_name ? (
@@ -235,16 +235,16 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
                       value={tenantName}
                       onChange={(e) => setTenantName(e.target.value)}
                       placeholder="Enter organization name"
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       Customize your personal organization name
                     </p>
                   </div>
                 ) : (
                   <div className="mt-1">
-                    <p className="text-base text-gray-900">{tenant_info.name}</p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="text-base text-gray-900 dark:text-gray-100">{tenant_info.name}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       Company organization names are derived from the domain and cannot be changed
                     </p>
                   </div>
@@ -253,8 +253,8 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
 
               {tenant_info.description && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-500">Description</label>
-                  <p className="mt-1 text-sm text-gray-600">{tenant_info.description}</p>
+                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Description</label>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{tenant_info.description}</p>
                 </div>
               )}
             </div>
@@ -262,13 +262,13 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
 
           {/* Error Message */}
           {error && (
-            <div className="px-6 py-4 bg-red-50 border-t border-red-200">
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="px-6 py-4 bg-red-50 dark:bg-red-900/20 border-t border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
             </div>
           )}
 
           {/* Confirmation Button */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
             <button
               onClick={handleConfirm}
               disabled={isLoading}
