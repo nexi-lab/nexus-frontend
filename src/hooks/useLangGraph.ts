@@ -13,6 +13,7 @@ interface UseLangGraphOptions {
   tenantId?: string;
   sandboxId?: string; // Sandbox ID for code execution
   openedFilePath?: string; // Currently opened file path in the editor
+  workspacePath?: string; // Selected workspace path
   maxSteps?: number; // Maximum number of steps for agent execution (recursion limit)
   key?: number; // Add key to force recreation
   onThreadIdChange?: (threadId: string) => void;
@@ -32,6 +33,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
     assistantId: options.assistantId,
     sandboxId: options.sandboxId || 'NOT SET',
     openedFilePath: options.openedFilePath || 'NOT SET',
+    workspacePath: options.workspacePath || 'NOT SET',
   });
 
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(options.threadId ?? null);
@@ -57,7 +59,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
 
   // Wrap submit to automatically add metadata
   const submitWithMetadata = (input: any, submitOptions?: any) => {
-    // Add Nexus API key, server URL, sandbox ID, and opened file path to metadata for tool calls
+    // Add Nexus API key, server URL, sandbox ID, opened file path, and workspace path to metadata for tool calls
     // ALWAYS include agent's API key if provided (from agent config file)
     const metadata = {
       ...submitOptions?.metadata,
@@ -66,6 +68,7 @@ export function useLangGraph(options: UseLangGraphOptions = {}) {
       ...(options.nexusServerUrl && { nexus_server_url: options.nexusServerUrl }),
       ...(options.sandboxId && { sandbox_id: options.sandboxId }),
       ...(options.openedFilePath && { opened_file_path: options.openedFilePath }),
+      ...(options.workspacePath && { workspace_path: options.workspacePath }),
     };
 
     // Build config with recursion_limit (max steps) if specified

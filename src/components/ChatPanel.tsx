@@ -1,5 +1,5 @@
 import type { Message, Thread } from '@langchain/langgraph-sdk';
-import { Bot, Box, ChevronDown, ChevronUp, History, Info, Loader2, Plus, Send, Settings, Wifi, WifiOff, X } from 'lucide-react';
+import { Bot, Box, ChevronDown, ChevronUp, Folder, History, Info, Loader2, Plus, Send, Settings, Wifi, WifiOff, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,6 +12,7 @@ import { AgentManagementDialog } from './AgentManagementDialog';
 import { ConnectionManagementDialog } from './ConnectionManagementDialog';
 import ThreadsHistoryPanel from './ThreadsHistoryPanel';
 import { ToolCalls } from './ToolCalls';
+import { WorkspaceManagementDialog } from './WorkspaceManagementDialog';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
@@ -32,6 +33,15 @@ interface Agent {
   created_at: string;
   has_api_key?: boolean;
   inherit_permissions?: boolean;
+}
+
+interface Workspace {
+  path: string;
+  name: string | null;
+  description: string;
+  created_at: string;
+  created_by: string | null;
+  metadata: Record<string, any>;
 }
 
 interface AgentConfig {
@@ -390,10 +400,17 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   const [sandboxConnecting, setSandboxConnecting] = useState(false);
   const [sandboxConnectStatus, setSandboxConnectStatus] = useState<string>('');
 
-  // Load agents when panel opens
+  // Workspace management state
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [selectedWorkspacePath, setSelectedWorkspacePath] = useState<string>('');
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
+  const [workspaceManagementDialogOpen, setWorkspaceManagementDialogOpen] = useState(false);
+
+  // Load agents and workspaces when panel opens
   useEffect(() => {
     if (isOpen) {
       loadAgents();
+      loadWorkspaces();
     }
   }, [isOpen]);
 
@@ -403,6 +420,23 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
       handleAgentSelect(initialSelectedAgentId);
     }
   }, [initialSelectedAgentId, agents]);
+
+  // Auto-select workspace based on smart default logic
+  useEffect(() => {
+    if (workspaces.length > 0 && !selectedWorkspacePath) {
+      // Try to load last-used workspace from localStorage
+      const lastUsedWorkspace = localStorage.getItem('chat_last_used_workspace');
+
+      if (lastUsedWorkspace && workspaces.some(ws => ws.path === lastUsedWorkspace)) {
+        // Use last-used workspace if it still exists
+        handleWorkspaceSelect(lastUsedWorkspace);
+      } else if (workspaces.length === 1) {
+        // Auto-select if only one workspace
+        handleWorkspaceSelect(workspaces[0].path);
+      }
+      // Otherwise, leave empty and show prompt
+    }
+  }, [workspaces]);
 
   const loadAgents = async () => {
     setLoadingAgents(true);
@@ -423,6 +457,72 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
       console.error('Failed to load agents:', err);
     } finally {
       setLoadingAgents(false);
+    }
+  };
+
+  const loadWorkspaces = async () => {
+    setLoadingWorkspaces(true);
+    try {
+      const workspaceList = await apiClient.listWorkspaces();
+
+      // Filter to only show workspaces owned by current user
+      const userId = userInfo?.user || userInfo?.subject_id;
+      const tenantId = userInfo?.tenant_id || 'default';
+
+      const userWorkspaces = workspaceList.filter((ws) => {
+        // Support both old and new path conventions
+        return ws.path.startsWith(`/workspace/${userId}/`) ||
+               ws.path.includes(`/tenant:${tenantId}/user:${userId}/workspace/`);
+      });
+
+      setWorkspaces(userWorkspaces);
+    } catch (err) {
+      console.error('Failed to load workspaces:', err);
+    } finally {
+      setLoadingWorkspaces(false);
+    }
+  };
+
+  const handleWorkspaceSelect = (workspacePath: string) => {
+    if (!workspacePath) {
+      setSelectedWorkspacePath('');
+      setConfig((prev) => ({
+        ...prev,
+        workspacePath: undefined,
+        workspaceName: undefined,
+      }));
+      return;
+    }
+
+    const workspace = workspaces.find(ws => ws.path === workspacePath);
+    setSelectedWorkspacePath(workspacePath);
+
+    // Update config with workspace info
+    setConfig((prev) => ({
+      ...prev,
+      workspacePath: workspacePath,
+      workspaceName: workspace?.name || workspacePath.split('/').pop() || 'Unknown',
+    }));
+
+    // Save to localStorage for persistence
+    localStorage.setItem('chat_last_used_workspace', workspacePath);
+  };
+
+  const handleCreateWorkspace = async (path: string, name: string, description: string) => {
+    try {
+      await apiClient.registerWorkspace({
+        path,
+        name,
+        description,
+        created_by: userInfo?.subject_id,
+      });
+      // Reload workspaces after creation
+      await loadWorkspaces();
+      // Auto-select the newly created workspace
+      handleWorkspaceSelect(path);
+    } catch (err) {
+      console.error('Failed to create workspace:', err);
+      throw err;
     }
   };
 
@@ -942,6 +1042,51 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
           </div>
         </div>
 
+        {/* Workspace Selector */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <Select value={selectedWorkspacePath} onValueChange={handleWorkspaceSelect} disabled={loadingWorkspaces}>
+              <SelectTrigger>
+                <SelectValue placeholder={loadingWorkspaces ? 'Loading workspaces...' : 'Select a workspace'}>
+                  {selectedWorkspacePath ? (
+                    <div className="flex items-center gap-2">
+                      <Folder className="h-3.5 w-3.5" />
+                      <span className="truncate">
+                        {workspaces.find(ws => ws.path === selectedWorkspacePath)?.name || selectedWorkspacePath.split('/').pop()}
+                      </span>
+                    </div>
+                  ) : (
+                    'Select a workspace'
+                  )}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {workspaces.map((workspace) => (
+                  <SelectItem key={workspace.path} value={workspace.path}>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <Folder className="h-3.5 w-3.5" />
+                        <span>{workspace.name || workspace.path.split('/').pop()}</span>
+                      </div>
+                      {workspace.description && (
+                        <span className="text-xs text-muted-foreground pl-5">{workspace.description}</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+                <div className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground border-t mt-1 pt-2"
+                     onClick={(e) => {
+                       e.preventDefault();
+                       setWorkspaceManagementDialogOpen(true);
+                     }}>
+                  <Plus className="h-3.5 w-3.5 mr-2" />
+                  <span className="font-medium">Add Workspace</span>
+                </div>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         {/* Agent Selector and New Chat */}
         <div className="flex items-center gap-2">
           <div className="flex-1 flex items-center gap-2">
@@ -1015,6 +1160,19 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
         onOpenChange={setConnectionDialogOpen}
         selectedAgentId={selectedAgentId}
         agentApiKey={selectedAgentApiKey}
+      />
+
+      {/* Workspace Management Dialog */}
+      <WorkspaceManagementDialog
+        open={workspaceManagementDialogOpen}
+        onOpenChange={(open) => {
+          setWorkspaceManagementDialogOpen(open);
+          // Reload workspaces when dialog closes
+          if (!open) {
+            loadWorkspaces();
+          }
+        }}
+        onCreateWorkspace={handleCreateWorkspace}
       />
 
       {/* Sandbox Status Dialog */}
@@ -1190,15 +1348,21 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
       </Dialog>
 
       {/* Chat Content - key forces complete remount */}
-      {selectedAgentId ? (
+      {selectedAgentId && selectedWorkspacePath ? (
         <ChatPanelContent key={chatKey} config={config} selectedAgentId={selectedAgentId} filesAPI={filesAPI} userInfo={userInfo} onThreadIdChange={handleThreadIdChange} />
       ) : (
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="text-center text-muted-foreground">
-            {loadingAgents ? (
+            {loadingAgents || loadingWorkspaces ? (
               <>
                 <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
-                <p>Loading agents...</p>
+                <p>Loading {loadingWorkspaces ? 'workspaces' : 'agents'}...</p>
+              </>
+            ) : !selectedWorkspacePath ? (
+              <>
+                <Folder className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="font-medium mb-1">Please select a workspace</p>
+                <p className="text-sm">Choose a workspace from the dropdown above to start chatting</p>
               </>
             ) : (
               <>

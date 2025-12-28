@@ -21,4 +21,6 @@ export interface ChatConfig {
   sandboxExpiresAt?: string;
   openedFilePath?: string; // Currently opened file path in the editor
   maxSteps?: number; // Maximum number of steps for agent execution (recursion limit)
+  workspacePath?: string; // Selected workspace path
+  workspaceName?: string; // Selected workspace name for display
 }
