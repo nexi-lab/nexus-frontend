@@ -28,7 +28,7 @@ type ConfirmationData = {
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { apiClient, isUserAuthenticated, jwtToken } = useAuth();
+  const { apiClient } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error' | 'confirmation'>('processing');
   const [message, setMessage] = useState('Processing OAuth callback...');
   const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
