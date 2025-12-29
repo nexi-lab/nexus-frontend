@@ -647,14 +647,12 @@ export function Agent() {
         if (langgraphAgentId.trim()) {
           metadata.agent_id = langgraphAgentId.trim();
         }
-        
-        // Update agent metadata by calling registerAgent with same agent_id
-        await apiClient.registerAgent({
+
+        // Update agent configuration using update_agent endpoint
+        await apiClient.updateAgent({
           agent_id: editingAgentId,
           name: agentName.trim(),
           description: description.trim(),
-          generate_api_key: false, // Don't regenerate API key
-          inherit_permissions: false, // Don't change inheritance
           metadata,
         });
       } catch (metadataErr) {

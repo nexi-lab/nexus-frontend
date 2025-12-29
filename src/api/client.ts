@@ -617,6 +617,23 @@ class NexusAPIClient {
     return await this.call('register_agent', params);
   }
 
+  // Agent API - Update existing agent configuration
+  async updateAgent(params: {
+    agent_id: string;
+    name?: string;
+    description?: string;
+    metadata?: Record<string, any>; // Optional metadata (platform, endpoint_url, agent_id, etc.)
+  }): Promise<{
+    agent_id: string;
+    user_id: string;
+    name: string;
+    description?: string;
+    metadata: Record<string, any>;
+    config_path: string;
+  }> {
+    return await this.call('update_agent', params);
+  }
+
   // Agent API - List all agents
   async listAgents(): Promise<
     Array<{
