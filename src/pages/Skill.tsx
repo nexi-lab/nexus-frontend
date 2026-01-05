@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ArrowLeft, BookOpen, Download, Edit, FolderOpen, Loader2, Plus, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, BookOpen, Download, Edit, FolderOpen, Globe, Loader2, Plus, Share2, Star, Trash2, Upload, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useSkills, useDeleteSkill, useExportSkill } from '../hooks/useSkills';
+import { useDiscoverSkills, useDeleteSkill, useExportSkill, useSubscribeSkill, useUnsubscribeSkill } from '../hooks/useSkills';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { SkillUploadDialog } from '../components/SkillUploadDialog';
@@ -10,6 +10,9 @@ import { SkillEditor } from '../components/SkillEditor';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../i18n/useTranslation';
+
+// Tab type for the four main views
+type SkillTab = 'subscribed' | 'myskills' | 'shared' | 'marketplace';
 
 interface EditingSkill {
   name: string;
@@ -23,11 +26,55 @@ export function Skill() {
   const { t } = useTranslation();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<EditingSkill | null>(null);
-  const [selectedTier, setSelectedTier] = useState<string | undefined>(undefined);
+  const [selectedTab, setSelectedTab] = useState<SkillTab>('subscribed');
 
-  const { data: skillsData, isLoading, error } = useSkills(selectedTier);
+  // Fetch skills for each tab
+  const { data: subscribedData, isLoading: isLoadingSubscribed, error: subscribedError } = useDiscoverSkills('subscribed');
+  const { data: ownedData, isLoading: isLoadingOwned, error: ownedError } = useDiscoverSkills('owned');
+  const { data: sharedData, isLoading: isLoadingShared, error: sharedError } = useDiscoverSkills('shared');
+  const { data: publicData, isLoading: isLoadingPublic, error: publicError } = useDiscoverSkills('public');
+
   const deleteMutation = useDeleteSkill();
   const exportMutation = useExportSkill();
+  const subscribeMutation = useSubscribeSkill();
+  const unsubscribeMutation = useUnsubscribeSkill();
+
+  // Skills for each tab
+  const subscribedSkills = subscribedData?.skills || [];
+  const mySkills = ownedData?.skills || [];
+  const sharedSkills = sharedData?.skills || [];
+  const marketplaceSkills = publicData?.skills || [];
+
+  // Track owned skill paths for edit/delete button visibility
+  const ownedPaths = new Set(ownedData?.skills?.map(s => s.path) || []);
+
+  // Current skills based on selected tab
+  const currentSkills = (() => {
+    switch (selectedTab) {
+      case 'subscribed': return subscribedSkills;
+      case 'myskills': return mySkills;
+      case 'shared': return sharedSkills;
+      case 'marketplace': return marketplaceSkills;
+    }
+  })();
+
+  const isLoading = (() => {
+    switch (selectedTab) {
+      case 'subscribed': return isLoadingSubscribed;
+      case 'myskills': return isLoadingOwned;
+      case 'shared': return isLoadingShared;
+      case 'marketplace': return isLoadingPublic;
+    }
+  })();
+
+  const error = (() => {
+    switch (selectedTab) {
+      case 'subscribed': return subscribedError;
+      case 'myskills': return ownedError;
+      case 'shared': return sharedError;
+      case 'marketplace': return publicError;
+    }
+  })();
 
   // Fetch SKILL.md content when editing
   const { data: skillContent, isLoading: isLoadingContent } = useQuery<string>({
@@ -156,6 +203,24 @@ export function Skill() {
     }
   };
 
+  const handleSubscribe = async (skillPath: string, skillName: string) => {
+    try {
+      await subscribeMutation.mutateAsync({ skillPath });
+      toast.success(`Subscribed to ${skillName}`);
+    } catch (error) {
+      toast.error(`Failed to subscribe: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleUnsubscribe = async (skillPath: string, skillName: string) => {
+    try {
+      await unsubscribeMutation.mutateAsync({ skillPath });
+      toast.success(`Unsubscribed from ${skillName}`);
+    } catch (error) {
+      toast.error(`Failed to unsubscribe: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
@@ -185,28 +250,59 @@ export function Skill() {
             </p>
           </div>
 
-          {/* Filter Tabs */}
-          <div className="mb-6 flex items-center gap-2">
+          {/* Tab Navigation */}
+          <div className="mb-6 flex items-center gap-2 flex-wrap">
             <Button
-              variant={selectedTier === undefined ? 'default' : 'outline'}
+              variant={selectedTab === 'subscribed' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSelectedTier(undefined)}
+              onClick={() => setSelectedTab('subscribed')}
             >
-              {t('skill.all')}
+              <Star className="h-3 w-3 mr-1" />
+              Subscribed
+              {subscribedSkills.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-primary-foreground/20">
+                  {subscribedSkills.length}
+                </span>
+              )}
             </Button>
             <Button
-              variant={selectedTier === 'personal' ? 'default' : 'outline'}
+              variant={selectedTab === 'myskills' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSelectedTier('personal')}
+              onClick={() => setSelectedTab('myskills')}
             >
-              {t('skill.personal')}
+              <User className="h-3 w-3 mr-1" />
+              My Skills
+              {mySkills.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-primary-foreground/20">
+                  {mySkills.length}
+                </span>
+              )}
             </Button>
             <Button
-              variant={selectedTier === 'system' ? 'default' : 'outline'}
+              variant={selectedTab === 'shared' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSelectedTier('system')}
+              onClick={() => setSelectedTab('shared')}
             >
-              {t('skill.system')}
+              <Share2 className="h-3 w-3 mr-1" />
+              Shared Skills
+              {sharedSkills.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-primary-foreground/20">
+                  {sharedSkills.length}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant={selectedTab === 'marketplace' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedTab('marketplace')}
+            >
+              <Globe className="h-3 w-3 mr-1" />
+              Skill Marketplace
+              {marketplaceSkills.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-muted">
+                  {marketplaceSkills.length}
+                </span>
+              )}
             </Button>
           </div>
 
@@ -222,38 +318,69 @@ export function Skill() {
                 {error instanceof Error ? error.message : 'Unknown error'}
               </p>
             </div>
-          ) : !skillsData || skillsData.skills.length === 0 ? (
+          ) : currentSkills.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <FolderOpen className="h-16 w-16 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">{t('skill.notFound')}</h3>
+              <h3 className="text-lg font-medium">
+                {selectedTab === 'subscribed' && 'No subscribed skills'}
+                {selectedTab === 'myskills' && 'No skills yet'}
+                {selectedTab === 'shared' && 'No shared skills'}
+                {selectedTab === 'marketplace' && 'No skills in marketplace'}
+              </h3>
               <p className="text-sm text-muted-foreground mt-2 mb-4">
-                {t('skill.uploadFirst')}
+                {selectedTab === 'subscribed' && 'Subscribe to skills from the marketplace'}
+                {selectedTab === 'myskills' && 'Upload a skill to get started'}
+                {selectedTab === 'shared' && 'No skills have been shared with you yet'}
+                {selectedTab === 'marketplace' && 'No public skills available at the moment'}
               </p>
-              <Button onClick={() => setUploadDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                {t('skill.upload')}
-              </Button>
+              {(selectedTab === 'subscribed' || selectedTab === 'shared') && (
+                <Button variant="outline" onClick={() => setSelectedTab('marketplace')}>
+                  <Globe className="h-4 w-4 mr-2" />
+                  Browse Marketplace
+                </Button>
+              )}
+              {selectedTab === 'myskills' && (
+                <div className="flex gap-2">
+                  <Button onClick={() => setUploadDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t('skill.upload')}
+                  </Button>
+                  <Button variant="outline" onClick={() => setSelectedTab('marketplace')}>
+                    <Globe className="h-4 w-4 mr-2" />
+                    Browse Marketplace
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {skillsData.skills.map((skill) => (
+              {currentSkills.map((skill) => (
                 <div
-                  key={skill.file_path || skill.name}
+                  key={skill.path || skill.name}
                   className="border rounded-lg p-4 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">{skill.name}</h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {skill.tier ? (
-                          <span className="inline-block px-2 py-0.5 rounded bg-muted">
-                            {skill.tier}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {skill.is_public && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                            <Globe className="h-3 w-3 mr-1" />
+                            Public
                           </span>
-                        ) : null}
-                        {skill.version && (
-                          <span className="ml-2">v{skill.version}</span>
                         )}
-                      </p>
+                        {skill.is_subscribed && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300">
+                            <Star className="h-3 w-3 mr-1" />
+                            Subscribed
+                          </span>
+                        )}
+                        {skill.version && (
+                          <span className="inline-block px-2 py-0.5 rounded text-xs bg-muted">
+                            v{skill.version}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -261,39 +388,62 @@ export function Skill() {
                     {skill.description}
                   </p>
 
-                  {skill.author && (
+                  {skill.owner && (
                     <p className="text-xs text-muted-foreground mb-3">
-                      {t('skill.by')} {skill.author}
+                      {t('skill.by')} {skill.owner}
                     </p>
                   )}
 
-                  {skill.requires && skill.requires.length > 0 && (
+                  {skill.tags && skill.tags.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs text-muted-foreground mb-1">{t('skill.dependencies')}:</p>
                       <div className="flex flex-wrap gap-1">
-                        {skill.requires.map((dep) => (
+                        {skill.tags.map((tag) => (
                           <span
-                            key={dep}
+                            key={tag}
                             className="text-xs px-2 py-0.5 rounded bg-muted"
                           >
-                            {dep}
+                            {tag}
                           </span>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  <div className="flex gap-2 mt-3">
-                    {skill.file_path && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {/* Subscribe/Subscribed toggle button */}
+                    {skill.is_subscribed ? (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleUnsubscribe(skill.path, skill.name)}
+                        disabled={unsubscribeMutation.isPending}
+                      >
+                        <Star className="h-3 w-3 mr-1 fill-current" />
+                        Subscribed
+                      </Button>
+                    ) : (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditingSkill({ name: skill.name, path: skill.file_path! })}
+                        onClick={() => handleSubscribe(skill.path, skill.name)}
+                        disabled={subscribeMutation.isPending}
+                      >
+                        <Star className="h-3 w-3 mr-1" />
+                        Subscribe
+                      </Button>
+                    )}
+                    {/* Edit button - only for owned skills */}
+                    {skill.path && ownedPaths.has(skill.path) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingSkill({ name: skill.name, path: `${skill.path}SKILL.md` })}
                       >
                         <Edit className="h-3 w-3 mr-1" />
                         {t('common.edit')}
                       </Button>
                     )}
+                    {/* Export button */}
                     <Button
                       variant="outline"
                       size="sm"
@@ -303,11 +453,12 @@ export function Skill() {
                       <Download className="h-3 w-3 mr-1" />
                       {t('common.export') || 'Export'}
                     </Button>
-                    {skill.file_path && (
+                    {/* Delete button - only for owned skills */}
+                    {skill.path && ownedPaths.has(skill.path) && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDelete(skill.file_path!, skill.name)}
+                        onClick={() => handleDelete(skill.path, skill.name)}
                         disabled={deleteMutation.isPending}
                       >
                         <Trash2 className="h-3 w-3 mr-1" />

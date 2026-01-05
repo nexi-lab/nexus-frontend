@@ -8,6 +8,7 @@ export const skillKeys = {
   all: ['skills'] as const,
   lists: () => [...skillKeys.all, 'list'] as const,
   list: (tier?: string) => [...skillKeys.lists(), tier] as const,
+  discover: (filter?: string) => [...skillKeys.all, 'discover', filter] as const,
   detail: (name: string) => [...skillKeys.all, 'detail', name] as const,
 };
 
@@ -23,6 +24,27 @@ export interface Skill {
   modified_at?: string;
   requires?: string[];
 }
+
+// Discovered skill with permission info
+export interface DiscoveredSkill {
+  path: string;
+  name: string;
+  description: string;
+  owner: string;
+  is_subscribed: boolean;
+  is_public: boolean;
+  version?: string;
+  tags?: string[];
+}
+
+export interface SkillsDiscoverResponse {
+  skills: DiscoveredSkill[];
+  count: number;
+}
+
+// Skill filter type - exported as a value to ensure Vite can resolve it
+export const SKILL_FILTERS = ['all', 'owned', 'subscribed', 'shared', 'public'] as const;
+export type SkillFilter = (typeof SKILL_FILTERS)[number];
 
 export interface SkillsListResponse {
   skills: Skill[];
@@ -50,7 +72,7 @@ export interface SkillExportResponse {
   filename?: string; // Suggested filename (e.g., "skill-name.skill")
 }
 
-// List all skills
+// List all skills (legacy - uses tier filter)
 export function useSkills(tier?: string, enabled = true) {
   const { apiClient } = useAuth();
 
@@ -61,6 +83,52 @@ export function useSkills(tier?: string, enabled = true) {
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+// Discover skills with permission-based filtering
+export function useDiscoverSkills(filter?: SkillFilter, enabled = true) {
+  const { apiClient } = useAuth();
+
+  return useQuery({
+    queryKey: skillKeys.discover(filter),
+    queryFn: async (): Promise<SkillsDiscoverResponse> => {
+      return apiClient.skillsDiscover({ filter });
+    },
+    enabled,
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+// Subscribe to a skill
+export function useSubscribeSkill() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ skillPath }: { skillPath: string }) => {
+      return apiClient.skillsSubscribe({ skill_path: skillPath });
+    },
+    onSuccess: () => {
+      // Invalidate all skill queries to refresh
+      queryClient.invalidateQueries({ queryKey: skillKeys.all });
+    },
+  });
+}
+
+// Unsubscribe from a skill
+export function useUnsubscribeSkill() {
+  const { apiClient } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ skillPath }: { skillPath: string }) => {
+      return apiClient.skillsUnsubscribe({ skill_path: skillPath });
+    },
+    onSuccess: () => {
+      // Invalidate all skill queries to refresh
+      queryClient.invalidateQueries({ queryKey: skillKeys.all });
+    },
   });
 }
 

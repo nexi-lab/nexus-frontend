@@ -1460,6 +1460,54 @@ class NexusAPIClient {
   }
 
   /**
+   * Discover skills with permission-based filtering.
+   *
+   * @param params - Discovery parameters
+   * @returns Skills list with permission info
+   */
+  async skillsDiscover(params?: {
+    filter?: 'all' | 'owned' | 'subscribed' | 'shared' | 'public';
+  }): Promise<{
+    skills: Array<{
+      path: string;
+      name: string;
+      description: string;
+      owner: string;
+      is_subscribed: boolean;
+      is_public: boolean;
+      version?: string;
+      tags?: string[];
+    }>;
+    count: number;
+  }> {
+    return await this.call('skills_discover', params || {});
+  }
+
+  /**
+   * Subscribe to a skill.
+   */
+  async skillsSubscribe(params: {
+    skill_path: string;
+  }): Promise<{
+    success: boolean;
+    skill_path: string;
+  }> {
+    return await this.call('skills_subscribe', params);
+  }
+
+  /**
+   * Unsubscribe from a skill.
+   */
+  async skillsUnsubscribe(params: {
+    skill_path: string;
+  }): Promise<{
+    success: boolean;
+    skill_path: string;
+  }> {
+    return await this.call('skills_unsubscribe', params);
+  }
+
+  /**
    * Get detailed skill information.
    *
    * @param params - Skill query parameters
