@@ -264,6 +264,38 @@ export function createFilesAPI(client: NexusAPIClient) {
       });
       return result;
     },
+
+    // Delete connector completely (bundled operation - deactivate, delete directory, delete config)
+    async deleteConnector(
+      mount_point: string,
+      options?: {
+        revoke_oauth?: boolean;
+        provider?: string;
+        user_email?: string;
+      }
+    ): Promise<{
+      removed: boolean;
+      directory_deleted: boolean;
+      config_deleted: boolean;
+      oauth_revoked: boolean;
+      errors: string[];
+      warnings: string[];
+    }> {
+      const result = await client.call<{
+        removed: boolean;
+        directory_deleted: boolean;
+        config_deleted: boolean;
+        oauth_revoked: boolean;
+        errors: string[];
+        warnings: string[];
+      }>('delete_connector', {
+        mount_point,
+        revoke_oauth: options?.revoke_oauth ?? false,
+        provider: options?.provider,
+        user_email: options?.user_email,
+      });
+      return result;
+    },
   };
 }
 

@@ -209,20 +209,9 @@ export function FileBrowser() {
         if (file.isDirectory && file.path) {
           if (confirm(`Are you sure you want to remove the connector at ${file.path}? This will also delete the connector directory and saved configuration.`)) {
             try {
-              // First remove the connector (deactivate)
-              await apiClient.call('remove_mount', { mount_point: file.path });
-
-              // Then delete the saved connector configuration from database
-              try {
-                await apiClient.call('delete_saved_mount', { mount_point: file.path });
-                console.log('Deleted saved connector configuration');
-              } catch (deleteError) {
-                // If delete_saved_mount fails (e.g., no saved config exists), log but don't fail
-                console.warn('Could not delete saved connector configuration (may not exist):', deleteError);
-              }
-
-              // Then delete the directory
-              await filesAPI.rmdir(file.path, true);
+              // Use the bundled delete_connector API
+              await filesAPI.deleteConnector(file.path);
+              console.log('Connector deleted successfully');
 
               // Invalidate queries to refresh the UI
               await queryClient.invalidateQueries({ queryKey: fileKeys.connectors() });

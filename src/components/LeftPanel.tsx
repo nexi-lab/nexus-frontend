@@ -1,8 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Files, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { Files, RefreshCw, Search, Trash2, Unplug, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { fileKeys, useDeleteFile } from '../hooks/useFiles';
+import { createFilesAPI } from '../api/files';
+import { useAuth } from '../contexts/AuthContext';
+import { fileKeys, useConnectors, useDeleteFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
 import type { ContextMenuAction } from './FileContextMenu';
 import { FileTree } from './FileTree';
@@ -29,10 +31,16 @@ export function LeftPanel({
   onCancelCreate,
 }: LeftPanelProps) {
   const queryClient = useQueryClient();
+  const { apiClient } = useAuth();
+  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [activeTab, setActiveTab] = useState<'explorer' | 'search'>('explorer');
   const [searchFolderPath, setSearchFolderPath] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const deleteMutation = useDeleteFile();
+
+  // Fetch active connectors to identify connector paths
+  const { data: connectors = [] } = useConnectors();
 
   // Multi-select state (within explorer tree)
   const [selectedItems, setSelectedItems] = useState<Map<string, FileInfo>>(new Map());
@@ -40,6 +48,21 @@ export function LeftPanel({
   const selectedCount = selectedItems.size;
 
   const selectedPaths = useMemo(() => new Set(selectedItems.keys()), [selectedItems]);
+
+  // Check if all selected items are connectors (root connector paths)
+  const connectorPaths = useMemo(() => new Set(connectors.map(c => c.mount_point)), [connectors]);
+  const selectedConnectors = useMemo(() => {
+    const selected: FileInfo[] = [];
+    for (const [path, file] of selectedItems.entries()) {
+      if (connectorPaths.has(path)) {
+        selected.push(file);
+      }
+    }
+    return selected;
+  }, [selectedItems, connectorPaths]);
+
+  const hasOnlyConnectorsSelected = selectedCount > 0 && selectedConnectors.length === selectedCount;
+  const hasConnectorsSelected = selectedConnectors.length > 0;
 
   const toggleSelect = (file: FileInfo, parentPath: string) => {
     setSelectedItems((prev) => {
@@ -86,6 +109,50 @@ export function LeftPanel({
   };
 
   const clearSelection = () => setSelectedItems(new Map());
+
+  const handleDisconnectConnectors = async () => {
+    if (selectedConnectors.length === 0) return;
+    const count = selectedConnectors.length;
+    const connectorNames = selectedConnectors.map(c => c.name).join(', ');
+
+    if (!window.confirm(
+      `Disconnect ${count} connector${count === 1 ? '' : 's'}?\n\n${connectorNames}\n\n` +
+      'This will:\n' +
+      '- Deactivate the connector(s)\n' +
+      '- Delete the connector directory and all its contents\n' +
+      '- Remove the saved connector configuration\n\n' +
+      'This action cannot be undone.'
+    )) {
+      return;
+    }
+
+    setIsDisconnecting(true);
+    const errors: Array<{ path: string; error: unknown }> = [];
+
+    for (const connector of selectedConnectors) {
+      try {
+        await filesAPI.deleteConnector(connector.path);
+      } catch (err) {
+        errors.push({ path: connector.path, error: err });
+      }
+    }
+
+    // Invalidate queries to refresh UI
+    await queryClient.invalidateQueries({ queryKey: ['saved_connectors'] });
+    await queryClient.invalidateQueries({ queryKey: fileKeys.connectors() });
+    await queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+
+    setIsDisconnecting(false);
+
+    if (errors.length > 0) {
+      console.error('Batch disconnect errors:', errors);
+      toast.error(`Disconnected with errors: ${errors.length} connector${errors.length === 1 ? '' : 's'} failed`);
+    } else {
+      toast.success(`Disconnected ${count} connector${count === 1 ? '' : 's'}`);
+    }
+
+    clearSelection();
+  };
 
   const handleDeleteSelected = async () => {
     if (selectedItems.size === 0) return;
@@ -194,17 +261,56 @@ export function LeftPanel({
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleDeleteSelected}
-                      title="Delete selected"
-                      type="button"
-                      className="h-7 w-7"
-                      disabled={deleteMutation.isPending}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
+                    {hasOnlyConnectorsSelected ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleDisconnectConnectors}
+                        title={`Disconnect ${selectedConnectors.length} connector${selectedConnectors.length === 1 ? '' : 's'}`}
+                        type="button"
+                        className="h-7 w-7"
+                        disabled={isDisconnecting}
+                      >
+                        <Unplug className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    ) : hasConnectorsSelected ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleDisconnectConnectors}
+                          title={`Disconnect ${selectedConnectors.length} connector${selectedConnectors.length === 1 ? '' : 's'}`}
+                          type="button"
+                          className="h-7 w-7"
+                          disabled={isDisconnecting}
+                        >
+                          <Unplug className="h-3.5 w-3.5 text-orange-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleDeleteSelected}
+                          title="Delete non-connector items"
+                          type="button"
+                          className="h-7 w-7"
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleDeleteSelected}
+                        title="Delete selected"
+                        type="button"
+                        className="h-7 w-7"
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    )}
                   </>
                 )}
                 <button

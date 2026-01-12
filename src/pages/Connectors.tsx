@@ -103,28 +103,8 @@ export function Connectors() {
   const deleteConnectorMutation = useMutation({
     mutationFn: async (mount_point: string) => {
       setDeletingConnector(mount_point);
-      // First, try to remove the connector if it's active (deactivate it and delete directory)
-      try {
-        await apiClient.call('remove_mount', { mount_point });
-      } catch (error) {
-        // Connector might not be active, continue
-        console.log('Connector not active or already removed:', error);
-      }
-      
-      // Always try to delete the directory to ensure it's removed
-      // (remove_mount should handle this, but we ensure it as a fallback)
-      try {
-        await filesAPI.rmdir(mount_point, true);
-      } catch (dirError: any) {
-        // Directory might not exist (already deleted by remove_mount) or other error
-        // Only log if it's not a "not found" error
-        if (dirError?.message && !dirError.message.includes('not found') && !dirError.message.includes('does not exist')) {
-          console.warn('Directory deletion warning:', dirError);
-        }
-      }
-      
-      // Finally, delete the saved connector configuration
-      return await filesAPI.deleteSavedConnector(mount_point);
+      // Use the bundled delete_connector API
+      return await filesAPI.deleteConnector(mount_point);
     },
     onSuccess: async (_result, mount_point) => {
       toast.success(`Connector deleted successfully: ${mount_point}`);
