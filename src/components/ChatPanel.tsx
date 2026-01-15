@@ -539,7 +539,8 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     try {
       // Create a temporary client with the agent's API key
       const { default: NexusAPIClient } = await import('../api/client');
-      const tempClient = new NexusAPIClient(apiClient.getBaseURL() || undefined, agentApiKey);
+      const baseUrl = apiClient.getBaseURL();
+      const tempClient = new NexusAPIClient(baseUrl || '', agentApiKey);
 
       // Test connection with whoami
       const result = await tempClient.whoami();

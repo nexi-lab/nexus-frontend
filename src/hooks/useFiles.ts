@@ -24,8 +24,11 @@ export function useNamespaces(enabled = true) {
   const filesAPI = useFilesAPI();
   return useQuery({
     queryKey: fileKeys.namespaces(),
-    queryFn: () => filesAPI.getAvailableNamespaces(),
-    enabled,
+    queryFn: () => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      return filesAPI.getAvailableNamespaces();
+    },
+    enabled: enabled && !!filesAPI,
     staleTime: 5 * 60 * 1000, // 5 minutes - namespaces don't change often
   });
 }
@@ -35,8 +38,11 @@ export function useConnectors(enabled = true) {
   const filesAPI = useFilesAPI();
   return useQuery({
     queryKey: fileKeys.connectors(),
-    queryFn: () => filesAPI.listConnectors(),
-    enabled,
+    queryFn: () => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      return filesAPI.listConnectors();
+    },
+    enabled: enabled && !!filesAPI,
     staleTime: 30 * 1000, // 30 seconds - connectors don't change very often
   });
 }
@@ -46,7 +52,10 @@ export function useFileList(path: string, enabled = true) {
   const filesAPI = useFilesAPI();
   return useQuery({
     queryKey: fileKeys.list(path),
-    queryFn: () => filesAPI.list(path, { details: true }),
+    queryFn: () => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      return filesAPI.list(path, { details: true });
+    },
     enabled,
   });
 }
@@ -56,8 +65,11 @@ export function useFileContent(path: string, enabled = true) {
   const filesAPI = useFilesAPI();
   return useQuery({
     queryKey: fileKeys.file(path),
-    queryFn: () => filesAPI.read(path),
-    enabled,
+    queryFn: () => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      return filesAPI.read(path);
+    },
+    enabled: enabled && !!filesAPI,
   });
 }
 
@@ -67,7 +79,10 @@ export function useCreateDirectory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ path }: { path: string }) => filesAPI.mkdir(path, { parents: true, exist_ok: false }),
+    mutationFn: ({ path }: { path: string }) => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      return filesAPI.mkdir(path, { parents: true, exist_ok: false });
+    },
     onSuccess: (_, { path }) => {
       // Invalidate parent directory
       const parentPath = path.substring(0, path.lastIndexOf('/')) || '/';
@@ -82,7 +97,10 @@ export function useUploadFile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ path, content }: { path: string; content: string | ArrayBuffer }) => filesAPI.write(path, content),
+    mutationFn: ({ path, content }: { path: string; content: string | ArrayBuffer }) => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      return filesAPI.write(path, content);
+    },
     onSuccess: (_, { path }) => {
       // Invalidate parent directory
       const parentPath = path.substring(0, path.lastIndexOf('/')) || '/';
@@ -99,7 +117,10 @@ export function useUpdateFile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ path, content }: { path: string; content: string | ArrayBuffer }) => filesAPI.write(path, content),
+    mutationFn: ({ path, content }: { path: string; content: string | ArrayBuffer }) => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      return filesAPI.write(path, content);
+    },
     onSuccess: (_, { path }) => {
       // Invalidate file content to refresh the view
       queryClient.invalidateQueries({ queryKey: fileKeys.file(path) });
@@ -114,6 +135,7 @@ export function useDeleteFile() {
 
   return useMutation({
     mutationFn: async ({ path, isDirectory }: { path: string; isDirectory: boolean }) => {
+      if (!filesAPI) throw new Error('API client not initialized');
       if (isDirectory) {
         await filesAPI.rmdir(path, true);
       } else {
@@ -136,7 +158,10 @@ export function useRenameFile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ oldPath, newPath }: { oldPath: string; newPath: string }) => filesAPI.rename(oldPath, newPath),
+    mutationFn: ({ oldPath, newPath }: { oldPath: string; newPath: string }) => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      return filesAPI.rename(oldPath, newPath);
+    },
     onSuccess: (_, { oldPath, newPath }) => {
       // Invalidate parent directories
       const oldParent = oldPath.substring(0, oldPath.lastIndexOf('/')) || '/';
@@ -156,6 +181,7 @@ export function useSearchFiles() {
   const filesAPI = useFilesAPI();
   return useMutation({
     mutationFn: async ({ query, searchType, path = '/' }: { query: string; searchType: 'glob' | 'grep'; path?: string }) => {
+      if (!filesAPI) throw new Error('API client not initialized');
       if (searchType === 'glob') {
         return await filesAPI.glob(query, path);
       } else {

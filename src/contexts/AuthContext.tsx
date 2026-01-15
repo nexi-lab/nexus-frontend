@@ -297,7 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateConnection = async (newApiUrl: string, newApiKey: string): Promise<UserInfo> => {
     // Create a temporary client with the new settings
-    const tempClient = new NexusAPIClient(newApiUrl || undefined, newApiKey || undefined);
+    const tempClient = new NexusAPIClient(newApiUrl || '', newApiKey || undefined);
 
     // Validate the connection by calling whoami
     const whoamiResponse = await tempClient.whoami();

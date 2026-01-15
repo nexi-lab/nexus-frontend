@@ -37,6 +37,12 @@ export default function OAuthCallback() {
   const hasProcessedRef = useRef(false);
 
   const handleUserAuthCallback = async (code: string, state: string) => {
+    if (!apiClient) {
+      setStatus('error');
+      setMessage('API client not initialized. Please configure your connection.');
+      return;
+    }
+    
     try {
       setStatus('processing');
       setMessage('Signing in with Google...');
@@ -262,6 +268,10 @@ export default function OAuthCallback() {
         }
 
         console.log('[OAuth Popup] Calling oauthExchangeCode with:', { provider, hasCode: !!code, hasState: !!state });
+
+        if (!clientToUse) {
+          throw new Error('API client not initialized');
+        }
 
         // Exchange code - email will be fetched automatically from provider
         // Use dynamic redirect URI based on current origin

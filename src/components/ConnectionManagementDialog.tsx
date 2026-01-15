@@ -64,8 +64,9 @@ export function ConnectionManagementDialog({ open, onOpenChange, selectedAgentId
     try {
       // Use agent's API key to check connection status
       const { default: NexusAPIClient } = await import('../api/client')
+      const baseUrl = apiClient.getBaseURL();
       const testClient = new NexusAPIClient(
-        apiClient.getBaseURL() || undefined,
+        baseUrl || '',
         apiKeyToUse || newApiKey || undefined // Use passed key or state
       )
 
@@ -106,7 +107,7 @@ export function ConnectionManagementDialog({ open, onOpenChange, selectedAgentId
       // Create a temporary client with the new settings
       const { default: NexusAPIClient } = await import('../api/client')
       const tempClient = new NexusAPIClient(
-        serverUrl.trim() || undefined,
+        serverUrl.trim() || '',
         newApiKey.trim() || undefined
       )
 
