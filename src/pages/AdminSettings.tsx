@@ -32,6 +32,7 @@ export function AdminSettings() {
   // Create dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
+    tenant_id: '',
     user_id: '',
     name: '',
     is_admin: false,
@@ -46,6 +47,7 @@ export function AdminSettings() {
   const [filters, setFilters] = useState({
     userId: '',
     name: '',
+    tenant: '',
     role: 'all', // 'all' | 'admin' | 'user' | 'agent'
     status: 'active', // 'all' | 'active' | 'revoked'
   });
@@ -92,10 +94,10 @@ export function AdminSettings() {
     loadKeys();
   }, [userInfo]);
 
-  // Create new user (API key)
+  // Create new API key
   const handleCreate = async () => {
-    if (!createForm.user_id.trim() || !createForm.name.trim()) {
-      setError('User ID and Name are required');
+    if (!createForm.tenant_id.trim() || !createForm.name.trim()) {
+      setError('Tenant ID and Name are required');
       return;
     }
 
@@ -103,7 +105,8 @@ export function AdminSettings() {
       setCreating(true);
       setError(null);
       const response = await apiClient.adminCreateKey({
-        user_id: createForm.user_id.trim(),
+        tenant_id: createForm.tenant_id.trim(),
+        user_id: createForm.user_id.trim() || undefined,
         name: createForm.name.trim(),
         is_admin: createForm.is_admin,
         expires_days: createForm.expires_days > 0 ? createForm.expires_days : null,
@@ -119,6 +122,7 @@ export function AdminSettings() {
 
       // Reset form
       setCreateForm({
+        tenant_id: '',
         user_id: '',
         name: '',
         is_admin: false,
@@ -220,6 +224,11 @@ export function AdminSettings() {
         return false;
       }
 
+      // Filter by tenant
+      if (filters.tenant && !key.tenant_id.toLowerCase().includes(filters.tenant.toLowerCase())) {
+        return false;
+      }
+
       // Filter by role
       if (filters.role === 'admin' && !key.is_admin) {
         return false;
@@ -270,7 +279,7 @@ export function AdminSettings() {
           </div>
           <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Create User
+            Create New Key
           </Button>
         </div>
       </header>
@@ -286,7 +295,7 @@ export function AdminSettings() {
               <Filter className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">Filters</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* User ID Search */}
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">User ID</label>
@@ -310,6 +319,20 @@ export function AdminSettings() {
                     placeholder="Search name..."
                     value={filters.name}
                     onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              {/* Tenant Search */}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Tenant</label>
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search tenant..."
+                    value={filters.tenant}
+                    onChange={(e) => setFilters({ ...filters, tenant: e.target.value })}
                     className="pl-8"
                   />
                 </div>
@@ -359,6 +382,7 @@ export function AdminSettings() {
                   <tr className="border-b">
                     <th className="text-left p-4 font-medium">User ID</th>
                     <th className="text-left p-4 font-medium">Name</th>
+                    <th className="text-left p-4 font-medium">Tenant</th>
                     <th className="text-left p-4 font-medium">Role</th>
                     <th className="text-left p-4 font-medium">Created</th>
                     <th className="text-left p-4 font-medium">Expires</th>
@@ -376,6 +400,9 @@ export function AdminSettings() {
                         </div>
                       </td>
                       <td className="p-4">{key.name}</td>
+                      <td className="p-4">
+                        <span className="font-mono text-sm">{key.tenant_id}</span>
+                      </td>
                       <td className="p-4">
                         {key.is_admin ? (
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
@@ -430,10 +457,10 @@ export function AdminSettings() {
               {keys.length === 0 && (
                 <div className="text-center py-12">
                   <Key className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No users found</p>
+                  <p className="text-muted-foreground">No API keys found</p>
                   <Button onClick={() => setCreateDialogOpen(true)} className="mt-4">
                     <Plus className="h-4 w-4 mr-2" />
-                    Create First User
+                    Create First Key
                   </Button>
                 </div>
               )}
@@ -477,8 +504,8 @@ export function AdminSettings() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New User</DialogTitle>
-            <DialogDescription>Create a new API key for a user. The API key will be shown only once.</DialogDescription>
+            <DialogTitle>Create New Key</DialogTitle>
+            <DialogDescription>Create a new API key. The API key will be shown only once.</DialogDescription>
           </DialogHeader>
 
           {(() => {
@@ -524,22 +551,35 @@ export function AdminSettings() {
           ) : (
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <label htmlFor="user_id" className="text-sm font-medium">
-                  User ID *
+                <label htmlFor="tenant_id" className="text-sm font-medium">
+                  Tenant ID *
                 </label>
                 <Input
-                  id="user_id"
-                  placeholder="alice"
-                  value={createForm.user_id}
-                  onChange={(e) => setCreateForm({ ...createForm, user_id: e.target.value })}
+                  id="tenant_id"
+                  placeholder="system"
+                  value={createForm.tenant_id}
+                  onChange={(e) => setCreateForm({ ...createForm, tenant_id: e.target.value })}
                 />
               </div>
 
               <div className="grid gap-2">
-                <label htmlFor="name" className="text-sm font-medium">
-                  Display Name *
+                <label htmlFor="user_id" className="text-sm font-medium">
+                  User ID (optional)
                 </label>
-                <Input id="name" placeholder="Alice Smith" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} />
+                <Input
+                  id="user_id"
+                  placeholder="alice (auto-generated if empty)"
+                  value={createForm.user_id}
+                  onChange={(e) => setCreateForm({ ...createForm, user_id: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Leave empty to auto-generate a user ID</p>
+              </div>
+
+              <div className="grid gap-2">
+                <label htmlFor="name" className="text-sm font-medium">
+                  Key Name *
+                </label>
+                <Input id="name" placeholder="My API Key" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} />
               </div>
 
               <div className="grid gap-2">
@@ -590,7 +630,7 @@ export function AdminSettings() {
                   Cancel
                 </Button>
                 <Button onClick={handleCreate} disabled={creating}>
-                  {creating ? 'Creating...' : 'Create User'}
+                  {creating ? 'Creating...' : 'Create Key'}
                 </Button>
               </>
             )}

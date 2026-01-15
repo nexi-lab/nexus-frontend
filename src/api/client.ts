@@ -516,11 +516,11 @@ class NexusAPIClient {
 
   // Admin API - Create a new API key for a user
   async adminCreateKey(params: {
-    user_id: string;
+    tenant_id: string;
     name: string;
+    user_id?: string;
     is_admin?: boolean;
     expires_days?: number | null;
-    tenant_id?: string;
     subject_type?: string;
     subject_id?: string;
   }): Promise<{ api_key: string; key_id: string; user_id: string; name: string }> {
