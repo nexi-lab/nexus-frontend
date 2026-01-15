@@ -28,7 +28,7 @@ type ConfirmationData = {
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { apiClient } = useAuth();
+  const { apiClient, apiUrl } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error' | 'confirmation'>('processing');
   const [message, setMessage] = useState('Processing OAuth callback...');
   const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
@@ -248,12 +248,16 @@ export default function OAuthCallback() {
           }
 
           // Create fresh API client with auth token pre-set
-          const apiUrl = (import.meta as any).env.VITE_NEXUS_API_URL || 'http://localhost:2026';
-          console.log('[OAuth Popup] Creating fresh API client with URL:', apiUrl);
+          // Get API URL from context, localStorage, or env - no default
+          const apiUrlToUse = apiUrl || localStorage.getItem('nexus_api_url') || (import.meta as any).env.VITE_NEXUS_API_URL;
+          if (!apiUrlToUse) {
+            throw new Error('Nexus server URL is required. Please configure it in the login page.');
+          }
+          console.log('[OAuth Popup] Creating fresh API client with URL:', apiUrlToUse);
 
           // IMPORTANT: Pass the token directly to constructor instead of calling setAuthToken
           // This ensures the token is available in the interceptor closure
-          clientToUse = new NexusAPIClient(apiUrl, authToken);
+          clientToUse = new NexusAPIClient(apiUrlToUse, authToken);
           console.log('[OAuth Popup] Created API client with auth token');
         }
 

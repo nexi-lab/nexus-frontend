@@ -9,9 +9,8 @@ export default function Login() {
   const { updateConnection } = useAuth();
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState(() => {
-    // Get from localStorage or use default
-    const stored = localStorage.getItem('nexus_api_url');
-    return stored || 'http://localhost:2026';
+    // Get from localStorage (no default)
+    return localStorage.getItem('nexus_api_url') || '';
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,13 +19,13 @@ export default function Login() {
     e.preventDefault();
     setError('');
     
-    if (!apiKey.trim()) {
-      setError('Please enter an API key');
+    if (!apiUrl.trim()) {
+      setError('Nexus server URL is required');
       return;
     }
 
-    if (!apiUrl.trim()) {
-      setError('Please enter a Nexus server URL');
+    if (!apiKey.trim()) {
+      setError('API key is required');
       return;
     }
 
@@ -76,7 +75,7 @@ export default function Login() {
               onChange={(e) => setApiUrl(e.target.value)}
             />
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              Enter the URL of your Nexus server (e.g., http://localhost:2026)
+              Enter the URL of your Nexus server (required)
             </p>
           </div>
 

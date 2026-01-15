@@ -27,12 +27,13 @@ interface UserAccount {
 
 interface AuthContextType {
   // API Key authentication (backend auth)
+  apiUrl: string | null;
   apiKey: string | null;
   isAuthenticated: boolean;
   userInfo: UserInfo | null;
   login: (apiKey: string) => Promise<UserInfo>;
   logout: () => void;
-  apiClient: NexusAPIClient;
+  apiClient: NexusAPIClient | null;
   updateConnection: (apiUrl: string, apiKey: string) => Promise<UserInfo>;
 
   // User JWT authentication (user accounts)
@@ -56,7 +57,7 @@ const JWT_TOKEN_STORAGE_KEY = 'nexus_jwt_token';
 const USER_ACCOUNT_STORAGE_KEY = 'nexus_user_account';
 
 // Get API URL from localStorage or environment
-const getApiURL = () => {
+const getApiURL = (): string | null => {
   // First try localStorage (user-configured URL)
   const storedUrl = localStorage.getItem(API_URL_STORAGE_KEY);
   if (storedUrl) {
@@ -79,15 +80,22 @@ const getApiURL = () => {
     return storedUrl;
   }
 
-  // Fall back to environment variable
-  const apiURL =
-    (import.meta as any).env.VITE_NEXUS_API_URL !== undefined && (import.meta as any).env.VITE_NEXUS_API_URL !== ''
-      ? (import.meta as any).env.VITE_NEXUS_API_URL
-      : 'http://localhost:2026'; // Default to localhost:2026 if not configured
-  return apiURL;
+  // Fall back to environment variable if available
+  const envUrl = (import.meta as any).env.VITE_NEXUS_API_URL;
+  if (envUrl && envUrl !== '') {
+    return envUrl;
+  }
+
+  // No default - return null if not configured
+  return null;
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [apiUrl, setApiUrl] = useState<string | null>(() => {
+    // Initialize API URL from localStorage (no default)
+    return getApiURL();
+  });
+
   const [apiKey, setApiKey] = useState<string | null>(() => {
     // Try to load API key from localStorage only
     const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
@@ -111,8 +119,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return storedAccount ? JSON.parse(storedAccount) : null;
   });
 
-  const [apiClient, setApiClient] = useState<NexusAPIClient>(() => {
-    const client = new NexusAPIClient(getApiURL(), apiKey || undefined);
+  const [apiClient, setApiClient] = useState<NexusAPIClient | null>(() => {
+    // Only create client if API URL is available
+    if (!apiUrl) {
+      return null;
+    }
+    const client = new NexusAPIClient(apiUrl, apiKey || undefined);
     // Prefer user's personal API key (permanent), fallback to JWT token
     if (userAccount?.api_key) {
       client.setAuthToken(userAccount.api_key);
@@ -122,9 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return client;
   });
 
-  // Update API client when API key, JWT token, or user account changes
+  // Update API client when API URL, API key, JWT token, or user account changes
   useEffect(() => {
-    const newClient = new NexusAPIClient(getApiURL(), apiKey || undefined);
+    if (!apiUrl) {
+      setApiClient(null);
+      return;
+    }
+    const newClient = new NexusAPIClient(apiUrl, apiKey || undefined);
     // Prefer user's personal API key (permanent), fallback to JWT token
     if (userAccount?.api_key) {
       newClient.setAuthToken(userAccount.api_key);
@@ -132,15 +148,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       newClient.setAuthToken(jwtToken);
     }
     setApiClient(newClient);
-  }, [apiKey, jwtToken, userAccount]);
+  }, [apiUrl, apiKey, jwtToken, userAccount]);
 
   // Fetch fresh user data from backend when app loads (if API key or JWT token exists)
   useEffect(() => {
     const fetchUserData = async () => {
       // If we have an API key, use it to get fresh user info
-      if (apiKey) {
+      if (apiKey && apiUrl) {
         try {
-          const tempClient = new NexusAPIClient(getApiURL(), apiKey);
+          const tempClient = new NexusAPIClient(apiUrl, apiKey);
           const whoamiData = await tempClient.whoami();
 
           if (whoamiData.authenticated) {
@@ -169,10 +185,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // If we have JWT token but no API key, fetch user data with JWT
-      if (jwtToken) {
+      if (jwtToken && apiUrl) {
         try {
           // Create a temporary client with the JWT token
-          const tempClient = new NexusAPIClient(getApiURL(), undefined);
+          const tempClient = new NexusAPIClient(apiUrl, undefined);
           tempClient.setAuthToken(jwtToken);
 
           // Fetch user info using whoami (simpler and more reliable than /auth/me)
@@ -214,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     fetchUserData();
-  }, []); // Only run once on mount
+  }, [apiUrl, apiKey, jwtToken]); // Re-run when API URL, API key, or JWT token changes
 
   // Sync userInfo from userAccount for OAuth users (when userAccount changes from login)
   // This ensures FileTree and other components that rely on userInfo work properly
@@ -234,8 +250,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [userAccount, userInfo]);
 
   const login = async (newApiKey: string): Promise<UserInfo> => {
+    if (!apiUrl) {
+      throw new Error('API URL is required. Please configure the Nexus server URL first.');
+    }
     // Create a temporary client with the new API key
-    const tempClient = new NexusAPIClient(getApiURL(), newApiKey);
+    const tempClient = new NexusAPIClient(apiUrl, newApiKey);
 
     // Validate the API key by calling whoami
     const whoamiResponse = await tempClient.whoami();
@@ -302,6 +321,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(USER_INFO_STORAGE_KEY, JSON.stringify(newUserInfo));
 
     // Update state
+    setApiUrl(newApiUrl);
     setApiKey(newApiKey);
     setUserInfo(newUserInfo);
     // API client will be updated by the useEffect
@@ -311,6 +331,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // User authentication methods
   const userLogin = async (identifier: string, password: string): Promise<UserAccount> => {
+    if (!apiClient) {
+      throw new Error('API URL is required. Please configure the Nexus server URL first.');
+    }
     const response = await apiClient.authLogin({ identifier, password });
 
     const newUserAccount: UserAccount = response.user;
@@ -334,6 +357,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     username?: string,
     displayName?: string
   ): Promise<UserAccount> => {
+    if (!apiClient) {
+      throw new Error('API URL is required. Please configure the Nexus server URL first.');
+    }
     const response = await apiClient.authRegister({
       email,
       password,
@@ -364,7 +390,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(USER_ACCOUNT_STORAGE_KEY, JSON.stringify(newUserAccount));
 
     // Update API client with new token
-    apiClient.setAuthToken(token);
+    if (apiClient) {
+      apiClient.setAuthToken(token);
+    }
 
     return newUserAccount;
   };
@@ -378,10 +406,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(USER_INFO_STORAGE_KEY);
     localStorage.removeItem('nexus_user_api_key');
     localStorage.removeItem('nexus_tenant_id');
-    apiClient.setAuthToken(null);
+    if (apiClient) {
+      apiClient.setAuthToken(null);
+    }
   };
 
   const updateUserProfile = async (displayName?: string, avatarUrl?: string): Promise<UserAccount> => {
+    if (!apiClient) {
+      throw new Error('API URL is required. Please configure the Nexus server URL first.');
+    }
     const updatedUser = await apiClient.authUpdateProfile({
       display_name: displayName,
       avatar_url: avatarUrl,
@@ -394,6 +427,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
+    if (!apiClient) {
+      throw new Error('API URL is required. Please configure the Nexus server URL first.');
+    }
     await apiClient.authChangePassword({
       old_password: oldPassword,
       new_password: newPassword,
@@ -401,6 +437,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteAccount = async (): Promise<void> => {
+    if (!apiClient) {
+      throw new Error('API URL is required. Please configure the Nexus server URL first.');
+    }
     if (!userAccount) {
       throw new Error('No user account found');
     }
@@ -419,6 +458,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextType = {
     // API Key authentication
+    apiUrl,
     apiKey,
     isAuthenticated: !!apiKey,
     userInfo,

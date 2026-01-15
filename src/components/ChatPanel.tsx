@@ -364,19 +364,22 @@ function ChatPanelContent({
 }
 
 export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFilePath }: ChatPanelProps) {
-  const { apiKey, userInfo, apiClient, userAccount } = useAuth();
+  const { apiKey, apiUrl, userInfo, apiClient, userAccount } = useAuth();
   // User's personal API key: prefer userAccount.api_key (OAuth users), fallback to apiKey (direct API key auth)
   const userPersonalApiKey = userAccount?.api_key || apiKey || '';
   // filesAPI always uses user's API key from AuthContext (not agent's key)
   const filesAPI = createFilesAPI(apiClient);
   const registerAgentMutation = useRegisterAgent();
 
+  // Get Nexus server URL from context, env - required, no default
+  const nexusServerUrl = apiUrl || import.meta.env.VITE_NEXUS_SERVER_URL || import.meta.env.VITE_API_URL;
+
   const [config, setConfig] = useState<ChatConfig>({
     apiUrl: 'http://localhost:2024',
     assistantId: 'agent',
     apiKey: apiKey || '', // Will be LangGraph key for LangGraph agents
     nexusApiKey: apiKey || '', // Nexus API key for tool calls
-    nexusServerUrl: import.meta.env.VITE_NEXUS_SERVER_URL || import.meta.env.VITE_API_URL || 'http://localhost:2026', // Nexus backend URL for LangGraph to connect
+    nexusServerUrl: nexusServerUrl || '', // Nexus backend URL for LangGraph to connect (required, no default)
     sandboxId: undefined, // Sandbox ID for code execution
     threadId: undefined, // Start with no thread
     userId: userInfo?.subject_id || '',

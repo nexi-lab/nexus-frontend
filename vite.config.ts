@@ -16,15 +16,17 @@ export default defineConfig({
     allowedHosts: ['localhost'],
     proxy: {
       '/api': {
-        // For Docker development, proxy to local Nexus server
-        // For production deployment, change to: 'https://nexus-dev.nexilab.co'
-        // Use VITE_NEXUS_API_URL from .env, fallback to localhost for local dev
-        target: process.env.VITE_NEXUS_API_URL || 'http://localhost:2026',
+        // VITE_NEXUS_API_URL is required - set it in .env file
+        // Example: VITE_NEXUS_API_URL=http://localhost:2026
+        // If not set, proxy will fail (which is intentional - forces configuration)
+        target: process.env.VITE_NEXUS_API_URL,
         changeOrigin: true,
         secure: false,
       },
       '/health': {
-        target: process.env.VITE_NEXUS_API_URL || 'https://nexus-dev.nexilab.co',
+        // VITE_NEXUS_API_URL is required - set it in .env file
+        // If not set, proxy will fail (which is intentional - forces configuration)
+        target: process.env.VITE_NEXUS_API_URL,
         changeOrigin: true,
         secure: false,
       },
