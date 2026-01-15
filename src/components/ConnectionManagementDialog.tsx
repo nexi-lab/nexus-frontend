@@ -29,6 +29,15 @@ interface ConnectionStatus {
 
 export function ConnectionManagementDialog({ open, onOpenChange, selectedAgentId, agentApiKey }: ConnectionManagementDialogProps) {
   const { apiClient } = useAuth()
+  
+  if (!apiClient) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        API client not initialized. Please configure your connection.
+      </div>
+    );
+  }
+  
   const [serverUrl, setServerUrl] = useState('')
   const [newApiKey, setNewApiKey] = useState('')
   const [error, setError] = useState<string | null>(null)

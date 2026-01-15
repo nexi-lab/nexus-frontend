@@ -78,6 +78,15 @@ const AVAILABLE_TOOL_SETS = [
 
 export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onAgentSelect }: AgentManagementDialogProps) {
   const { userInfo, apiClient, apiKey } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        API client not initialized. Please configure your connection.
+      </div>
+    );
+  }
+  
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
 
   // Agent list state
@@ -114,6 +123,10 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
   }, [open]);
 
   const loadAgents = async () => {
+    if (!apiClient) {
+      setAgentError('API client not initialized');
+      return;
+    }
     setLoadingAgents(true);
     setAgentError(null);
     try {
@@ -127,6 +140,10 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
   };
 
   const handleStartSandbox = async (agentId: string) => {
+    if (!apiClient) {
+      setAgentError('API client not initialized');
+      return;
+    }
     // Check if Nexus is connected first
     const currentConnection = sandboxConnections[agentId];
     if (currentConnection?.nexusStatus !== 'connected') {
@@ -208,6 +225,10 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
   };
 
   const handleConnectNexus = async (agentId: string) => {
+    if (!apiClient) {
+      setAgentError('API client not initialized');
+      return;
+    }
     // Get Nexus API key from auth context
     if (!apiKey) {
       setAgentError('No Nexus API key found. Please log in again.');
@@ -265,6 +286,10 @@ export function AgentManagementDialog({ open, onOpenChange, onRegisterAgent, onA
   };
 
   const handleDeleteAgent = async (agentId: string, agentName: string) => {
+    if (!apiClient) {
+      setAgentError('API client not initialized');
+      return;
+    }
     if (!confirm(`Are you sure you want to delete agent "${agentName}"?`)) {
       return;
     }

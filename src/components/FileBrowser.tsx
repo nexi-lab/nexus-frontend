@@ -33,6 +33,18 @@ export function FileBrowser() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, isUserAuthenticated, logout, apiClient, userInfo, userAccount, userLogout } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium mb-2">API client not initialized</p>
+          <p>Please configure your connection in the login page.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const { t } = useTranslation();
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [currentPath, setCurrentPath] = useState('/');
@@ -295,7 +307,7 @@ export function FileBrowser() {
       <header className="relative z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4 flex-1">
-            <img src="/nexus-logo.png" alt="Nexus Logo" className="h-10 w-10" />
+            <img src="/logo.png" alt="Nexus Logo" className="h-10 w-10" />
             <h1 className="text-2xl font-bold">{t('landing.nexus')}</h1>
           </div>
           <div className="flex gap-2 items-center">

@@ -29,6 +29,11 @@ interface OAuthStatusPanelProps {
 
 export default function OAuthStatusPanel({ className }: OAuthStatusPanelProps) {
   const { apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return null;
+  }
+  
   const [credentials, setCredentials] = useState<OAuthCredential[]>([]);
   const [providers, setProviders] = useState<OAuthProvider[]>([]);
   const [loading, setLoading] = useState(true);

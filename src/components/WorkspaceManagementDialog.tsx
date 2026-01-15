@@ -24,6 +24,15 @@ interface Workspace {
 
 export function WorkspaceManagementDialog({ open, onOpenChange, onCreateWorkspace }: WorkspaceManagementDialogProps) {
   const { userInfo, apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        API client not initialized. Please configure your connection.
+      </div>
+    );
+  }
+  
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
 
   // Workspace list state

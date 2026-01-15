@@ -28,6 +28,18 @@ interface OAuthConfirmationProps {
 export default function OAuthConfirmation({ confirmationData }: OAuthConfirmationProps) {
   const navigate = useNavigate();
   const { apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium mb-2">API client not initialized</p>
+          <p>Please configure your connection in the login page.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const { user_info, tenant_info, pending_token } = confirmationData;
 
   const [tenantName, setTenantName] = useState(tenant_info.name);

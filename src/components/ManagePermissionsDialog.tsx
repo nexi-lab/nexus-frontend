@@ -29,6 +29,11 @@ const subjectTypeIcons: Record<string, any> = {
 
 export function ManagePermissionsDialog({ open, onOpenChange, filePath }: ManagePermissionsDialogProps) {
   const { apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return null;
+  }
+  
   const { data: rawPermissions, isLoading, refetch } = useFilePermissions(filePath);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [granting, setGranting] = useState(false);

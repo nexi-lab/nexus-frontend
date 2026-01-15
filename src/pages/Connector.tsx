@@ -56,6 +56,18 @@ const BACKEND_NAMES: Record<string, string> = {
 export function Connector() {
   const navigate = useNavigate();
   const { apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium mb-2">API client not initialized</p>
+          <p>Please configure your connection in the login page.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const filesAPI = createFilesAPI(apiClient);

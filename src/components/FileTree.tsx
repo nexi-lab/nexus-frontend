@@ -149,6 +149,11 @@ function TreeNode({
 }: TreeNodeProps) {
   const queryClient = useQueryClient();
   const { apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return null;
+  }
+  
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [isExpanded, setIsExpanded] = useState(currentPath.startsWith(path) || path === '/');
   const [isSyncing, setIsSyncing] = useState(false);

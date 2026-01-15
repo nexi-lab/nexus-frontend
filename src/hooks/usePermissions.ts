@@ -18,6 +18,7 @@ export function useFilePermissions(filePath: string | null | undefined) {
     queryKey: ['permissions', filePath],
     queryFn: async () => {
       if (!filePath) return [];
+      if (!apiClient) throw new Error('API client not initialized');
 
       const tuples = await apiClient.rebacListTuples({
         object: ['file', filePath],
@@ -26,6 +27,6 @@ export function useFilePermissions(filePath: string | null | undefined) {
       // Filter out any tuples with invalid data
       return tuples.filter((t: any) => t.subject_type && t.subject_id && t.relation) as PermissionTuple[];
     },
-    enabled: !!filePath,
+    enabled: !!filePath && !!apiClient,
   });
 }

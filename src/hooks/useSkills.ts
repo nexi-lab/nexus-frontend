@@ -84,9 +84,10 @@ export function useSkills(tier?: string, enabled = true) {
   return useQuery({
     queryKey: skillKeys.list(tier),
     queryFn: async (): Promise<SkillsListResponse> => {
+      if (!apiClient) throw new Error('API client not initialized');
       return apiClient.skillsList({ tier, include_metadata: true });
     },
-    enabled,
+    enabled: enabled && !!apiClient,
     staleTime: 60 * 1000, // 1 minute
   });
 }
@@ -103,9 +104,10 @@ export function useDiscoverSkills(
   return useQuery({
     queryKey: skillKeys.discover(filter, offset, limit),
     queryFn: async (): Promise<SkillsDiscoverResponse> => {
+      if (!apiClient) throw new Error('API client not initialized');
       return apiClient.skillsDiscover({ filter, offset, limit });
     },
-    enabled,
+    enabled: enabled && !!apiClient,
     staleTime: 60 * 1000, // 1 minute
   });
 }
@@ -117,6 +119,7 @@ export function useSubscribeSkill() {
 
   return useMutation({
     mutationFn: async ({ skillPath }: { skillPath: string }) => {
+      if (!apiClient) throw new Error('API client not initialized');
       return apiClient.skillsSubscribe({ skill_path: skillPath });
     },
     onSuccess: () => {
@@ -133,6 +136,7 @@ export function useUnsubscribeSkill() {
 
   return useMutation({
     mutationFn: async ({ skillPath }: { skillPath: string }) => {
+      if (!apiClient) throw new Error('API client not initialized');
       return apiClient.skillsUnsubscribe({ skill_path: skillPath });
     },
     onSuccess: () => {
@@ -149,9 +153,10 @@ export function useSkillInfo(skillName: string, enabled = true) {
   return useQuery({
     queryKey: skillKeys.detail(skillName),
     queryFn: async () => {
+      if (!apiClient) throw new Error('API client not initialized');
       return apiClient.skillsInfo({ skill_name: skillName });
     },
-    enabled,
+    enabled: enabled && !!apiClient,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -171,6 +176,7 @@ export function useUploadSkill() {
       tier: 'personal' | 'tenant';
       allowOverwrite?: boolean;
     }): Promise<SkillImportResponse> => {
+      if (!apiClient) throw new Error('API client not initialized');
       return apiClient.skillsImport({
         zip_data: zipData,
         tier,
@@ -194,6 +200,7 @@ export function useValidateSkillZip() {
     }: {
       zipData: string;
     }): Promise<SkillValidationResponse> => {
+      if (!apiClient) throw new Error('API client not initialized');
       return apiClient.skillsValidateZip({ zip_data: zipData });
     },
   });
@@ -213,6 +220,7 @@ export function useExportSkill() {
       format?: 'generic' | 'claude';
       includeDependencies?: boolean;
     }): Promise<SkillExportResponse> => {
+      if (!apiClient) throw new Error('API client not initialized');
       return apiClient.skillsExport({
         skill_name: skillName,
         format: format || 'generic',
@@ -226,10 +234,11 @@ export function useExportSkill() {
 export function useDeleteSkill() {
   const { apiClient } = useAuth();
   const queryClient = useQueryClient();
-  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
+  const filesAPI = useMemo(() => apiClient ? createFilesAPI(apiClient) : null, [apiClient]);
 
   return useMutation({
     mutationFn: async ({ skillPath }: { skillPath: string }) => {
+      if (!filesAPI) throw new Error('API client not initialized');
       // Use filesystem API to delete skill directory
       // skillPath is like: /skills/users/{user_id}/skill-name/
       console.log('useDeleteSkill: Attempting to delete skill directory:', skillPath);

@@ -49,6 +49,18 @@ const AVAILABLE_PLATFORMS = [
 export function Agent() {
   const navigate = useNavigate();
   const { userInfo, apiClient, apiKey } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium mb-2">API client not initialized</p>
+          <p>Please configure your connection in the login page.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'list' | 'edit' | 'create'>('list');
 

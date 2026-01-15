@@ -25,6 +25,18 @@ interface ApiKey {
 export function AdminSettings() {
   const navigate = useNavigate();
   const { apiClient, userInfo } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium mb-2">API client not initialized</p>
+          <p>Please configure your connection in the login page.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

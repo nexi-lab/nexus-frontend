@@ -14,6 +14,10 @@ interface StoreMemoryDialogProps {
 
 export function StoreMemoryDialog({ open, onOpenChange, initialNamespace, onRegisterMemory }: StoreMemoryDialogProps) {
   const { userInfo, apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return null;
+  }
 
   // Form state
   const [namespace, setNamespace] = useState<string>('');

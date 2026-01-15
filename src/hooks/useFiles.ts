@@ -16,7 +16,7 @@ export const fileKeys = {
 // Hook to get the filesAPI with the authenticated client
 function useFilesAPI() {
   const { apiClient } = useAuth();
-  return useMemo(() => createFilesAPI(apiClient), [apiClient]);
+  return useMemo(() => apiClient ? createFilesAPI(apiClient) : null, [apiClient]);
 }
 
 // Get available namespaces
@@ -173,6 +173,9 @@ export function useCreateWorkspace() {
 
   return useMutation({
     mutationFn: async ({ path, name, description }: { path: string; name?: string; description?: string }) => {
+      if (!filesAPI) throw new Error('API client not initialized');
+      if (!apiClient) throw new Error('API client not initialized');
+      
       // Step 1: Create directory
       await filesAPI.mkdir(path, { parents: true, exist_ok: false });
 
@@ -222,6 +225,9 @@ export function useRegisterAgent() {
         tools: string[];
       };
     }) => {
+      if (!apiClient) throw new Error('API client not initialized');
+      if (!filesAPI) throw new Error('API client not initialized');
+      
       // Step 1: Register the agent
       const agent = await apiClient.registerAgent({
         agent_id: agentId,

@@ -47,6 +47,15 @@ interface FileContentViewerProps {
 
 export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProps) {
   const { apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        API client not initialized. Please configure your connection.
+      </div>
+    );
+  }
+  
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
 
   const filePath = file?.path || '';

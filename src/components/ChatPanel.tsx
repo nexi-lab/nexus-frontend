@@ -368,7 +368,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   // User's personal API key: prefer userAccount.api_key (OAuth users), fallback to apiKey (direct API key auth)
   const userPersonalApiKey = userAccount?.api_key || apiKey || '';
   // filesAPI always uses user's API key from AuthContext (not agent's key)
-  const filesAPI = createFilesAPI(apiClient);
+  const filesAPI = apiClient ? createFilesAPI(apiClient) : null;
   const registerAgentMutation = useRegisterAgent();
 
   // Get Nexus server URL from context, env - required, no default
@@ -442,6 +442,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   }, [workspaces]);
 
   const loadAgents = async () => {
+    if (!apiClient) return;
     setLoadingAgents(true);
     try {
       const agentList = await apiClient.listAgents();
@@ -464,6 +465,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   };
 
   const loadWorkspaces = async () => {
+    if (!apiClient) return;
     setLoadingWorkspaces(true);
     try {
       const workspaceList = await apiClient.listWorkspaces();
@@ -512,6 +514,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   };
 
   const handleCreateWorkspace = async (path: string, name: string, description: string) => {
+    if (!apiClient) throw new Error('API client not initialized');
     try {
       await apiClient.registerWorkspace({
         path,
@@ -531,6 +534,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
 
   // Test agent connection with its API key
   const testAgentConnection = async (agentApiKey: string) => {
+    if (!apiClient) return;
     setAgentConnectionStatus('checking');
     try {
       // Create a temporary client with the agent's API key
@@ -559,6 +563,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
       setSelectedAgentId('');
       return;
     }
+    if (!apiClient) return;
 
     try {
       // Use get_agent API to get all agent information including API key and config
@@ -716,7 +721,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
 
   // Poll sandbox status periodically if sandbox exists
   useEffect(() => {
-    if (!config.sandboxId || !selectedAgentId) {
+    if (!config.sandboxId || !selectedAgentId || !apiClient) {
       return;
     }
 
@@ -794,7 +799,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   };
 
   const handlePauseSandbox = async () => {
-    if (!config.sandboxId) return;
+    if (!config.sandboxId || !apiClient) return;
 
     try {
       await apiClient.sandboxPause(config.sandboxId);
@@ -809,7 +814,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   };
 
   const handleResumeSandbox = async () => {
-    if (!config.sandboxId) return;
+    if (!config.sandboxId || !apiClient) return;
 
     try {
       await apiClient.sandboxResume(config.sandboxId);
@@ -824,7 +829,7 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   };
 
   const handleStopSandbox = async () => {
-    if (!config.sandboxId) return;
+    if (!config.sandboxId || !apiClient) return;
 
     if (!confirm('Are you sure you want to stop this sandbox? You will need to create a new one to continue.')) {
       return;
@@ -852,6 +857,10 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     // Check if we have a selected agent
     if (!selectedAgentId) {
       alert('Please select an agent first.');
+      return;
+    }
+    if (!apiClient) {
+      alert('API client not initialized');
       return;
     }
 

@@ -41,6 +41,11 @@ interface StoredMemory {
 
 export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementDialogProps) {
   const { userInfo, apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return null;
+  }
+  
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'stored'>('list');
 
   // Memory list state

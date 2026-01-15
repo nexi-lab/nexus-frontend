@@ -17,6 +17,15 @@ interface OAuthSetupDialogProps {
 
 export default function OAuthSetupDialog({ open, onOpenChange, onSuccess, provider: initialProvider }: OAuthSetupDialogProps) {
   const { apiClient, userInfo } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        API client not initialized. Please configure your connection.
+      </div>
+    );
+  }
+  
   const [step, setStep] = useState<'email' | 'authorize' | 'code' | 'success'>('email');
   const [userEmail, setUserEmail] = useState('');
   const [rootFolder, setRootFolder] = useState('');

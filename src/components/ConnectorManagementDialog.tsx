@@ -50,6 +50,15 @@ export function ConnectorManagementDialog({
   onSuccess,
 }: ConnectorManagementDialogProps) {
   const { apiClient, userInfo } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        API client not initialized. Please configure your connection.
+      </div>
+    );
+  }
+  
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<'select' | 'configure'>('select');

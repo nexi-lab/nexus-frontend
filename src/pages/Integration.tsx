@@ -35,6 +35,18 @@ export function IntegrationsPanel({
   urlCleanupPath?: string;
 }) {
   const { apiClient, userInfo } = useAuth();
+  
+  if (!apiClient) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium mb-2">API client not initialized</p>
+          <p>Please configure your connection in the login page.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const [selectedProvider, setSelectedProvider] = useState<string>('');
   const [oauthDialogOpen, setOauthDialogOpen] = useState(false);
   const [providers, setProviders] = useState<OAuthProvider[]>([]);

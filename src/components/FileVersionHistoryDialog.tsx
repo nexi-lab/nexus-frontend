@@ -24,6 +24,11 @@ interface FileVersionHistoryDialogProps {
 
 export function FileVersionHistoryDialog({ open, onOpenChange, filePath }: FileVersionHistoryDialogProps) {
   const { apiClient } = useAuth();
+  
+  if (!apiClient) {
+    return null;
+  }
+  
   const [versions, setVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
