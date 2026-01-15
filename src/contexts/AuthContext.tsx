@@ -134,51 +134,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApiClient(newClient);
   }, [apiKey, jwtToken, userAccount]);
 
-  // Fetch fresh user data from backend when app loads (if JWT token exists)
+  // Fetch fresh user data from backend when app loads (if API key or JWT token exists)
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!jwtToken) {
-        return;
-      }
+      // If we have an API key, use it to get fresh user info
+      if (apiKey) {
+        try {
+          const tempClient = new NexusAPIClient(getApiURL(), apiKey);
+          const whoamiData = await tempClient.whoami();
 
-      try {
-        // Create a temporary client with the JWT token
-        const tempClient = new NexusAPIClient(getApiURL(), undefined);
-        tempClient.setAuthToken(jwtToken);
-
-        // Fetch user info using whoami (simpler and more reliable than /auth/me)
-        const whoamiData = await tempClient.whoami();
-
-        // Set userInfo directly from whoami response
-        if (whoamiData.authenticated) {
-          const userInfoData: UserInfo = {
-            subject_type: whoamiData.subject_type,
-            subject_id: whoamiData.subject_id,
-            tenant_id: whoamiData.tenant_id,
-            is_admin: whoamiData.is_admin,
-            user: whoamiData.user || whoamiData.subject_id,
-          };
-          setUserInfo(userInfoData);
-          localStorage.setItem(USER_INFO_STORAGE_KEY, JSON.stringify(userInfoData));
-
-          // Keep userAccount in sync (for OAuth users who need email, display_name, etc.)
-          // This is a simplified version - full account data comes from OAuth login response
-          if (userAccount) {
-            // Update tenant_id in userAccount from whoami (source of truth)
-            const updatedAccount = {
-              ...userAccount,
-              tenant_id: whoamiData.tenant_id || null,
+          if (whoamiData.authenticated) {
+            const userInfoData: UserInfo = {
+              subject_type: whoamiData.subject_type,
+              subject_id: whoamiData.subject_id,
+              tenant_id: whoamiData.tenant_id,
+              is_admin: whoamiData.is_admin,
+              user: whoamiData.user || whoamiData.subject_id,
             };
-            setUserAccount(updatedAccount);
-            localStorage.setItem(USER_ACCOUNT_STORAGE_KEY, JSON.stringify(updatedAccount));
+            setUserInfo(userInfoData);
+            localStorage.setItem(USER_INFO_STORAGE_KEY, JSON.stringify(userInfoData));
+          }
+        } catch (error) {
+          console.error('Failed to fetch user data from API key:', error);
+          // If API key is invalid/expired, clear auth state
+          if ((error as any)?.response?.status === 401) {
+            console.log('API key expired or invalid, clearing auth state');
+            setApiKey(null);
+            setUserInfo(null);
+            localStorage.removeItem(API_KEY_STORAGE_KEY);
+            localStorage.removeItem(USER_INFO_STORAGE_KEY);
           }
         }
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-        // If token is invalid/expired, clear auth state
-        if ((error as any)?.response?.status === 401) {
-          console.log('JWT token expired or invalid, logging out');
-          userLogout();
+        return; // Don't proceed to JWT check if we have API key
+      }
+
+      // If we have JWT token but no API key, fetch user data with JWT
+      if (jwtToken) {
+        try {
+          // Create a temporary client with the JWT token
+          const tempClient = new NexusAPIClient(getApiURL(), undefined);
+          tempClient.setAuthToken(jwtToken);
+
+          // Fetch user info using whoami (simpler and more reliable than /auth/me)
+          const whoamiData = await tempClient.whoami();
+
+          // Set userInfo directly from whoami response
+          if (whoamiData.authenticated) {
+            const userInfoData: UserInfo = {
+              subject_type: whoamiData.subject_type,
+              subject_id: whoamiData.subject_id,
+              tenant_id: whoamiData.tenant_id,
+              is_admin: whoamiData.is_admin,
+              user: whoamiData.user || whoamiData.subject_id,
+            };
+            setUserInfo(userInfoData);
+            localStorage.setItem(USER_INFO_STORAGE_KEY, JSON.stringify(userInfoData));
+
+            // Keep userAccount in sync (for OAuth users who need email, display_name, etc.)
+            // This is a simplified version - full account data comes from OAuth login response
+            if (userAccount) {
+              // Update tenant_id in userAccount from whoami (source of truth)
+              const updatedAccount = {
+                ...userAccount,
+                tenant_id: whoamiData.tenant_id || null,
+              };
+              setUserAccount(updatedAccount);
+              localStorage.setItem(USER_ACCOUNT_STORAGE_KEY, JSON.stringify(updatedAccount));
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch user data:', error);
+          // If token is invalid/expired, clear auth state
+          if ((error as any)?.response?.status === 401) {
+            console.log('JWT token expired or invalid, logging out');
+            userLogout();
+          }
         }
       }
     };

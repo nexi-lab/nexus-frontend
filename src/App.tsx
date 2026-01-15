@@ -47,9 +47,10 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isUserAuthenticated } = useAuth();
+  const { isUserAuthenticated, isAuthenticated } = useAuth();
 
-  if (!isUserAuthenticated) {
+  // Allow access if either user account (JWT) or API key is authenticated
+  if (!isUserAuthenticated && !isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
@@ -76,10 +77,12 @@ function AppContent() {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<ProtectedRoute><FileBrowser /></ProtectedRoute>} />
+              <Route path="/files" element={<ProtectedRoute><FileBrowser /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
               <Route path="/integration" element={<ProtectedRoute><Integration /></ProtectedRoute>} />
               <Route path="/connector" element={<ProtectedRoute><Connector /></ProtectedRoute>} />
-              <Route path="/skill" element={<ProtectedRoute><Skill /></ProtectedRoute>} />
+              <Route path="/skills" element={<ProtectedRoute><Skill /></ProtectedRoute>} />
+              <Route path="/skill" element={<Navigate to="/skills" replace />} />
               <Route path="/agent" element={<ProtectedRoute><Agent /></ProtectedRoute>} />
               <Route path="/workspace" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
               <Route path="/memory" element={<ProtectedRoute><Memory /></ProtectedRoute>} />

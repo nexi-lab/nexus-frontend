@@ -1460,13 +1460,16 @@ class NexusAPIClient {
   }
 
   /**
-   * Discover skills with permission-based filtering.
+   * Discover skills with permission-based filtering and pagination.
    *
    * @param params - Discovery parameters
-   * @returns Skills list with permission info
+   * @returns Skills list with permission info and pagination metadata
    */
   async skillsDiscover(params?: {
     filter?: 'all' | 'owned' | 'subscribed' | 'shared' | 'public';
+    offset?: number;
+    limit?: number;
+    include_total?: boolean;
   }): Promise<{
     skills: Array<{
       path: string;
@@ -1479,6 +1482,10 @@ class NexusAPIClient {
       tags?: string[];
     }>;
     count: number;
+    offset: number;
+    limit: number;
+    total_count: number;
+    has_more: boolean;
   }> {
     return await this.call('skills_discover', params || {});
   }

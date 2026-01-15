@@ -8,7 +8,8 @@ export const skillKeys = {
   all: ['skills'] as const,
   lists: () => [...skillKeys.all, 'list'] as const,
   list: (tier?: string) => [...skillKeys.lists(), tier] as const,
-  discover: (filter?: string) => [...skillKeys.all, 'discover', filter] as const,
+  discover: (filter?: string, offset?: number, limit?: number) =>
+    [...skillKeys.all, 'discover', filter, offset, limit] as const,
   detail: (name: string) => [...skillKeys.all, 'detail', name] as const,
 };
 
@@ -40,6 +41,10 @@ export interface DiscoveredSkill {
 export interface SkillsDiscoverResponse {
   skills: DiscoveredSkill[];
   count: number;
+  offset: number;
+  limit: number;
+  total_count: number;
+  has_more: boolean;
 }
 
 // Skill filter type - exported as a value to ensure Vite can resolve it
@@ -86,14 +91,19 @@ export function useSkills(tier?: string, enabled = true) {
   });
 }
 
-// Discover skills with permission-based filtering
-export function useDiscoverSkills(filter?: SkillFilter, enabled = true) {
+// Discover skills with permission-based filtering and pagination
+export function useDiscoverSkills(
+  filter?: SkillFilter,
+  offset?: number,
+  limit?: number,
+  enabled = true
+) {
   const { apiClient } = useAuth();
 
   return useQuery({
-    queryKey: skillKeys.discover(filter),
+    queryKey: skillKeys.discover(filter, offset, limit),
     queryFn: async (): Promise<SkillsDiscoverResponse> => {
-      return apiClient.skillsDiscover({ filter });
+      return apiClient.skillsDiscover({ filter, offset, limit });
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute

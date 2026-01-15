@@ -329,7 +329,7 @@ export function FileBrowser() {
                   <Cloud className="h-4 w-4 mr-2" />
                   {t('landing.connector')}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate('/skill')}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/skills')}>
                   <BookOpen className="h-4 w-4 mr-2" />
                   {t('landing.skill')}
                 </Button>
@@ -339,10 +339,7 @@ export function FileBrowser() {
                     {t('landing.admin')}
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => navigate('/settings')}>
-                  <User className="h-4 w-4 mr-2" />
-                  Settings
-                </Button>
+                {/* Settings button hidden */}
                 <Button
                   variant="outline"
                   onClick={() => {

@@ -28,11 +28,18 @@ export function Skill() {
   const [editingSkill, setEditingSkill] = useState<EditingSkill | null>(null);
   const [selectedTab, setSelectedTab] = useState<SkillTab>('subscribed');
 
-  // Fetch skills for each tab
-  const { data: subscribedData, isLoading: isLoadingSubscribed, error: subscribedError } = useDiscoverSkills('subscribed');
-  const { data: ownedData, isLoading: isLoadingOwned, error: ownedError } = useDiscoverSkills('owned');
-  const { data: sharedData, isLoading: isLoadingShared, error: sharedError } = useDiscoverSkills('shared');
-  const { data: publicData, isLoading: isLoadingPublic, error: publicError } = useDiscoverSkills('public');
+  // Pagination state for each tab
+  const [subscribedOffset, setSubscribedOffset] = useState(0);
+  const [ownedOffset, setOwnedOffset] = useState(0);
+  const [sharedOffset, setSharedOffset] = useState(0);
+  const [publicOffset, setPublicOffset] = useState(0);
+  const limit = 21; // Page size (matches backend default)
+
+  // Fetch skills for each tab with pagination
+  const { data: subscribedData, isLoading: isLoadingSubscribed, error: subscribedError } = useDiscoverSkills('subscribed', subscribedOffset, limit);
+  const { data: ownedData, isLoading: isLoadingOwned, error: ownedError } = useDiscoverSkills('owned', ownedOffset, limit);
+  const { data: sharedData, isLoading: isLoadingShared, error: sharedError } = useDiscoverSkills('shared', sharedOffset, limit);
+  const { data: publicData, isLoading: isLoadingPublic, error: publicError } = useDiscoverSkills('public', publicOffset, limit);
 
   const deleteMutation = useDeleteSkill();
   const exportMutation = useExportSkill();
@@ -227,7 +234,7 @@ export function Skill() {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Back to files">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/files')} aria-label="Back to files">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <BookOpen className="h-8 w-8" />
@@ -470,6 +477,72 @@ export function Skill() {
               ))}
             </div>
           )}
+
+          {/* Pagination Controls */}
+          {!isLoading && !error && currentSkills.length > 0 && (() => {
+            const currentData = (() => {
+              switch (selectedTab) {
+                case 'subscribed': return subscribedData;
+                case 'myskills': return ownedData;
+                case 'shared': return sharedData;
+                case 'marketplace': return publicData;
+              }
+            })();
+
+            const currentOffset = (() => {
+              switch (selectedTab) {
+                case 'subscribed': return subscribedOffset;
+                case 'myskills': return ownedOffset;
+                case 'shared': return sharedOffset;
+                case 'marketplace': return publicOffset;
+              }
+            })();
+
+            const setCurrentOffset = (() => {
+              switch (selectedTab) {
+                case 'subscribed': return setSubscribedOffset;
+                case 'myskills': return setOwnedOffset;
+                case 'shared': return setSharedOffset;
+                case 'marketplace': return setPublicOffset;
+              }
+            })();
+
+            if (!currentData) return null;
+
+            const totalCount = currentData.total_count;
+            const hasMore = currentData.has_more;
+            const currentPage = Math.floor(currentOffset / limit) + 1;
+            const totalPages = Math.ceil(totalCount / limit);
+
+            return (
+              <div className="mt-6 flex items-center justify-between border-t pt-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {currentOffset + 1} to {Math.min(currentOffset + limit, totalCount)} of {totalCount} skills
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentOffset(Math.max(0, currentOffset - limit))}
+                    disabled={currentOffset === 0}
+                  >
+                    Previous
+                  </Button>
+                  <span className="flex items-center px-3 text-sm">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentOffset(currentOffset + limit)}
+                    disabled={!hasMore}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </main>
 
