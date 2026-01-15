@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, BookOpen, Bot, Brain, Cloud, FolderPlus, Settings, User } from 'lucide-react';
+import { AlertCircle, BookOpen, Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
