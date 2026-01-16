@@ -32,7 +32,7 @@ export function FileBrowser() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated, isUserAuthenticated, logout, apiClient, userInfo, userAccount, userLogout } = useAuth();
+  const { isAuthenticated, isUserAuthenticated, logout, apiClient, apiUrl, userInfo, userAccount, userLogout } = useAuth();
   
   if (!apiClient) {
     return (
@@ -321,6 +321,12 @@ export function FileBrowser() {
                       <>
                         <span className="mx-2">|</span>
                         <span className="font-medium">{t('landing.tenant')}:</span> {userAccount?.tenant_id || userInfo?.tenant_id}
+                      </>
+                    )}
+                    {apiUrl && (
+                      <>
+                        <span className="mx-2">|</span>
+                        <span className="font-medium">Nexus:</span> {apiUrl}
                       </>
                     )}
                   </span>
