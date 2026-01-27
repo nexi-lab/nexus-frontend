@@ -33,3 +33,4 @@ firebase-debug.*.log
 *.sln
 *.sw?
 *.env*
+.npm-cache/

@@ -254,8 +254,12 @@ export default function OAuthCallback() {
           }
 
           // Create fresh API client with auth token pre-set
-          // Get API URL from context, localStorage, or env - no default
-          const apiUrlToUse = apiUrl || localStorage.getItem('nexus_api_url') || (import.meta as any).env.VITE_NEXUS_API_URL;
+          // Get API URL from context or localStorage (no production default).
+          // In dev only, allow VITE_NEXUS_API_URL as a convenience default.
+          const apiUrlToUse =
+            apiUrl ||
+            localStorage.getItem('nexus_api_url') ||
+            (import.meta.env.DEV ? import.meta.env.VITE_NEXUS_API_URL : null);
           if (!apiUrlToUse) {
             throw new Error('Nexus server URL is required. Please configure it in the login page.');
           }

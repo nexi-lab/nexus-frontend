@@ -61,29 +61,28 @@ const getApiURL = (): string | null => {
   // First try localStorage (user-configured URL)
   const storedUrl = localStorage.getItem(API_URL_STORAGE_KEY);
   if (storedUrl) {
-    // Auto-upgrade HTTP to HTTPS for production deployments
+    // Auto-upgrade HTTP to HTTPS for production deployments ONLY for non-localhost URLs
     // This fixes Mixed Content errors when frontend is served over HTTPS
-    if (storedUrl.startsWith('http://') && window.location.protocol === 'https:') {
+    // BUT preserve localhost URLs exactly as entered (localhost doesn't have SSL)
+    const isLocalhost = storedUrl.includes('localhost') || storedUrl.includes('127.0.0.1');
+    if (storedUrl.startsWith('http://') && window.location.protocol === 'https:' && !isLocalhost) {
       const httpsUrl = storedUrl.replace('http://', 'https://');
       // Remove port 2026 if present (nginx handles this)
       const cleanedUrl = httpsUrl.replace(':2026', '');
       localStorage.setItem(API_URL_STORAGE_KEY, cleanedUrl);
       return cleanedUrl;
     }
-    // If stored URL is an IP address but we have a domain in env, use the domain
-    // This fixes ERR_CERT_COMMON_NAME_INVALID when SSL cert is for domain, not IP
-    const envUrl = (import.meta as any).env.VITE_NEXUS_API_URL;
-    if (envUrl && storedUrl.includes('34.182.34.94')) {
-      localStorage.setItem(API_URL_STORAGE_KEY, envUrl);
-      return envUrl;
-    }
     return storedUrl;
   }
 
-  // Fall back to environment variable if available
-  const envUrl = (import.meta as any).env.VITE_NEXUS_API_URL;
-  if (envUrl && envUrl !== '') {
-    return envUrl;
+  // In production, do NOT default to a specific backend.
+  // The hosted frontend should work with any Nexus backend the user provides.
+  // In dev, allow a local env default for convenience.
+  if (import.meta.env.DEV) {
+    const envUrl = import.meta.env.VITE_NEXUS_API_URL;
+    if (envUrl && envUrl !== '') {
+      return envUrl;
+    }
   }
 
   // No default - return null if not configured

@@ -372,7 +372,8 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
   const registerAgentMutation = useRegisterAgent();
 
   // Get Nexus server URL from context, env - required, no default
-  const nexusServerUrl = apiUrl || import.meta.env.VITE_NEXUS_SERVER_URL || import.meta.env.VITE_API_URL;
+  // Always use the user-selected backend URL (do not hardcode a default backend in production)
+  const nexusServerUrl = apiUrl || null;
 
   const [config, setConfig] = useState<ChatConfig>({
     apiUrl: 'http://localhost:2024',

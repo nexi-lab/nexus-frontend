@@ -1592,11 +1592,4 @@ class NexusAPIClient {
   }
 }
 
-// Default client instance
-// If VITE_NEXUS_API_URL is empty or not set, use empty string (works with Vite proxy in dev)
-// Otherwise use the provided URL (for production or custom server location)
-const apiURL = import.meta.env.VITE_NEXUS_API_URL !== undefined && import.meta.env.VITE_NEXUS_API_URL !== '' ? import.meta.env.VITE_NEXUS_API_URL : ''; // Empty string means use same origin (Vite proxy in dev)
-
-export const nexusAPI = new NexusAPIClient(apiURL, import.meta.env.VITE_API_KEY);
-
 export default NexusAPIClient;

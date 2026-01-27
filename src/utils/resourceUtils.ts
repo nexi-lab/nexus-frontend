@@ -1,5 +1,4 @@
 import type NexusAPIClient from '../api/client';
-import { nexusAPI } from '../api/client';
 import { createFilesAPI } from '../api/files';
 import { generateResourceId, userPath, tenantPath } from './pathUtils';
 
@@ -60,6 +59,7 @@ export async function createWorkspace(
 export async function createConnector(
   name: string,
   tenantId: string,
+  apiClient: NexusAPIClient,
   backendType: string,
   backendConfig: Record<string, any>,
   priority?: number,
@@ -70,7 +70,7 @@ export async function createConnector(
   const path = tenantPath(tenantId, 'connector', resourceId);
 
   // Use save_mount to persist the connector configuration
-  await nexusAPI.call('save_mount', {
+  await apiClient.call('save_mount', {
     mount_point: path,
     backend_type: backendType,
     backend_config: backendConfig,
@@ -90,6 +90,7 @@ export async function createResource(
   name: string,
   tenantId: string,
   userId: string | null,
+  apiClient: NexusAPIClient,
   content: string | Uint8Array
 ): Promise<string> {
   const resourceId = generateResourceId('resource', name);
@@ -97,7 +98,7 @@ export async function createResource(
     ? userPath(tenantId, userId, 'resource', resourceId)
     : tenantPath(tenantId, 'resource', resourceId);
 
-  const filesAPI = createFilesAPI(nexusAPI);
+  const filesAPI = createFilesAPI(apiClient);
   let resourceCreated = false;
   try {
     // Step 1: Create resource
@@ -105,7 +106,7 @@ export async function createResource(
     resourceCreated = true;
 
     // Step 2: CRITICAL - Grant ownership via ReBAC
-    await nexusAPI.rebacCreate({
+    await apiClient.rebacCreate({
       subject: userId ? ['user', userId] : ['tenant', tenantId],
       relation: 'owner-of',
       object: ['file', path],
@@ -133,9 +134,10 @@ export async function createResource(
  * IMPORTANT: Removes all ReBAC relationships for the resource
  */
 export async function deleteResource(
-  path: string
+  path: string,
+  apiClient: NexusAPIClient
 ): Promise<void> {
-  const filesAPI = createFilesAPI(nexusAPI);
+  const filesAPI = createFilesAPI(apiClient);
   let resourceDeleted = false;
   try {
     // Step 1: Delete the resource
@@ -144,12 +146,12 @@ export async function deleteResource(
 
     // Step 2: Clean up ALL ReBAC tuples for this resource
     // Note: This requires a rebacListTuples with object filter
-    const tuples = await nexusAPI.rebacListTuples({
+    const tuples = await apiClient.rebacListTuples({
       object: ['file', path],
     });
 
     for (const tuple of tuples) {
-      await nexusAPI.rebacDelete({ tuple_id: tuple.tuple_id });
+      await apiClient.rebacDelete({ tuple_id: tuple.tuple_id });
     }
   } catch (error) {
     // If resource was deleted but ReBAC cleanup failed, log for manual intervention
