@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, BookOpen, Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -71,35 +71,49 @@ export function FileBrowser() {
   const { error: connectorsError } = useConnectors(true);
   const authError = rootError instanceof AuthenticationError ? rootError : (connectorsError instanceof AuthenticationError ? connectorsError : null);
 
-  // Check if user is provisioned by looking for workspace folder
-  const isProvisioned = useMemo(() => {
-    if (!rootFiles || !userInfo) return true; // Assume provisioned while loading
+  // Check if user is provisioned by checking if any workspace exists
+  // Use listWorkspaces() API instead of checking root files, since workspaces
+  // are created at /tenant:{tenant_id}/user:{user_id}/workspace/{workspace_id}
+  const { data: workspaces, isLoading: loadingWorkspaces } = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: async () => {
+      if (!apiClient) return [];
+      try {
+        return await apiClient.listWorkspaces();
+      } catch (error) {
+        // If API call fails, assume no workspaces (will show setup)
+        console.warn('Failed to list workspaces:', error);
+        return [];
+      }
+    },
+    enabled: !!(isAuthenticated || isUserAuthenticated) && !!apiClient && !!userInfo,
+    staleTime: 30 * 1000, // 30 seconds
+  });
 
-    // Look for workspace folder as indicator of provisioning
-    return rootFiles.some(file =>
-      file.isDirectory && (
-        file.name === 'workspace' ||
-        file.path?.endsWith('/workspace') ||
-        file.path?.includes('/workspace/')
-      )
-    );
-  }, [rootFiles, userInfo]);
+  const isProvisioned = useMemo(() => {
+    if (!userInfo) return true; // Assume provisioned while loading
+    if (loadingWorkspaces) return true; // Assume provisioned while loading workspaces
+    
+    // User is provisioned if they have at least one workspace
+    return workspaces && workspaces.length > 0;
+  }, [workspaces, loadingWorkspaces, userInfo]);
 
   const [needsProvisioning, setNeedsProvisioning] = useState(false);
 
   useEffect(() => {
-    // Only show provisioning if authenticated, root loaded, and not provisioned
-    if ((isAuthenticated || isUserAuthenticated) && rootFiles && !isProvisioned && userInfo) {
+    // Only show provisioning if authenticated, workspaces loaded, and not provisioned
+    if ((isAuthenticated || isUserAuthenticated) && !loadingWorkspaces && !isProvisioned && userInfo) {
       setNeedsProvisioning(true);
     } else {
       setNeedsProvisioning(false);
     }
-  }, [isAuthenticated, isUserAuthenticated, rootFiles, isProvisioned, userInfo]);
+  }, [isAuthenticated, isUserAuthenticated, loadingWorkspaces, isProvisioned, userInfo]);
 
   const handleWorkspaceCreated = () => {
     // Refresh file list and reset provisioning state
     refetchRoot();
     queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+    queryClient.invalidateQueries({ queryKey: ['workspaces'] }); // Refresh workspaces list
     setNeedsProvisioning(false);
     toast.success('Your workspace is ready!');
   };
