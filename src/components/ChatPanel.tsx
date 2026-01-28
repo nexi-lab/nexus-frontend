@@ -1,5 +1,5 @@
 import type { Message, Thread } from '@langchain/langgraph-sdk';
-import { Bot, Box, ChevronDown, ChevronUp, Folder, History, Info, Loader2, Plus, Send, Settings, Square, Wifi, WifiOff, X } from 'lucide-react';
+import { Bot, Box, ChevronDown, ChevronRight, ChevronUp, Folder, History, Info, Loader2, Plus, Send, Settings, Square, Wifi, WifiOff, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -53,26 +53,59 @@ interface AgentConfig {
   tools?: string[];
 }
 
-function getContentString(content: Message['content']): string {
+function parseContent(content: Message['content']): { text: string; thinkingBlocks: string[] } {
+  const thinkingBlocks: string[] = [];
+  const textParts: string[] = [];
+
   if (typeof content === 'string') {
-    return content;
+    return { text: content, thinkingBlocks: [] };
   }
   if (Array.isArray(content)) {
-    return content
-      .map((c: any) => {
-        if (typeof c === 'string') return c;
-        if (c.type === 'text') return c.text || '';
-        return '';
-      })
-      .filter(Boolean)
-      .join('\n');
+    content.forEach((c: any) => {
+      if (typeof c === 'string') {
+        textParts.push(c);
+      } else if (c.type === 'thinking' && c.thinking) {
+        thinkingBlocks.push(c.thinking);
+      } else if (c.type === 'text' && c.text) {
+        textParts.push(c.text);
+      }
+    });
   }
-  return '';
+  return { text: textParts.filter(Boolean).join('\n'), thinkingBlocks };
+}
+
+// Collapsible thinking block component
+function ThinkingBlock({ thinking }: { thinking: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+        type="button"
+      >
+        {isExpanded ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5" />
+        )}
+        <span className="font-medium">Extended Thinking</span>
+      </button>
+      {isExpanded && (
+        <div className="mt-2 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md">
+          <div className="text-sm text-purple-900 dark:text-purple-100 whitespace-pre-wrap font-mono text-xs leading-relaxed max-h-[400px] overflow-y-auto">
+            {thinking}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MessageBubble({ message, allMessages }: { message: Message; allMessages: Message[] }) {
   const isUser = message.type === 'human';
-  const content = getContentString(message.content);
+  const { text: content, thinkingBlocks } = parseContent(message.content);
   const aiMessage = message as any;
   const hasToolCalls = !isUser && aiMessage.tool_calls && aiMessage.tool_calls.length > 0;
   const isToolResult = message.type === 'tool';
@@ -92,6 +125,14 @@ function MessageBubble({ message, allMessages }: { message: Message; allMessages
 
       {/* Message Content */}
       <div className={`flex-1 max-w-[80%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-2`}>
+        {/* Thinking Blocks - show before content for AI messages */}
+        {!isUser && thinkingBlocks.length > 0 && (
+          <div className="w-full">
+            {thinkingBlocks.map((thinking, index) => (
+              <ThinkingBlock key={index} thinking={thinking} />
+            ))}
+          </div>
+        )}
         {content && (
           <div className={`rounded-lg p-3 ${isUser ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-800'}`}>
             {isUser ? (
