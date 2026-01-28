@@ -12,7 +12,7 @@ dist
 
 # Git
 .git
-.gitignore
+# .gitignore is needed for Biome linting
 
 # IDE
 .vscode
