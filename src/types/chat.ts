@@ -23,4 +23,8 @@ export interface ChatConfig {
   maxSteps?: number; // Maximum number of steps for agent execution (recursion limit)
   workspacePath?: string; // Selected workspace path
   workspaceName?: string; // Selected workspace name for display
+  // Model selection
+  llmProvider?: 'openai' | 'anthropic' | 'gemini';
+  llmTier?: 'pro' | 'flash';
+  enableThinking?: boolean;
 }

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, BookOpen, Bot, Brain, Cloud, FolderPlus, Settings } from 'lucide-react';
+import { AlertCircle, BookOpen, Bot, Brain, Cloud, FileText, FolderPlus, MessageSquare, Settings } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
@@ -59,8 +59,8 @@ export function FileBrowser() {
   const [managePermissionsFile, setManagePermissionsFile] = useState<FileInfo | null>(null);
   const [versionHistoryFile, setVersionHistoryFile] = useState<FileInfo | null>(null);
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null);
-  const [chatPanelOpen, setChatPanelOpen] = useState(false);
   const [initialSelectedAgentId, setInitialSelectedAgentId] = useState<string | undefined>(undefined);
+  const [viewMode, setViewMode] = useState<'file' | 'chat'>('file');
 
   const deleteMutation = useDeleteFile();
   const uploadMutation = useUploadFile();
@@ -123,7 +123,7 @@ export function FileBrowser() {
     const agentId = searchParams.get('agent');
     if (agentId) {
       setInitialSelectedAgentId(agentId);
-      setChatPanelOpen(true);
+      setViewMode('chat');
       // Clear the URL parameter
       setSearchParams({});
     }
@@ -441,20 +441,32 @@ export function FileBrowser() {
         </div>
       </header>
 
-      {/* Breadcrumb */}
+      {/* Breadcrumb and View Mode Toggle */}
       <div className="border-b px-4 py-2 bg-muted/20 flex items-center justify-between gap-3">
         <Breadcrumb path={currentPath} onPathChange={setCurrentPath} />
-        <Button
-          variant="ghost"
-          size="icon"
-          type="button"
-          aria-label={chatPanelOpen ? t('landing.hideAiPanel') : t('landing.showAiPanel')}
-          title={chatPanelOpen ? t('landing.hideAiPanel') : t('landing.showAiPanel')}
-          onClick={() => setChatPanelOpen((v) => !v)}
-          className="flex-shrink-0"
-        >
-          <Bot className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* View Mode Toggle - File/Chat tabs */}
+          <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
+            <Button
+              variant={viewMode === 'file' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('file')}
+              className="gap-2 h-8"
+            >
+              <FileText className="h-4 w-4" />
+              File
+            </Button>
+            <Button
+              variant={viewMode === 'chat' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('chat')}
+              className="gap-2 h-8"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Chat
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Main Content */}
@@ -475,24 +487,25 @@ export function FileBrowser() {
 
           <PanelResizeHandle className="w-1 bg-border hover:bg-blue-500 transition-colors" />
 
-          {/* Middle Panel - File Content Viewer or Workspace Empty State */}
-          <Panel defaultSize={chatPanelOpen ? 50 : 80} minSize={30}>
-            {needsProvisioning && !selectedFile ? (
-              <WorkspaceEmptyState onWorkspaceCreated={handleWorkspaceCreated} />
+          {/* Main Panel - File Content Viewer or Chat based on viewMode */}
+          <Panel defaultSize={80} minSize={50}>
+            {viewMode === 'file' ? (
+              // File View
+              needsProvisioning && !selectedFile ? (
+                <WorkspaceEmptyState onWorkspaceCreated={handleWorkspaceCreated} />
+              ) : (
+                <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
+              )
             ) : (
-              <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
+              // Chat View
+              <ChatPanel
+                isOpen={true}
+                onClose={() => setViewMode('file')}
+                initialSelectedAgentId={initialSelectedAgentId}
+                openedFilePath={selectedFile?.path}
+              />
             )}
           </Panel>
-
-          {/* Right Panel - Chat */}
-          {chatPanelOpen && (
-            <>
-              <PanelResizeHandle className="w-1 bg-border hover:bg-blue-500 transition-colors" />
-              <Panel defaultSize={30} minSize={20} maxSize={50}>
-                <ChatPanel isOpen={chatPanelOpen} onClose={() => setChatPanelOpen(false)} initialSelectedAgentId={initialSelectedAgentId} openedFilePath={selectedFile?.path} />
-              </Panel>
-            </>
-          )}
         </PanelGroup>
       </div>
 

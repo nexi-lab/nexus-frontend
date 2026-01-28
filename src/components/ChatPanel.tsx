@@ -1,5 +1,5 @@
 import type { Message, Thread } from '@langchain/langgraph-sdk';
-import { Bot, Box, ChevronDown, ChevronUp, Folder, History, Info, Loader2, Plus, Send, Settings, Wifi, WifiOff, X } from 'lucide-react';
+import { Bot, Box, ChevronDown, ChevronUp, Folder, History, Info, Loader2, Plus, Send, Settings, Square, Wifi, WifiOff, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -121,12 +121,14 @@ function ChatPanelContent({
   filesAPI,
   userInfo: _userInfo,
   onThreadIdChange,
+  onConfigChange,
 }: {
   config: ChatConfig;
   selectedAgentId: string;
   filesAPI: any;
   userInfo: any;
   onThreadIdChange?: (threadId: string) => void;
+  onConfigChange?: (config: ChatConfig | ((prev: ChatConfig) => ChatConfig)) => void;
 }) {
   const [inputValue, setInputValue] = useState('');
   const [firstTokenReceived, setFirstTokenReceived] = useState(false);
@@ -147,6 +149,7 @@ function ChatPanelContent({
   const stream = useLangGraph({ ...config, onThreadIdChange });
   const messages = stream.messages || [];
   const isLoading = stream.isLoading;
+  const isStopped = stream.isStopped || false;
   const threadId = stream.threadId;
   const chatStarted = messages.length > 0;
 
@@ -229,6 +232,13 @@ function ChatPanelContent({
     } catch (error) {
       console.error('Failed to create thread metadata:', error);
       // Don't fail the message send if metadata creation fails
+    }
+  };
+
+  const handleStopStreaming = () => {
+    if (stream.stop) {
+      stream.stop();
+      console.log('[ChatPanel] Streaming stopped');
     }
   };
 
@@ -342,21 +352,107 @@ function ChatPanelContent({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Model Selector Panel */}
+      <div className="border-t px-4 py-2 bg-muted/20">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Provider Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Provider:</span>
+            <div className="flex gap-1">
+              <Button
+                variant={config.llmProvider === 'gemini' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => onConfigChange?.((prev) => ({ ...prev, llmProvider: 'gemini' }))}
+                className="h-7 px-3 text-xs"
+              >
+                Gemini
+              </Button>
+              <Button
+                variant={config.llmProvider === 'anthropic' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => onConfigChange?.((prev) => ({ ...prev, llmProvider: 'anthropic' }))}
+                className="h-7 px-3 text-xs"
+              >
+                Claude
+              </Button>
+              <Button
+                variant={config.llmProvider === 'openai' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => onConfigChange?.((prev) => ({ ...prev, llmProvider: 'openai' }))}
+                className="h-7 px-3 text-xs"
+              >
+                GPT
+              </Button>
+            </div>
+          </div>
+
+          {/* Tier Selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Tier:</span>
+            <div className="flex gap-1">
+              <Button
+                variant={config.llmTier === 'flash' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => onConfigChange?.((prev) => ({ ...prev, llmTier: 'flash' }))}
+                className="h-7 px-3 text-xs"
+              >
+                Flash
+              </Button>
+              <Button
+                variant={config.llmTier === 'pro' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => onConfigChange?.((prev) => ({ ...prev, llmTier: 'pro' }))}
+                className="h-7 px-3 text-xs"
+              >
+                Pro
+              </Button>
+            </div>
+          </div>
+
+          {/* Extended Thinking Toggle */}
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config.enableThinking ?? true}
+                onChange={(e) => onConfigChange?.((prev) => ({ ...prev, enableThinking: e.target.checked }))}
+                className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary focus:ring-offset-0"
+              />
+              <span className="text-xs text-muted-foreground">Extended Thinking</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
       {/* Input */}
       <div className="border-t p-4">
+        {isStopped && (
+          <div className="mb-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+            <div className="flex items-center gap-2 text-sm text-yellow-800 dark:text-yellow-200">
+              <Info className="h-4 w-4" />
+              <span>Streaming was stopped. You can continue the conversation from here.</span>
+            </div>
+          </div>
+        )}
         <div className="flex gap-2">
           <textarea
             ref={textareaRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type your message... (Shift+Enter for new line)"
+            placeholder={isStopped ? "Continue the conversation... (Shift+Enter for new line)" : "Type your message... (Shift+Enter for new line)"}
             className="flex-1 min-h-[60px] max-h-[200px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isLoading}
           />
-          <Button onClick={handleSendMessage} disabled={!inputValue.trim() || isLoading} size="icon" className="self-end">
-            <Send className="h-4 w-4" />
-          </Button>
+          {isLoading ? (
+            <Button onClick={handleStopStreaming} size="icon" className="self-end" variant="destructive" title="Stop streaming">
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button onClick={handleSendMessage} disabled={!inputValue.trim() || isLoading} size="icon" className="self-end">
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     </>
@@ -387,7 +483,12 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
     tenantId: userInfo?.tenant_id || '',
     openedFilePath: openedFilePath, // Currently opened file path
     maxSteps: 100, // Default maximum steps for agent execution
+    // Model selection defaults
+    llmProvider: 'gemini',
+    llmTier: 'flash',
+    enableThinking: true,
   });
+
   const [showConfig, setShowConfig] = useState(false);
   const [chatKey, setChatKey] = useState(0); // Key to force recreation
 
@@ -1363,7 +1464,15 @@ export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFileP
 
       {/* Chat Content - key forces complete remount */}
       {selectedAgentId && selectedWorkspacePath ? (
-        <ChatPanelContent key={chatKey} config={config} selectedAgentId={selectedAgentId} filesAPI={filesAPI} userInfo={userInfo} onThreadIdChange={handleThreadIdChange} />
+        <ChatPanelContent
+          key={chatKey}
+          config={config}
+          selectedAgentId={selectedAgentId}
+          filesAPI={filesAPI}
+          userInfo={userInfo}
+          onThreadIdChange={handleThreadIdChange}
+          onConfigChange={setConfig}
+        />
       ) : (
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="text-center text-muted-foreground">
