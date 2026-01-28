@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../i18n/useTranslation';
 import { copyToClipboard } from '../utils';
+import { createFilesAPI } from '../api/files';
 import { PermissionInfoBox } from '../components/PermissionInfoBox';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -201,17 +202,71 @@ export function Agent() {
   const loadSkills = async () => {
     setLoadingSkills(true);
     try {
-      const result = await apiClient.skillsList();
-      // Extract skills array from the result object, filtering out any without file_path
-      const skillsArray = result.skills
-        .filter(skill => skill.file_path)
-        .map(skill => ({
-          name: skill.name,
-          description: skill.description,
-          tier: skill.tier || 'free',
-          // Use the directory path of the skill (parent directory of SKILL.md)
-          path: skill.file_path!.substring(0, skill.file_path!.lastIndexOf('/'))
-        }));
+      const filesAPI = createFilesAPI(apiClient);
+      const tenantId = userInfo?.tenant_id || 'default';
+      const userId = userInfo?.subject_id || 'admin';
+      const skillsFolderPath = `/tenant:${tenantId}/user:${userId}/skill`;
+
+      // List all items in the skills folder
+      const items = await filesAPI.list(skillsFolderPath, { details: true });
+
+      // Filter for directories only
+      const skillDirs = items.filter(item => item.isDirectory);
+
+      // Fetch SKILL.md for each directory
+      const skillsArray = await Promise.all(
+        skillDirs.map(async (dir) => {
+          const normalizedPath = dir.path.endsWith('/') ? dir.path : `${dir.path}/`;
+          // Use directory name as the skill name
+          const name = dir.name;
+
+          try {
+            const skillMdPath = `${normalizedPath}SKILL.md`.replace(/\/+/g, '/');
+            const skillMdContent = await filesAPI.read(skillMdPath);
+
+            // Decode the content
+            const textDecoder = new TextDecoder('utf-8');
+            const content = textDecoder.decode(skillMdContent);
+
+            // Extract description from first heading or body
+            const lines = content.split('\n');
+            const firstHeadingIndex = lines.findIndex(line => line.startsWith('#'));
+            let description = '';
+            if (firstHeadingIndex >= 0) {
+              const headingText = lines[firstHeadingIndex].replace(/^#+\s*/, '').trim();
+              const descLines = lines.slice(firstHeadingIndex + 1);
+              let descEnd = descLines.length;
+              for (let i = 0; i < descLines.length; i++) {
+                if (descLines[i].startsWith('#')) {
+                  descEnd = i;
+                  break;
+                }
+              }
+              const bodyDesc = descLines.slice(0, descEnd)
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .join(' ')
+                .substring(0, 200);
+              description = bodyDesc || headingText;
+            }
+
+            return {
+              name,
+              description: description || `Skill: ${name}`,
+              tier: 'personal',
+              path: normalizedPath
+            };
+          } catch (error) {
+            return {
+              name,
+              description: `Skill: ${name}`,
+              tier: 'personal',
+              path: normalizedPath
+            };
+          }
+        })
+      );
+
       setSkills(skillsArray);
     } catch (err) {
       console.error('Failed to load skills:', err);

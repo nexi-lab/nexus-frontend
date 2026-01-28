@@ -8,8 +8,6 @@ export const skillKeys = {
   all: ['skills'] as const,
   lists: () => [...skillKeys.all, 'list'] as const,
   list: (tier?: string) => [...skillKeys.lists(), tier] as const,
-  discover: (filter?: string, offset?: number, limit?: number) =>
-    [...skillKeys.all, 'discover', filter, offset, limit] as const,
   detail: (name: string) => [...skillKeys.all, 'detail', name] as const,
 };
 
@@ -19,37 +17,15 @@ export interface Skill {
   description: string;
   version?: string;
   author?: string;
+  owner?: string;
   tier?: string;
   file_path?: string;
+  path?: string;
   created_at?: string;
   modified_at?: string;
   requires?: string[];
-}
-
-// Discovered skill with permission info
-export interface DiscoveredSkill {
-  path: string;
-  name: string;
-  description: string;
-  owner: string;
-  is_subscribed: boolean;
-  is_public: boolean;
-  version?: string;
   tags?: string[];
 }
-
-export interface SkillsDiscoverResponse {
-  skills: DiscoveredSkill[];
-  count: number;
-  offset: number;
-  limit: number;
-  total_count: number;
-  has_more: boolean;
-}
-
-// Skill filter type - exported as a value to ensure Vite can resolve it
-export const SKILL_FILTERS = ['all', 'owned', 'subscribed', 'shared', 'public'] as const;
-export type SkillFilter = (typeof SKILL_FILTERS)[number];
 
 export interface SkillsListResponse {
   skills: Skill[];
@@ -77,72 +53,129 @@ export interface SkillExportResponse {
   filename?: string; // Suggested filename (e.g., "skill-name.skill")
 }
 
-// List all skills (legacy - uses tier filter)
+// Helper function to parse SKILL.md content
+function parseSkillMd(content: string, dirName: string, dirPath: string): Skill {
+  const lines = content.split('\n');
+  // Use directory name as the skill name (more consistent identifier)
+  const name = dirName;
+  let description = '';
+  let version: string | undefined;
+  let author: string | undefined;
+
+  // Extract description from the first heading or first paragraph
+  const firstHeadingIndex = lines.findIndex(line => line.startsWith('#'));
+  if (firstHeadingIndex >= 0) {
+    // Use the heading text as part of description if it's descriptive
+    const headingText = lines[firstHeadingIndex].replace(/^#+\s*/, '').trim();
+    const descLines = lines.slice(firstHeadingIndex + 1);
+    let descEnd = descLines.length;
+    for (let i = 0; i < descLines.length; i++) {
+      if (descLines[i].startsWith('#')) {
+        descEnd = i;
+        break;
+      }
+    }
+    const bodyDesc = descLines.slice(0, descEnd)
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .join(' ')
+      .substring(0, 500);
+
+    // Use body description if available, otherwise use heading text
+    description = bodyDesc || headingText;
+  }
+
+  // Try to extract version and author from content
+  const versionMatch = content.match(/version[:\s]+([^\n\r]+)/i);
+  if (versionMatch) {
+    version = versionMatch[1].trim();
+  }
+
+  const authorMatch = content.match(/author[:\s]+([^\n\r]+)/i);
+  if (authorMatch) {
+    author = authorMatch[1].trim();
+  }
+
+  // Ensure path ends with /
+  const skillPath = dirPath.endsWith('/') ? dirPath : `${dirPath}/`;
+
+  return {
+    name,
+    description: description || `Skill: ${name}`,
+    version,
+    author,
+    file_path: `${skillPath}SKILL.md`,
+    path: skillPath,
+    tier: 'personal',
+  };
+}
+
+// List all skills by reading from filesystem
 export function useSkills(tier?: string, enabled = true) {
-  const { apiClient } = useAuth();
+  const { apiClient, userInfo } = useAuth();
+
+  // Construct the skills folder path from tenant and user IDs
+  const skillsFolderPath = useMemo(() => {
+    const tenantId = userInfo?.tenant_id || 'default';
+    const userId = userInfo?.subject_id || 'admin';
+    return `/tenant:${tenantId}/user:${userId}/skill`;
+  }, [userInfo?.tenant_id, userInfo?.subject_id]);
 
   return useQuery({
     queryKey: skillKeys.list(tier),
     queryFn: async (): Promise<SkillsListResponse> => {
       if (!apiClient) throw new Error('API client not initialized');
-      return apiClient.skillsList({ tier, include_metadata: true });
+
+      const filesAPI = createFilesAPI(apiClient);
+
+      try {
+        // List all items in the skills folder
+        const items = await filesAPI.list(skillsFolderPath, { details: true });
+
+        // Filter for directories only
+        const skillDirs = items.filter(item => item.isDirectory);
+
+        // Fetch SKILL.md for each directory
+        const skills = await Promise.all(
+          skillDirs.map(async (dir) => {
+            try {
+              // Ensure path ends with / before appending SKILL.md
+              const normalizedPath = dir.path.endsWith('/') ? dir.path : `${dir.path}/`;
+              const skillMdPath = `${normalizedPath}SKILL.md`.replace(/\/+/g, '/');
+              const skillMdContent = await filesAPI.read(skillMdPath);
+
+              // Decode the content (it's a Uint8Array)
+              const textDecoder = new TextDecoder('utf-8');
+              const content = textDecoder.decode(skillMdContent);
+
+              return parseSkillMd(content, dir.name, dir.path);
+            } catch (error) {
+              console.warn(`Failed to read SKILL.md for ${dir.path}:`, error);
+              // Return a basic skill entry even if SKILL.md can't be read
+              const skillPath = dir.path.endsWith('/') ? dir.path : `${dir.path}/`;
+              return {
+                name: dir.name,
+                description: `Skill: ${dir.name}`,
+                file_path: `${skillPath}SKILL.md`,
+                path: skillPath,
+                tier: 'personal',
+              };
+            }
+          })
+        );
+
+        // Filter out null entries
+        const validSkills = skills.filter((s): s is Skill => s !== null);
+
+        return { skills: validSkills, count: validSkills.length };
+      } catch (error) {
+        // If the skills folder doesn't exist, return empty list
+        console.warn(`Failed to list skills from ${skillsFolderPath}:`, error);
+        return { skills: [], count: 0 };
+      }
     },
     enabled: enabled && !!apiClient,
     staleTime: 60 * 1000, // 1 minute
-  });
-}
-
-// Discover skills with permission-based filtering and pagination
-export function useDiscoverSkills(
-  filter?: SkillFilter,
-  offset?: number,
-  limit?: number,
-  enabled = true
-) {
-  const { apiClient } = useAuth();
-
-  return useQuery({
-    queryKey: skillKeys.discover(filter, offset, limit),
-    queryFn: async (): Promise<SkillsDiscoverResponse> => {
-      if (!apiClient) throw new Error('API client not initialized');
-      return apiClient.skillsDiscover({ filter, offset, limit });
-    },
-    enabled: enabled && !!apiClient,
-    staleTime: 60 * 1000, // 1 minute
-  });
-}
-
-// Subscribe to a skill
-export function useSubscribeSkill() {
-  const { apiClient } = useAuth();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ skillPath }: { skillPath: string }) => {
-      if (!apiClient) throw new Error('API client not initialized');
-      return apiClient.skillsSubscribe({ skill_path: skillPath });
-    },
-    onSuccess: () => {
-      // Invalidate all skill queries to refresh
-      queryClient.invalidateQueries({ queryKey: skillKeys.all });
-    },
-  });
-}
-
-// Unsubscribe from a skill
-export function useUnsubscribeSkill() {
-  const { apiClient } = useAuth();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ skillPath }: { skillPath: string }) => {
-      if (!apiClient) throw new Error('API client not initialized');
-      return apiClient.skillsUnsubscribe({ skill_path: skillPath });
-    },
-    onSuccess: () => {
-      // Invalidate all skill queries to refresh
-      queryClient.invalidateQueries({ queryKey: skillKeys.all });
-    },
   });
 }
 
@@ -240,7 +273,6 @@ export function useDeleteSkill() {
     mutationFn: async ({ skillPath }: { skillPath: string }) => {
       if (!filesAPI) throw new Error('API client not initialized');
       // Use filesystem API to delete skill directory
-      // skillPath is like: /skills/users/{user_id}/skill-name/
       console.log('useDeleteSkill: Attempting to delete skill directory:', skillPath);
 
       try {

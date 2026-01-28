@@ -951,20 +951,43 @@ class NexusAPIClient {
   // Helper: Get skill names and permissions granted to an agent
   async getAgentSkills(
     agentId: string,
-    tuples?: ReBACTuple[]
+    tuples?: ReBACTuple[],
+    tenantId?: string,
+    userId?: string
   ): Promise<Array<{name: string; permission: 'viewer' | 'editor' | 'owner'}>> {
-    const result = await this.getAgentResourceAccess<{name: string; file_path?: string}>(
+    const result = await this.getAgentResourceAccess<{name: string; path: string}>(
       agentId,
       async () => {
-        const skillsResult = await this.skillsList();
-        return skillsResult.skills.filter(s => s.file_path);
+        // Load skills from filesystem
+        const tid = tenantId || 'default';
+        const uid = userId || 'admin';
+        const skillsFolderPath = `/tenant:${tid}/user:${uid}/skill`;
+
+        try {
+          const listResult = await this.call<{files: Array<{path: string; name?: string; is_directory?: boolean}>}>('list', {
+            path: skillsFolderPath,
+            details: true
+          });
+
+          // Filter for directories and map to skill format
+          return listResult.files
+            .filter(f => f.is_directory || f.path?.endsWith('/'))
+            .map(f => {
+              const path = f.path.endsWith('/') ? f.path : `${f.path}/`;
+              const name = f.name || path.split('/').filter(Boolean).pop() || 'unknown';
+              return { name, path };
+            });
+        } catch (err) {
+          console.warn('Failed to list skills from filesystem:', err);
+          return [];
+        }
       },
-      (skill) => skill.file_path ? skill.file_path.substring(0, skill.file_path.lastIndexOf('/')) : '',
+      (skill) => skill.path,
       (path) => path.startsWith('/skills/') || path.includes('/skill/'), // Support both old (/skills/) and new (/skill/) namespace
       (skill) => skill.name,
       tuples
     );
-    
+
     // Filter to ensure we have names and return in the expected format
     return result
       .filter(r => r.name)
