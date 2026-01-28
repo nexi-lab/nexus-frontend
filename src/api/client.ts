@@ -1590,6 +1590,66 @@ class NexusAPIClient {
   }> {
     return await this.call('skills_export', params);
   }
+
+  // ===== User Provisioning Methods =====
+
+  /**
+   * Provision user resources (workspace, agents, skills, etc.)
+   *
+   * @param params - Provisioning parameters
+   * @returns Provisioned resources information
+   */
+  async provisionUser(params: {
+    user_id: string;
+    email: string;
+    display_name?: string;
+    tenant_id?: string;
+    create_api_key?: boolean;
+    create_agents?: boolean;
+    import_skills?: boolean;
+  }): Promise<{
+    user_id: string;
+    tenant_id: string;
+    api_key: string | null;
+    workspace_path: string;
+    agent_paths: string[];
+    skill_paths: string[];
+    created_resources: {
+      user: boolean;
+      tenant: boolean;
+      directories: string[];
+      workspace: string;
+      agents: string[];
+      skills: string[];
+    };
+  }> {
+    return await this.call('provision_user', params);
+  }
+
+  /**
+   * Deprovision user and remove all their resources.
+   *
+   * @param params - Deprovisioning parameters
+   * @returns Success status
+   */
+  async deprovisionUser(params: {
+    user_id: string;
+    tenant_id?: string;
+    delete_user_record?: boolean;
+    force?: boolean;
+  }): Promise<{
+    user_id: string;
+    tenant_id: string;
+    deleted_resources: {
+      directories: string[];
+      workspaces: number;
+      agents: number;
+      skills: number;
+      api_keys: number;
+    };
+  }> {
+    return await this.call('deprovision_user', params);
+  }
 }
 
 export default NexusAPIClient;

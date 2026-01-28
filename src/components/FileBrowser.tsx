@@ -27,6 +27,7 @@ import { LanguageSelector } from './LanguageSelector';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from './ui/button';
 import { useTranslation } from '../i18n/useTranslation';
+import { WorkspaceEmptyState } from './WorkspaceEmptyState';
 
 export function FileBrowser() {
   const navigate = useNavigate();
@@ -66,9 +67,42 @@ export function FileBrowser() {
   const createDirMutation = useCreateDirectory();
   
   // Check for authentication errors on initial load
-  const { error: rootError } = useFileList('/', true);
+  const { data: rootFiles, error: rootError, refetch: refetchRoot } = useFileList('/', true);
   const { error: connectorsError } = useConnectors(true);
   const authError = rootError instanceof AuthenticationError ? rootError : (connectorsError instanceof AuthenticationError ? connectorsError : null);
+
+  // Check if user is provisioned by looking for workspace folder
+  const isProvisioned = useMemo(() => {
+    if (!rootFiles || !userInfo) return true; // Assume provisioned while loading
+
+    // Look for workspace folder as indicator of provisioning
+    return rootFiles.some(file =>
+      file.isDirectory && (
+        file.name === 'workspace' ||
+        file.path?.endsWith('/workspace') ||
+        file.path?.includes('/workspace/')
+      )
+    );
+  }, [rootFiles, userInfo]);
+
+  const [needsProvisioning, setNeedsProvisioning] = useState(false);
+
+  useEffect(() => {
+    // Only show provisioning if authenticated, root loaded, and not provisioned
+    if ((isAuthenticated || isUserAuthenticated) && rootFiles && !isProvisioned && userInfo) {
+      setNeedsProvisioning(true);
+    } else {
+      setNeedsProvisioning(false);
+    }
+  }, [isAuthenticated, isUserAuthenticated, rootFiles, isProvisioned, userInfo]);
+
+  const handleWorkspaceCreated = () => {
+    // Refresh file list and reset provisioning state
+    refetchRoot();
+    queryClient.invalidateQueries({ queryKey: fileKeys.lists() });
+    setNeedsProvisioning(false);
+    toast.success('Your workspace is ready!');
+  };
 
   // Handle agent selection from URL parameters
   useEffect(() => {
@@ -427,9 +461,13 @@ export function FileBrowser() {
 
           <PanelResizeHandle className="w-1 bg-border hover:bg-blue-500 transition-colors" />
 
-          {/* Middle Panel - File Content Viewer */}
+          {/* Middle Panel - File Content Viewer or Workspace Empty State */}
           <Panel defaultSize={chatPanelOpen ? 50 : 80} minSize={30}>
-            <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
+            {needsProvisioning && !selectedFile ? (
+              <WorkspaceEmptyState onWorkspaceCreated={handleWorkspaceCreated} />
+            ) : (
+              <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
+            )}
           </Panel>
 
           {/* Right Panel - Chat */}
