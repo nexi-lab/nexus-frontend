@@ -67,7 +67,7 @@ export function FileBrowser() {
   const createDirMutation = useCreateDirectory();
   
   // Check for authentication errors on initial load
-  const { data: rootFiles, error: rootError, refetch: refetchRoot } = useFileList('/', true);
+  const { error: rootError, refetch: refetchRoot } = useFileList('/', true);
   const { error: connectorsError } = useConnectors(true);
   const authError = rootError instanceof AuthenticationError ? rootError : (connectorsError instanceof AuthenticationError ? connectorsError : null);
 
