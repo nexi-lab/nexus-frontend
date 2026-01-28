@@ -1,4 +1,4 @@
-import { AlertCircle, Code, Download, Edit, FileIcon, FileJson, FileText, Film, History, Image as ImageIcon, Loader2, Save, Trash2, X } from 'lucide-react';
+import { AlertCircle, Code, Download, Edit, FileIcon, FileJson, FileText, Film, History, Image as ImageIcon, Loader2, Maximize2, Minimize2, Save, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -104,6 +104,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
   const [editContent, setEditContent] = useState('');
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [showParsedContent, setShowParsedContent] = useState(false); // Toggle between raw and parsed content (default: raw)
+  const [isHtmlFullscreen, setIsHtmlFullscreen] = useState(false); // Fullscreen mode for HTML files
 
   // Check if file is editable
   const isEditable = fileType === 'text' || fileType === 'markdown';
@@ -113,6 +114,7 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
     setIsEditing(false);
     setEditContent('');
     setShowParsedContent(false); // Default to showing raw content
+    setIsHtmlFullscreen(false); // Reset fullscreen when file changes
   }, [file?.path]);
 
   // Update edit content when file content loads
@@ -351,14 +353,46 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
 
       case 'html':
         return (
-          <div className="h-full w-full bg-white dark:bg-muted">
-            <iframe
-              srcDoc={content}
-              className="w-full h-full border-0"
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-              title={fileName}
-            />
-          </div>
+          <>
+            {/* Fullscreen overlay for HTML */}
+            {isHtmlFullscreen && (
+              <div className="fixed inset-0 z-50 bg-white dark:bg-black">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsHtmlFullscreen(false)}
+                  className="absolute top-4 right-4 z-50 bg-white/90 dark:bg-gray-800/90 backdrop-blur shadow-lg"
+                >
+                  <Minimize2 className="h-4 w-4 mr-2" />
+                  Exit Fullscreen
+                </Button>
+                <iframe
+                  srcDoc={content}
+                  className="w-full h-full border-0"
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                  title={fileName}
+                />
+              </div>
+            )}
+            {/* Normal view with expand button */}
+            <div className="h-full w-full bg-white dark:bg-muted relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsHtmlFullscreen(true)}
+                className="absolute top-2 right-2 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur shadow"
+              >
+                <Maximize2 className="h-4 w-4 mr-2" />
+                Fullscreen
+              </Button>
+              <iframe
+                srcDoc={content}
+                className="w-full h-full border-0"
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                title={fileName}
+              />
+            </div>
+          </>
         );
 
       case 'pdf':

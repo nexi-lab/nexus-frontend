@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, BookOpen, Bot, Brain, Cloud, FileText, FolderPlus, MessageSquare, Settings } from 'lucide-react';
+import { AlertCircle, BookOpen, Bot, Brain, Cloud, FileText, FolderPlus, Maximize2, MessageSquare, Minimize2, Settings } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
@@ -61,6 +61,7 @@ export function FileBrowser() {
   const [creatingNewItem, setCreatingNewItem] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null);
   const [initialSelectedAgentId, setInitialSelectedAgentId] = useState<string | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'file' | 'chat'>('file');
+  const [isChatFullscreen, setIsChatFullscreen] = useState(false);
 
   const deleteMutation = useDeleteFile();
   const uploadMutation = useUploadFile();
@@ -468,6 +469,19 @@ export function FileBrowser() {
               Chat
             </Button>
           </div>
+          {/* Fullscreen button - only show when chat is active */}
+          {viewMode === 'chat' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsChatFullscreen(true)}
+              className="gap-2 h-8"
+              title="Focus Mode"
+            >
+              <Maximize2 className="h-4 w-4" />
+              Focus
+            </Button>
+          )}
         </div>
       </div>
 
@@ -491,22 +505,47 @@ export function FileBrowser() {
 
           {/* Main Panel - File Content Viewer or Chat based on viewMode */}
           <Panel defaultSize={80} minSize={50}>
-            {viewMode === 'file' ? (
-              // File View
-              needsProvisioning && !selectedFile ? (
-                <WorkspaceEmptyState onWorkspaceCreated={handleWorkspaceCreated} />
-              ) : (
-                <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
-              )
-            ) : (
-              // Chat View
-              <ChatPanel
-                isOpen={true}
-                onClose={() => setViewMode('file')}
-                initialSelectedAgentId={initialSelectedAgentId}
-                openedFilePath={selectedFile?.path}
-              />
-            )}
+            <div className="h-full relative">
+              {/* File View - hidden when chat mode is active */}
+              <div className={viewMode === 'file' ? 'h-full' : 'hidden'}>
+                {needsProvisioning && !selectedFile ? (
+                  <WorkspaceEmptyState onWorkspaceCreated={handleWorkspaceCreated} />
+                ) : (
+                  <FileContentViewer file={selectedFile} onFileDeleted={handleFileDeleted} />
+                )}
+              </div>
+              {/* Chat View - always mounted to preserve state, hidden when file mode is active */}
+              {/* When fullscreen, render as fixed overlay; otherwise render inline */}
+              <div className={
+                viewMode === 'chat'
+                  ? isChatFullscreen
+                    ? 'fixed inset-0 z-50 bg-background'
+                    : 'h-full'
+                  : 'hidden'
+              }>
+                {/* Exit Focus button - only show in fullscreen mode */}
+                {isChatFullscreen && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsChatFullscreen(false)}
+                    className="absolute top-4 right-4 z-[60] bg-background/90 backdrop-blur shadow-lg"
+                  >
+                    <Minimize2 className="h-4 w-4 mr-2" />
+                    Exit Focus
+                  </Button>
+                )}
+                <ChatPanel
+                  isOpen={true}
+                  onClose={() => {
+                    setIsChatFullscreen(false);
+                    setViewMode('file');
+                  }}
+                  initialSelectedAgentId={initialSelectedAgentId}
+                  openedFilePath={selectedFile?.path}
+                />
+              </div>
+            </div>
           </Panel>
         </PanelGroup>
       </div>
