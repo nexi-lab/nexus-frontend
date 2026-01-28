@@ -131,6 +131,8 @@ export function FileBrowser() {
 
   const handleFileSelect = (file: FileInfo) => {
     setSelectedFile(file);
+    // Auto-switch to File tab when a file is selected
+    setViewMode('file');
   };
 
   const handleFileDeleted = () => {
