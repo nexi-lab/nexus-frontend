@@ -1,7 +1,6 @@
 import type { Message } from '@langchain/langgraph-sdk';
-import { CheckCircle, Loader2, Maximize2 } from 'lucide-react';
+import { CheckCircle, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 
 interface ToolCallsProps {
@@ -50,78 +49,109 @@ function ToolCallItem({ toolCall, messages }: { toolCall: any; messages: Message
   }
 
   const outputStr = isJsonContent ? JSON.stringify(parsedContent, null, 2) : String(parsedContent || '');
-  
-  // Get one-line snippet for RESPONSE
-  const getResponseSnippet = (str: string): string => {
-    // Strip newlines and truncate to one line
-    const singleLine = str.replace(/\n/g, ' ').trim();
-    return singleLine.length > 100 ? singleLine.substring(0, 100) + '...' : singleLine;
+
+  // Extract pattern for grep_files to display inline
+  const getToolDisplayName = () => {
+    if (toolCall.name === 'grep_files' && toolInput.pattern) {
+      return (
+        <>
+          <span className="font-bold">Grep</span>
+          {' '}
+          <span className="font-normal text-muted-foreground">{toolInput.pattern}</span>
+        </>
+      );
+    }
+
+    if (toolCall.name === 'glob_files' && toolInput.pattern) {
+      return (
+        <>
+          <span className="font-bold">Glob</span>
+          {' '}
+          <span className="font-normal text-muted-foreground">{toolInput.pattern}</span>
+        </>
+      );
+    }
+
+    if (toolCall.name === 'read_file' && toolInput.read_cmd) {
+      // Extract file path - handle both quoted paths (with spaces) and unquoted paths
+      const quotedMatch = toolInput.read_cmd.match(/"([^"]+)"/);
+      const filePath = quotedMatch ? quotedMatch[1] : toolInput.read_cmd.split(/\s+/).pop();
+
+      if (filePath) {
+        const basename = filePath.split('/').pop() || filePath;
+        return (
+          <>
+            <span className="font-bold">Read</span>
+            {' '}
+            <span className="font-normal text-muted-foreground">{basename}</span>
+          </>
+        );
+      }
+    }
+
+    if (toolCall.name === 'write_file') {
+      const filePath = toolInput.file_path || toolInput.path || toolInput.filepath;
+      if (filePath) {
+        const basename = filePath.split('/').pop() || filePath;
+        return (
+          <>
+            <span className="font-bold">Write</span>
+            {' '}
+            <span className="font-normal text-muted-foreground">{basename}</span>
+          </>
+        );
+      }
+    }
+
+    if (toolCall.name === 'bash') {
+      return <span className="font-bold">Bash</span>;
+    }
+
+    if (toolCall.name === 'python') {
+      return <span className="font-bold">Python</span>;
+    }
+
+    if (toolCall.name === 'web_search' && toolInput.query) {
+      return (
+        <>
+          <span className="font-bold">Web Search</span>
+          {' '}
+          <span className="font-normal text-muted-foreground">{toolInput.query}</span>
+        </>
+      );
+    }
+
+    if (toolCall.name === 'web_crawl' && toolInput.url) {
+      return (
+        <>
+          <span className="font-bold">Web Crawl</span>
+          {' '}
+          <span className="font-normal text-muted-foreground">{toolInput.url}</span>
+        </>
+      );
+    }
+
+    return toolCall.name;
   };
-  const responseSnippet = result ? getResponseSnippet(outputStr) : '';
 
   return (
     <>
-      <div className="p-3 rounded-xl bg-[#393939] text-white transition-all duration-300 overflow-x-hidden relative w-full">
-        <div className="flex items-center justify-between gap-5 w-full mb-2">
-          <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
-            {result ? <CheckCircle className="text-green-500 flex-shrink-0" size={20} /> : <Loader2 className="flex-shrink-0 animate-spin" size={16} />}
-            <span className="truncate font-medium">{toolCall.name}</span>
-          </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="bg-white/10 text-white hover:bg-white/15 rounded-full py-1 px-2 flex-shrink-0 h-auto absolute top-2 right-2"
-            onClick={() => setShowDetails(true)}
-            title="Expand to view full content"
-          >
-            <Maximize2 className="h-3 w-3" />
-          </Button>
+      {/* Compact one-line tool call display */}
+      <button
+        onClick={() => setShowDetails(true)}
+        className="w-full px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          {result ? (
+            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+          ) : (
+            <Loader2 className="h-4 w-4 text-gray-600 dark:text-gray-400 flex-shrink-0 animate-spin" />
+          )}
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+            {getToolDisplayName()}
+          </span>
         </div>
-
-        {/* RESPONSE section - shown first, one line only */}
-        {result && (
-          <div className="mt-2 space-y-1">
-            <div className="text-xs font-semibold text-gray-300 uppercase tracking-wide">RESPONSE</div>
-            <div className="bg-black/20 rounded p-2 text-xs font-mono overflow-x-auto">
-              <div className="text-xs whitespace-nowrap">{responseSnippet}</div>
-            </div>
-          </div>
-        )}
-
-        {/* PARAMETERS section - shown second, snippet mode (one line only) */}
-        <div className="mt-2 space-y-1">
-          <div className="text-xs font-semibold text-gray-300 uppercase tracking-wide">PARAMETERS</div>
-          <div className="bg-black/20 rounded p-2 text-xs font-mono overflow-x-auto">
-            {(() => {
-              if (isComplexValue(toolInput)) {
-                const keys = Object.keys(toolInput);
-                if (keys.length === 0) return null;
-                const firstKey = keys[0];
-                const firstValue = toolInput[firstKey];
-                let valueStr = '';
-                if (typeof firstValue === 'string') {
-                  // Strip newlines and truncate if needed
-                  valueStr = firstValue.replace(/\n/g, ' ').trim();
-                  valueStr = valueStr.length > 50 ? valueStr.substring(0, 50) + '...' : valueStr;
-                } else if (typeof firstValue === 'object' && firstValue !== null) {
-                  valueStr = '{...}';
-                } else {
-                  valueStr = String(firstValue);
-                }
-                const moreText = keys.length > 1 ? ` (+${keys.length - 1} more)` : '';
-                return (
-                  <div className="text-xs">
-                    <span className="text-blue-400 font-semibold">{firstKey}</span>
-                    <span className="text-gray-300"> {valueStr}{moreText}</span>
-                  </div>
-                );
-              }
-              // Fallback for non-dict parameters
-              return <pre className="text-xs whitespace-pre-wrap break-words">{inputStr}</pre>;
-            })()}
-          </div>
-        </div>
-      </div>
+      </button>
 
       {/* Tool Details Dialog */}
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
@@ -154,10 +184,10 @@ function ToolCallItem({ toolCall, messages }: { toolCall: any; messages: Message
               {isComplexValue(toolInput) ? (
                 <div className="space-y-2">
                   {Object.entries(toolInput).map(([key, value]) => {
-                    const valueStr = typeof value === 'string' 
-                      ? value 
-                      : (typeof value === 'object' && value !== null 
-                          ? JSON.stringify(value, null, 2) 
+                    const valueStr = typeof value === 'string'
+                      ? value
+                      : (typeof value === 'object' && value !== null
+                          ? JSON.stringify(value, null, 2)
                           : String(value));
                     const isValueJson = typeof value === 'object' && value !== null;
                     return (
