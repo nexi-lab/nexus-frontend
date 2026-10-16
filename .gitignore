@@ -34,3 +34,5 @@ firebase-debug.*.log
 *.sw?
 *.env*
 .npm-cache/
+playwright-report/
+test-results/

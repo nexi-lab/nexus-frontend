@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, User, Building2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import NexusAPIClient from '../api/client';
 
 interface ConfirmationData {
   pending_token: string;
@@ -27,19 +28,8 @@ interface OAuthConfirmationProps {
 
 export default function OAuthConfirmation({ confirmationData }: OAuthConfirmationProps) {
   const navigate = useNavigate();
-  const { apiClient } = useAuth();
-  
-  if (!apiClient) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center text-muted-foreground">
-          <p className="text-lg font-medium mb-2">API client not initialized</p>
-          <p>Please configure your connection in the login page.</p>
-        </div>
-      </div>
-    );
-  }
-  
+  const { apiClient, completeUserLogin } = useAuth();
+
   const { user_info, tenant_info, pending_token } = confirmationData;
 
   const [tenantName, setTenantName] = useState(tenant_info.name);
@@ -68,6 +58,10 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
   };
 
   const handleConfirm = async () => {
+    if (!apiClient) {
+      setError('Please configure your Nexus connection.');
+      return;
+    }
     // Validate slug before submitting
     if (!validateSlug(tenantSlug)) {
       return;
@@ -77,36 +71,18 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
     setError(null);
 
     try {
-      const response = await apiClient.authOAuthConfirm({
+      const response = await new NexusAPIClient(apiClient.getBaseURL()).authOAuthConfirm({
         pending_token,
         tenant_name: tenant_info.can_edit_name && tenantName !== tenant_info.name ? tenantName : null,
         tenant_slug: tenantSlug !== tenant_info.tenant_id ? tenantSlug : null,
       });
 
-      // Store JWT token and user account
-      const userAccount = {
-        ...response.user,
-        api_key: response.api_key, // Include API key in userAccount object
-        tenant_id: response.tenant_id, // Include tenant ID in userAccount object
-      };
-      localStorage.setItem('nexus_jwt_token', response.token);
-      localStorage.setItem('nexus_user_account', JSON.stringify(userAccount));
-
-      // Store API key and tenant ID
-      if (response.api_key) {
-        localStorage.setItem('nexus_user_api_key', response.api_key);
-      }
-      if (response.tenant_id) {
-        localStorage.setItem('nexus_tenant_id', response.tenant_id);
-      }
+      completeUserLogin(response);
 
       // Clear sessionStorage
       sessionStorage.removeItem('oauth_state');
 
-      // Redirect to home page
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
+      navigate('/', { replace: true });
     } catch (err: any) {
       console.error('Failed to confirm registration:', err);
       const errorDetail = err.response?.data?.detail || err.message || 'Unknown error';
@@ -134,12 +110,8 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
       <div className="max-w-2xl w-full space-y-8">
         <div className="text-center">
           <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            Confirm Your Information
-          </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            Please review your account information before continuing
-          </p>
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-gray-100">Confirm Your Information</h2>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please review your account information before continuing</p>
         </div>
 
         <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden">
@@ -150,19 +122,11 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">User Information</h3>
             </div>
             <div className="flex items-start space-x-4">
-              {user_info.avatar_url && (
-                <img
-                  src={user_info.avatar_url}
-                  alt="Profile"
-                  className="h-16 w-16 rounded-full"
-                />
-              )}
+              {user_info.avatar_url && <img src={user_info.avatar_url} alt="Profile" className="h-16 w-16 rounded-full" />}
               <div className="flex-1">
                 <div className="mb-3">
                   <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Name</label>
-                  <p className="mt-1 text-base text-gray-900 dark:text-gray-100">
-                    {user_info.display_name || 'Not provided'}
-                  </p>
+                  <p className="mt-1 text-base text-gray-900 dark:text-gray-100">{user_info.display_name || 'Not provided'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Email</label>
@@ -196,10 +160,7 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
               </div>
 
               <div>
-                <label
-                  htmlFor="tenant-slug"
-                  className="block text-sm font-medium text-gray-500 dark:text-gray-400"
-                >
+                <label htmlFor="tenant-slug" className="block text-sm font-medium text-gray-500 dark:text-gray-400">
                   Organization Slug
                   <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(You can customize this)</span>
                 </label>
@@ -217,9 +178,7 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
                   {slugError ? (
                     <p className="mt-1 text-xs text-red-600 dark:text-red-400">{slugError}</p>
                   ) : (
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Used in URLs and API calls (3-63 chars, lowercase alphanumeric + hyphens)
-                    </p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Used in URLs and API calls (3-63 chars, lowercase alphanumeric + hyphens)</p>
                   )}
                 </div>
               </div>
@@ -230,14 +189,9 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
               </div>
 
               <div>
-                <label
-                  htmlFor="tenant-name"
-                  className="block text-sm font-medium text-gray-500 dark:text-gray-400"
-                >
+                <label htmlFor="tenant-name" className="block text-sm font-medium text-gray-500 dark:text-gray-400">
                   Organization Name
-                  {tenant_info.can_edit_name && (
-                    <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(You can customize this)</span>
-                  )}
+                  {tenant_info.can_edit_name && <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(You can customize this)</span>}
                 </label>
                 {tenant_info.can_edit_name ? (
                   <div className="mt-1">
@@ -249,9 +203,7 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
                       placeholder="Enter organization name"
                       className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Customize your personal organization name
-                    </p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Customize your personal organization name</p>
                   </div>
                 ) : (
                   <div className="mt-1">
@@ -282,6 +234,7 @@ export default function OAuthConfirmation({ confirmationData }: OAuthConfirmatio
           {/* Confirmation Button */}
           <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
             <button
+              type="button"
               onClick={handleConfirm}
               disabled={isLoading}
               className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"

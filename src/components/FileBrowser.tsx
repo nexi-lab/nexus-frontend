@@ -402,7 +402,7 @@ export function FileBrowser() {
                   <BookOpen className="h-4 w-4 mr-2" />
                   {t('landing.skill')}
                 </Button>
-                {(userAccount?.is_global_admin || userInfo?.is_admin) && (
+                {userInfo?.is_admin && (
                   <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
                     <Settings className="h-4 w-4 mr-2" />
                     {t('landing.admin')}

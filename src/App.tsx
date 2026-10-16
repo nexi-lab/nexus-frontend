@@ -1,25 +1,25 @@
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { FileBrowser } from './components/FileBrowser';
+import { lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
-import { AdminSettings } from './pages/AdminSettings';
-import { Integration } from './pages/Integration';
-import { Connector } from './pages/Connector';
-import { Skill } from './pages/Skill';
-import { Agent } from './pages/Agent';
-import { Workspace } from './pages/Workspace';
-import { Memory } from './pages/Memory';
 import OAuthCallback from './pages/OAuthCallback';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Settings from './pages/Settings';
 import './index.css';
 import { Toaster } from 'sonner';
-import { GOOGLE_CLIENT_ID } from './utils/config';
 import { AuthenticationError } from './api/client';
+
+const FileBrowser = lazy(async () => ({ default: (await import('./components/FileBrowser')).FileBrowser }));
+const AdminSettings = lazy(async () => ({ default: (await import('./pages/AdminSettings')).AdminSettings }));
+const Integration = lazy(async () => ({ default: (await import('./pages/Integration')).Integration }));
+const Connector = lazy(async () => ({ default: (await import('./pages/Connector')).Connector }));
+const Skill = lazy(async () => ({ default: (await import('./pages/Skill')).Skill }));
+const Agent = lazy(async () => ({ default: (await import('./pages/Agent')).Agent }));
+const Workspace = lazy(async () => ({ default: (await import('./pages/Workspace')).Workspace }));
+const Memory = lazy(async () => ({ default: (await import('./pages/Memory')).Memory }));
+const Settings = lazy(() => import('./pages/Settings'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,21 +47,24 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isUserAuthenticated, isAuthenticated } = useAuth();
+  const { isUserAuthenticated, isAuthenticated, isResolvingIdentity, identityError } = useAuth();
+
+  if (isResolvingIdentity) return <p role="status">Verifying your Nexus connection...</p>;
+  if (identityError) return <div role="alert">{identityError} <button type="button" onClick={() => window.location.reload()}>Retry</button></div>;
 
   // Allow access if either user account (JWT) or API key is authenticated
   if (!isUserAuthenticated && !isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return <Suspense fallback={<p role="status">Loading...</p>}>{children}</Suspense>;
 }
 
 function AppContent() {
   const { resolvedTheme } = useTheme();
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <>
       <Toaster
         theme={resolvedTheme}
         position="top-center"
@@ -98,7 +101,7 @@ function AppContent() {
           </BrowserRouter>
         </QueryClientProvider>
       </AuthProvider>
-    </GoogleOAuthProvider>
+    </>
   );
 }
 

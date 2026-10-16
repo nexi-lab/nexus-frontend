@@ -1,6 +1,16 @@
 import axios, { type AxiosInstance } from 'axios';
 import type { RPCRequest, RPCResponse } from '../types/file';
 
+interface NativeIdentity {
+  subject_type: string;
+  subject_id: string;
+  user_id: string;
+  agent_id: string | null;
+  zone_id: string;
+  is_admin: boolean;
+  zone_perms: Array<[string, string]>;
+}
+
 // ReBAC tuple type
 export type ReBACTuple = {
   tuple_id: string;
@@ -35,9 +45,9 @@ class NexusAPIClient {
       baseURL,
       headers: {
         'Content-Type': 'application/json',
-        ...(apiKey && { Authorization: `Bearer ${apiKey}` }),
       },
     });
+    this.setAuthToken(apiKey ?? null);
 
     // Add response interceptor to catch 401 errors globally
     this.client.interceptors.response.use(
@@ -45,7 +55,7 @@ class NexusAPIClient {
       (error) => {
         if (axios.isAxiosError(error) && error.response?.status === 401) {
           // Check if API key is missing or invalid
-          const hasApiKey = !!apiKey;
+          const hasApiKey = !!error.config?.headers?.Authorization;
           const errorMessage = hasApiKey
             ? 'API key is invalid or expired. Please check your API key and try again.'
             : 'API key is missing. Please provide a valid API key to access this resource.';
@@ -172,7 +182,7 @@ class NexusAPIClient {
     version?: string;
   }> {
     try {
-      const response = await this.client.get('/health');
+      const response = await this.client.get('/v2/status', { timeout: 8000 });
       return response.data;
     } catch (error) {
       // Re-throw AuthenticationError as-is (from interceptor)
@@ -208,8 +218,15 @@ class NexusAPIClient {
     user?: string;
   }> {
     try {
-      const response = await this.client.get('/api/auth/whoami');
-      return response.data;
+      const { data } = await this.client.get<NativeIdentity>('/v2/auth/whoami', { timeout: 8000 });
+      return {
+        authenticated: true,
+        subject_type: data.subject_type,
+        subject_id: data.subject_id,
+        tenant_id: data.zone_id,
+        is_admin: data.is_admin,
+        user: data.user_id,
+      };
     } catch (error) {
       // Re-throw AuthenticationError as-is (from interceptor)
       if (error instanceof AuthenticationError) {
@@ -396,7 +413,7 @@ class NexusAPIClient {
     state: string;
     message: string;
   }> {
-    const response = await this.client.get('/auth/oauth/google/authorize');
+    const response = await this.client.get('/auth/oauth/google/authorize', { withCredentials: true });
     return response.data;
   }
 
@@ -450,7 +467,7 @@ class NexusAPIClient {
         message: string;
       }
   > {
-    const response = await this.client.post('/auth/oauth/check', params);
+    const response = await this.client.post('/auth/oauth/check', params, { withCredentials: true });
     return response.data;
   }
 
@@ -480,7 +497,7 @@ class NexusAPIClient {
     tenant_id: string | null;
     message: string;
   }> {
-    const response = await this.client.post('/auth/oauth/confirm', params);
+    const response = await this.client.post('/auth/oauth/confirm', params, { withCredentials: true });
     return response.data;
   }
 
@@ -510,7 +527,7 @@ class NexusAPIClient {
     tenant_id: string | null;
     message: string;
   }> {
-    const response = await this.client.post('/auth/oauth/callback', params);
+    const response = await this.client.post('/auth/oauth/callback', params, { withCredentials: true });
     return response.data;
   }
 

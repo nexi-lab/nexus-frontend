@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import ThirdAuth from '../components/ThirdAuth';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -116,6 +117,9 @@ export default function Login() {
             </button>
           </div>
         </form>
+        <div className="mt-6">
+          <ThirdAuth apiUrl={apiUrl.trim()} />
+        </div>
       </div>
     </div>
   );

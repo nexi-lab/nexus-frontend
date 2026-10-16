@@ -1,76 +1,30 @@
-# React + TypeScript + Vite
+# Nexus frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React console for a configured Nexus server. Use Node.js 22 and the pnpm version in `package.json`.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sh
+corepack enable
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Enter the server URL on the login screen. API key login resolves the credential through `GET /v2/auth/whoami`; administrator UI state comes from that response. The server enforces access on every request.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Google sign-in starts at the selected server's `/auth/oauth/google/authorize` endpoint. The server must verify the provider identity and browser binding, then return the user's own Nexus credentials. New users review their account information before confirmation. The frontend does not contain a shared login credential or verify Google identities itself.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Verification
+
+```sh
+pnpm run typecheck
+pnpm run build
+pnpm exec playwright install chromium
+pnpm run test:e2e
 ```
 
+Browser tests run the application against a local HTTP protocol fixture. They exercise server selection, credential replacement, account confirmation, browser cookies, rejected callbacks, revocation, and cached administrator flags. Provider navigation is simulated; these tests do not prove a real Google exchange or the Rust account backend. Native daemon authorization and revocation are tested in nexus-vfs.
 
-# sk-default_admin_d38a7427_244c5f756dcc064eea6e68a64aa2111e
+CI runs the same browser journeys without retries. For a locally installed Chrome, set `NEXUS_TEST_CHROME` to its executable path. The test browser uses an isolated profile and blocks external requests.
+
+## Migration status
+
+The current identity and status requests use native `/v2` endpoints. Account routes and the console's remaining `/api/nfs/*` consumers still require migration before Python server retirement. This branch is not a complete frontend migration.

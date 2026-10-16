@@ -64,7 +64,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
           </div>
 
           <DialogFooter>
-            <ThirdAuth onSuccess={handleCancel} />
+            <ThirdAuth />
             <div className="flex items-center gap-4">
               <Button type="button" variant="outline" onClick={handleCancel} disabled={isLoading}>
                 {t('common.cancel')}

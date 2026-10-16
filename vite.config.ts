@@ -23,6 +23,14 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/auth': {
+        target: process.env.VITE_NEXUS_API_URL,
+        changeOrigin: true,
+      },
+      '/v2': {
+        target: process.env.VITE_NEXUS_API_URL,
+        changeOrigin: true,
+      },
       '/health': {
         // VITE_NEXUS_API_URL is required - set it in .env file
         // If not set, proxy will fail (which is intentional - forces configuration)

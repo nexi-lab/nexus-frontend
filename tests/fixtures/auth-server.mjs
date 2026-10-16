@@ -1,0 +1,163 @@
+import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+
+const origin = 'http://127.0.0.1:4173';
+let scenario = 'existing';
+let calls = [];
+const attempts = new Map();
+const pending = new Set();
+const user = {
+  user_id: 'server-alice',
+  email: 'alice@example.test',
+  username: 'alice',
+  display_name: 'Alice',
+  avatar_url: null,
+  primary_auth_method: 'google',
+  is_global_admin: false,
+  email_verified: true,
+  created_at: '2026-01-01T00:00:00Z',
+  last_login_at: '2026-01-01T00:00:00Z',
+};
+const session = () => ({ token: 'fixture-alice-session', user, api_key: 'sk-fixture-server-alice', tenant_id: 'sharedzone' });
+
+const server = createServer(async (request, response) => {
+  const url = new URL(request.url, 'http://127.0.0.1:4181');
+  if (request.headers.origin === origin) {
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Access-Control-Allow-Credentials', 'true');
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    response.setHeader('Vary', 'Origin');
+  }
+  response.setHeader('Cache-Control', 'no-store');
+  response.setHeader('Content-Type', 'application/json');
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204).end();
+    return;
+  }
+  const json = (value, status = 200) => {
+    response.writeHead(status).end(JSON.stringify(value));
+  };
+  let body = '';
+  for await (const chunk of request) body += chunk;
+  const value = body ? JSON.parse(body) : {};
+  const authorization = request.headers.authorization;
+  const principal =
+    authorization === 'Bearer sk-fixture-previous'
+      ? 'previous-user'
+      : ['Bearer sk-fixture-server-alice', 'Bearer fixture-alice-session'].includes(authorization)
+        ? user.user_id
+        : null;
+  if (url.pathname === '/__fixture/reset') {
+    scenario = value.scenario || 'existing';
+    calls = [];
+    attempts.clear();
+    pending.clear();
+    json({ ok: true });
+    return;
+  }
+  if (url.pathname === '/__fixture/state') {
+    json({ calls });
+    return;
+  }
+  calls.push({
+    path: url.pathname,
+    method: request.method,
+    principal,
+    authorized: !!authorization,
+    browserBound: !!request.headers.cookie?.includes('nexus_oauth_binding='),
+  });
+  if (url.pathname === '/v2/status') {
+    json({ status: 'ok', version: 'fixture' });
+    return;
+  }
+  if (url.pathname === '/v2/auth/whoami') {
+    if (!principal) {
+      json({ error: 'credential rejected' }, 401);
+      return;
+    }
+    json({
+      subject_type: 'user',
+      subject_id: principal,
+      user_id: principal,
+      agent_id: null,
+      zone_id: 'sharedzone',
+      is_admin: false,
+      zone_perms: [['sharedzone', 'r']],
+    });
+    return;
+  }
+  if (url.pathname === '/auth/oauth/google/authorize') {
+    if (scenario === 'unconfigured') {
+      json({ detail: 'Google sign-in is not configured' }, 503);
+      return;
+    }
+    const state = randomUUID();
+    const binding = randomUUID();
+    attempts.set(state, binding);
+    response.setHeader('Set-Cookie', `nexus_oauth_binding=${binding}; HttpOnly; SameSite=Lax; Path=/`);
+    const target = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    target.searchParams.set('state', state);
+    target.searchParams.set('redirect_uri', `${origin}/oauth/callback`);
+    json({ auth_url: scenario === 'malformed' ? 'javascript:void(0)' : target.href, state });
+    return;
+  }
+  if (url.pathname === '/auth/oauth/check') {
+    const binding = attempts.get(value.state);
+    attempts.delete(value.state);
+    if (
+      !binding ||
+      !request.headers.cookie?.includes(`nexus_oauth_binding=${binding}`) ||
+      value.provider !== 'google' ||
+      value.code !== 'provider-accepted-code' ||
+      scenario === 'rejected'
+    ) {
+      json({ detail: 'provider or browser binding rejected' }, 400);
+      return;
+    }
+    if (scenario === 'new') {
+      const ticket = randomUUID();
+      pending.add(ticket);
+      json({
+        needs_confirmation: true,
+        pending_token: ticket,
+        user_info: { email: user.email, display_name: user.display_name, avatar_url: null, oauth_provider: 'google' },
+        tenant_info: { tenant_id: 'sharedzone', name: 'Test workspace', domain: null, description: null, is_personal: true, can_edit_name: true },
+      });
+      return;
+    }
+    json({ needs_confirmation: false, ...session(), is_new_user: false });
+    return;
+  }
+  if (url.pathname === '/auth/oauth/confirm') {
+    if (!pending.delete(value.pending_token)) {
+      json({ detail: 'unknown confirmation' }, 400);
+      return;
+    }
+    json(session());
+    return;
+  }
+  if (url.pathname.startsWith('/api/nfs/')) {
+    if (!principal) {
+      json({ error: 'credential rejected' }, 401);
+      return;
+    }
+    const method = url.pathname.split('/').at(-1);
+    const result =
+      method === 'list'
+        ? { files: [] }
+        : method === 'is_directory'
+          ? { is_directory: true }
+          : method === 'exists'
+            ? { exists: false }
+            : method === 'get_available_namespaces'
+              ? { namespaces: [] }
+              : method === 'oauth_exchange_code'
+                ? { success: true }
+                : [];
+    json({ jsonrpc: '2.0', id: value.id, result });
+    return;
+  }
+  json({ error: 'unknown fixture route' }, 404);
+});
+server.listen(4181, '127.0.0.1');
