@@ -21,7 +21,7 @@ pnpm exec playwright install chromium
 pnpm run test:e2e
 ```
 
-Browser tests run the application against a local HTTP protocol fixture. They exercise server selection, credential replacement, account confirmation, browser cookies, rejected callbacks, revocation, and cached administrator flags. Provider navigation is simulated; these tests do not prove a real Google exchange or the Rust account backend. Native daemon authorization and revocation are tested in nexus-vfs.
+Browser tests serve the production build against a local HTTP protocol fixture. They exercise server selection, credential replacement, account confirmation, browser cookies, rejected callbacks, revocation, cached administrator flags, and a 1 MiB login JavaScript budget. Provider navigation is simulated; these tests do not prove a real Google exchange or the Rust account backend. Native daemon authorization and revocation are tested in nexus-vfs.
 
 CI runs the same browser journeys without retries. For a locally installed Chrome, set `NEXUS_TEST_CHROME` to its executable path. The test browser uses an isolated profile and blocks external requests.
 
