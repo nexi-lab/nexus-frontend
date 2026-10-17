@@ -6,7 +6,7 @@ test.beforeEach(async ({ request, context }) => {
   await request.post(`${backend}/__fixture/reset`, { data: {} });
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
-    if (url.hostname === '127.0.0.1') await route.continue();
+    if (url.origin === 'http://127.0.0.1:4173' || url.origin === backend) await route.continue();
     else await route.abort('blockedbyclient');
   });
   await context.route('https://accounts.google.com/**', async (route) => {

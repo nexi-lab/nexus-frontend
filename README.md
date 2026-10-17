@@ -25,6 +25,12 @@ Browser tests serve the production build against a local HTTP protocol fixture. 
 
 CI runs the same browser journeys without retries. For a locally installed Chrome, set `NEXUS_TEST_CHROME` to its executable path. The test browser uses an isolated profile and blocks external requests.
 
+### Native daemon browser acceptance
+
+Build this frontend, then run `scripts/test_search_local.py` from the Nexus repository with `--frontend-checkout <this-checkout>`, `--browser-origin http://127.0.0.1:4173`, and the native daemon/plugin paths. Use `--keyword-only` for this identity journey. The harness starts an isolated native daemon with TLS and ReBAC, issues temporary credentials, runs the browser, and cleans up the fixture. It retains sanitized results and screenshots.
+
+The browser serves the production frontend on port 4173 and connects directly to the Rust HTTP listener. It verifies bearer identity, explicit browser CORS, non-admin UI restrictions, a readable 401 after warmed credential revocation, and another user's continued access. This journey needs no Google credentials. The native daemon's `NEXUS_HTTP_ALLOWED_ORIGINS` must include the exact frontend origin when the two use different origins.
+
 ## Migration status
 
 The current identity and status requests use native `/v2` endpoints. Account routes and the console's remaining `/api/nfs/*` consumers still require migration before Python server retirement. This branch is not a complete frontend migration.
