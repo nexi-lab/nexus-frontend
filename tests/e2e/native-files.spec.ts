@@ -22,6 +22,7 @@ test('browse, edit, rename and delete use native files and keep the selected pat
   await page.getByPlaceholder('Enter text content...').fill('edited ✓ & 中文');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('edited ✓ & 中文', { exact: true })).toBeVisible();
+  await expect(page.getByText(`${Buffer.byteLength('edited ✓ & 中文')} bytes`, { exact: true })).toBeVisible();
 
   await page.getByText(name, { exact: true }).first().click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Rename' }).click();
@@ -55,6 +56,7 @@ test('create a directory and file then delete the populated directory recursivel
   await page.getByPlaceholder('file name').fill('empty.txt');
   await page.getByPlaceholder('file name').press('Enter');
   await expect(page.getByText('empty.txt', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('0 bytes', { exact: true })).toBeVisible();
   page.on('dialog', (dialog) => dialog.accept());
   await folder.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Delete' }).click();

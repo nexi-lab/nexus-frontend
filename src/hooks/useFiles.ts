@@ -125,6 +125,8 @@ export function useUpdateFile() {
     onSuccess: (_, { path }) => {
       // Invalidate file content to refresh the view
       queryClient.invalidateQueries({ queryKey: fileKeys.file(path) });
+      const parent = path.substring(0, path.lastIndexOf('/')) || '/';
+      queryClient.invalidateQueries({ queryKey: fileKeys.list(parent) });
     },
   });
 }

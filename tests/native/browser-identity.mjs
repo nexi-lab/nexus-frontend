@@ -206,6 +206,7 @@ try {
   await page.getByPlaceholder('Enter text content...').fill('saved after rename ✓');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByText('saved after rename ✓', { exact: true }).waitFor();
+  await page.getByText(`${Buffer.byteLength('saved after rename ✓')} bytes`, { exact: true }).waitFor();
   assert.equal(await (await adminRequest(`/v2/files?path=${encodeURIComponent(finalPath)}`)).text(), 'saved after rename ✓');
   const absent = await fetch(`${nativeUrl}/v2/files?path=${encodeURIComponent(initialPath)}`, { headers: { authorization: `Bearer ${admin}` } });
   assert.equal(absent.status, 404);

@@ -3,41 +3,20 @@ import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AuthenticationError } from '../api/client';
+import type NexusAPIClient from '../api/client';
 import { createFilesAPI } from '../api/files';
-import { useAuth } from '../contexts/AuthContext';
 import { useDeleteFile, useFileContent, useUpdateFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
 import ExcelViewer from './ExcelViewer';
 import { FileVersionHistoryDialog } from './FileVersionHistoryDialog';
 import { PDFViewer } from './PDFViewer';
+import { NexusConnection } from './NexusConnection';
 import WordViewer from './WordViewer';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 
-// Helper to convert Uint8Array to string
-function bytesToString(bytes: Uint8Array | undefined | null | any): string {
-  if (!bytes) return '';
-
-  // Handle Uint8Array
-  if (bytes instanceof Uint8Array) {
-    const decoder = new TextDecoder('utf-8');
-    return decoder.decode(bytes);
-  }
-
-  // Handle ArrayBuffer
-  if (bytes instanceof ArrayBuffer) {
-    const decoder = new TextDecoder('utf-8');
-    return decoder.decode(new Uint8Array(bytes));
-  }
-
-  // Handle empty or invalid data
-  if (typeof bytes === 'object' && bytes.length === 0) {
-    return '';
-  }
-
-  // Fallback: return empty string for unexpected types
-  console.warn('Unexpected bytes type:', typeof bytes, bytes);
-  return '';
+function bytesToString(bytes?: Uint8Array): string {
+  return bytes ? new TextDecoder().decode(bytes) : '';
 }
 
 interface FileContentViewerProps {
@@ -45,23 +24,18 @@ interface FileContentViewerProps {
   onFileDeleted?: () => void;
 }
 
-export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProps) {
-  const { apiClient } = useAuth();
-  
-  if (!apiClient) {
-    return (
-      <div className="p-4 text-center text-muted-foreground">
-        API client not initialized. Please configure your connection.
-      </div>
-    );
-  }
-  
+export function FileContentViewer(props: FileContentViewerProps) {
+  return <NexusConnection>{(apiClient) => <ConnectedFileContentViewer {...props} apiClient={apiClient} />}</NexusConnection>;
+}
+
+function ConnectedFileContentViewer({ file, onFileDeleted, apiClient }: FileContentViewerProps & { apiClient: NexusAPIClient }) {
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
 
   const filePath = file?.path || '';
   const fileName = file?.name || 'Unknown';
 
   const { data: contentBytes, isLoading, error } = useFileContent(filePath, !!file && !file.isDirectory);
+  const fileSize = contentBytes?.byteLength ?? file?.size;
   const deleteMutation = useDeleteFile();
   const updateMutation = useUpdateFile();
 
@@ -96,8 +70,8 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
   }, [hasParsedMarkdown, filePath, parsedMdPath, parsedMdBytes, parsedMdLoading, parsedMdError]);
 
   // Convert bytes to string for text display
-  const content = bytesToString(contentBytes);
-  const parsedMdContent = bytesToString(parsedMdBytes);
+  const content = useMemo(() => bytesToString(contentBytes), [contentBytes]);
+  const parsedMdContent = useMemo(() => bytesToString(parsedMdBytes), [parsedMdBytes]);
 
   const [fileType, setFileType] = useState<'text' | 'markdown' | 'image' | 'pdf' | 'json' | 'code' | 'video' | 'excel' | 'word'|'html' | 'unknown'>('unknown');
   const [isEditing, setIsEditing] = useState(false);
@@ -647,9 +621,9 @@ export function FileContentViewer({ file, onFileDeleted }: FileContentViewerProp
             <div>
               <span className="font-medium">Type:</span> <span className="capitalize">{fileType}</span>
             </div>
-            {file.size && (
+            {fileSize !== undefined && (
               <div>
-                <span className="font-medium">Size:</span> <span>{file.size} bytes</span>
+                <span className="font-medium">Size:</span> <span>{fileSize} bytes</span>
               </div>
             )}
             {hasParsedMarkdown && parsedMdContent && !parsedMdError && (

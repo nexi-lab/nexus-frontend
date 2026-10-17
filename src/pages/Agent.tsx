@@ -6,6 +6,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import { copyToClipboard } from '../utils';
 import { createFilesAPI } from '../api/files';
 import type NexusAPIClient from '../api/client';
+import { NexusConnection } from '../components/NexusConnection';
 import { PermissionInfoBox } from '../components/PermissionInfoBox';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -49,19 +50,7 @@ const AVAILABLE_PLATFORMS = [
 ];
 
 export function Agent() {
-  const { apiClient } = useAuth();
-  
-  if (!apiClient) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center text-muted-foreground">
-          <p className="text-lg font-medium mb-2">API client not initialized</p>
-          <p>Please configure your connection in the login page.</p>
-        </div>
-      </div>
-    );
-  }
-  return <ConnectedAgent apiClient={apiClient} />;
+  return <NexusConnection>{(apiClient) => <ConnectedAgent apiClient={apiClient} />}</NexusConnection>;
 }
 
 function ConnectedAgent({ apiClient }: { apiClient: NexusAPIClient }) {
