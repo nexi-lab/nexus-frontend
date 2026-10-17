@@ -150,13 +150,12 @@ function TreeNode({
   const queryClient = useQueryClient();
   const { apiClient } = useAuth();
   
-  if (!apiClient) {
-    return null;
-  }
-  
-  const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
+  const filesAPI = useMemo(() => apiClient ? createFilesAPI(apiClient) : null, [apiClient]);
   const [isExpanded, setIsExpanded] = useState(currentPath.startsWith(path) || path === '/');
   const [isSyncing, setIsSyncing] = useState(false);
+  useEffect(() => {
+    if (creatingNewItem?.parentPath === path) setIsExpanded(true);
+  }, [creatingNewItem?.parentPath, path]);
 
   // Use regular file listing for all paths
   const { data: rawFiles, isLoading, error } = useFileList(path, isExpanded);
@@ -166,6 +165,7 @@ function TreeNode({
   const { data: isSkillFolder = false } = useQuery({
     queryKey: ['skillExists', skillMdPath],
     queryFn: async () => {
+      if (!filesAPI) throw new Error('API client not initialized');
       try {
         return await filesAPI.exists(skillMdPath);
       } catch (error) {
@@ -173,6 +173,7 @@ function TreeNode({
         return false;
       }
     },
+    enabled: !!filesAPI,
     staleTime: 30000, // Cache for 30 seconds
     gcTime: 60000, // Keep in cache for 1 minute
   });
@@ -190,6 +191,7 @@ function TreeNode({
   // Handle sync connector - call actual sync_mount API
   const handleSyncConnector = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent expanding/collapsing the folder
+    if (!filesAPI) return;
 
     setIsSyncing(true);
     try {
@@ -314,6 +316,7 @@ function TreeNode({
           <span className="truncate">{name}</span>
           {backendType && backendType !== 'LocalBackend' && (
             <button
+              type="button"
               onClick={handleSyncConnector}
               disabled={isSyncing}
               className="ml-auto opacity-0 group-hover:opacity-100 hover:bg-muted p-1 rounded transition-opacity"

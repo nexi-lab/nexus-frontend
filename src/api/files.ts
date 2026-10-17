@@ -1,4 +1,7 @@
-import type { ConnectorInfo, FileInfo, ListResult } from '../types/file';
+import type { ConnectorInfo, FileInfo } from '../types/file';
+import type { FileMetadata } from '../types/vfs';
+import { NexusAPIError } from './client';
+import { createVfsAPI } from './vfs';
 import type NexusAPIClient from './client';
 
 // Helper function to find the connector for a given path
@@ -17,153 +20,50 @@ function findConnectorForPath(path: string, connectors: ConnectorInfo[]): { conn
   return null;
 }
 
-// Helper function to transform backend file data to frontend FileInfo
-function transformFileInfo(file: any): FileInfo {
-  // Handle string (just a path)
-  if (typeof file === 'string') {
-    const name = file.split('/').filter(Boolean).pop() || file;
-    return {
-      path: file,
-      name,
-      isDirectory: file.endsWith('/'),
-      size: undefined,
-      type: undefined,
-    };
-  }
-
-  // Extract filename from path
-  const pathParts = (file.path || '').split('/').filter(Boolean);
-  const name = pathParts.pop() || file.path || 'unknown';
-
-  // Heuristic to detect directory:
-  // 1. Explicit is_directory field
-  // 2. No size (directories typically don't have size)
-  // 3. No etag (files have etags, directories don't)
-  // 4. mime_type is null and no size (likely a directory)
-  // 5. Path ends with /
-  const isDirectory =
-    file.is_directory ??
-    file.isDirectory ??
-    ((file.size === undefined && file.etag === undefined && file.mime_type === null) || file.path?.endsWith('/')) ??
-    false;
-
-  // Transform datetime objects if they exist
-  const modified = file.modified_at?.data || file.modified_at || file.modified;
-  const created = file.created_at?.data || file.created_at || file.created;
-
+function fileInfo(file: FileMetadata): FileInfo {
   return {
-    path: file.path || file,
-    name,
+    path: file.path,
+    name: file.path.split('/').filter(Boolean).pop() || file.path,
+    isDirectory: file.is_directory,
     size: file.size,
-    type: file.mime_type || file.type,
-    isDirectory,
-    modified,
-    created,
-    accessed: file.accessed_at?.data || file.accessed_at || file.accessed,
+    type: file.mime_type || undefined,
+    created: file.created_at_ms === null ? undefined : new Date(file.created_at_ms).toISOString(),
+    modified: file.modified_at_ms === null ? undefined : new Date(file.modified_at_ms).toISOString(),
   };
 }
 
 // Factory function to create filesAPI with a specific client
 export function createFilesAPI(client: NexusAPIClient) {
+  const vfs = createVfsAPI(client);
+  const metadata = async (path: string): Promise<FileMetadata | null> => {
+    try { return await vfs.metadata(path); }
+    catch (error) {
+      if (error instanceof NexusAPIError && error.status === 404) return null;
+      throw error;
+    }
+  };
   return {
-    // List files in a directory
-    async list(
-      path: string,
-      options?: {
-        recursive?: boolean;
-        details?: boolean;
-        prefix?: string;
-        show_parsed?: boolean;
-      },
-    ): Promise<FileInfo[]> {
-      const params: any = {
-        path,
-        recursive: options?.recursive ?? false,
-        details: options?.details ?? true,
-      };
-
-      // Only add optional params if they are defined
-      if (options?.prefix !== undefined) {
-        params.prefix = options.prefix;
-      }
-      if (options?.show_parsed !== undefined) {
-        params.show_parsed = options.show_parsed;
-      }
-
-      const result = await client.call<ListResult>('list', params);
-
-      // Transform backend response to frontend FileInfo format
-      return result.files.map(file => transformFileInfo(file));
+    async list(path: string, options?: { recursive?: boolean }): Promise<FileInfo[]> {
+      return (await vfs.list(path, options?.recursive)).entries.map(fileInfo);
     },
-
-    // Read file contents (returns Uint8Array for binary files)
-    async read(path: string): Promise<Uint8Array> {
-      return await client.call<Uint8Array>('read', { path });
-    },
-
-    // Write file contents
+    read: vfs.read,
     async write(path: string, content: string | ArrayBuffer): Promise<void> {
-      // Convert content to base64-encoded bytes format expected by server
-      let base64Content: string;
-
-      if (typeof content === 'string') {
-        // Text content - encode as UTF-8 then base64
-        base64Content = btoa(unescape(encodeURIComponent(content)));
-      } else {
-        // Binary content (ArrayBuffer) - convert to base64
-        const bytes = new Uint8Array(content);
-        const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '');
-        base64Content = btoa(binary);
-      }
-
-      // Send in the format expected by RPC server: {"__type__": "bytes", "data": "base64..."}
-      await client.call('write', {
-        path,
-        content: { __type__: 'bytes', data: base64Content },
-      });
+      await vfs.write(path, content);
     },
-
-    // Delete file or directory
-    async delete(path: string): Promise<void> {
-      await client.call('delete', { path });
+    async delete(path: string, recursive = false): Promise<void> {
+      await vfs.delete(path, recursive);
     },
-
-    // Check if file exists
     async exists(path: string): Promise<boolean> {
-      const result = await client.call<{ exists: boolean }>('exists', { path });
-      return result.exists;
+      return (await metadata(path)) !== null;
     },
-
-    // Create directory
     async mkdir(path: string, options?: { parents?: boolean; exist_ok?: boolean }): Promise<void> {
-      await client.call('mkdir', {
-        path,
-        parents: options?.parents ?? true,
-        exist_ok: options?.exist_ok ?? false,
-      });
+      await vfs.mkdir(path, options);
     },
-
-    // Remove directory
-    async rmdir(path: string, recursive?: boolean): Promise<void> {
-      await client.call('rmdir', {
-        path,
-        recursive: recursive ?? false,
-      });
-    },
-
-    // Check if path is a directory
     async isDirectory(path: string): Promise<boolean> {
-      const result = await client.call<{ is_directory: boolean }>('is_directory', { path });
-      return result.is_directory;
+      return (await metadata(path))?.is_directory ?? false;
     },
-
-    // Rename/move file
     async rename(oldPath: string, newPath: string): Promise<void> {
-      // Implement using read + write + delete
-      const content = await this.read(oldPath);
-      // Convert Uint8Array to ArrayBuffer for write
-      await this.write(newPath, content.buffer as ArrayBuffer);
-      await this.delete(oldPath);
+      await vfs.rename(oldPath, newPath);
     },
 
     // Get available namespaces

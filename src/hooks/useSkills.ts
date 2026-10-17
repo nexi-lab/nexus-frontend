@@ -130,7 +130,7 @@ export function useSkills(tier?: string, enabled = true) {
 
       try {
         // List all items in the skills folder
-        const items = await filesAPI.list(skillsFolderPath, { details: true });
+        const items = await filesAPI.list(skillsFolderPath);
 
         // Filter for directories only
         const skillDirs = items.filter(item => item.isDirectory);
@@ -276,7 +276,7 @@ export function useDeleteSkill() {
       console.log('useDeleteSkill: Attempting to delete skill directory:', skillPath);
 
       try {
-        await filesAPI.rmdir(skillPath, true);
+        await filesAPI.delete(skillPath, true);
         console.log('useDeleteSkill: Successfully deleted skill directory:', skillPath);
       } catch (error) {
         console.error('useDeleteSkill: Failed to delete skill directory:', error);

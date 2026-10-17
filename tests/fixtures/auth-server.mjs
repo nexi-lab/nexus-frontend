@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
+import { createFilesFixture } from './files.mjs';
 
 const origin = 'http://127.0.0.1:4173';
 let scenario = 'existing';
@@ -7,6 +8,8 @@ let calls = [];
 let password = 'fixture-current-password';
 const attempts = new Map();
 const pending = new Set();
+const files = createFilesFixture();
+files.reset();
 const user = {
   user_id: 'server-alice',
   email: 'alice@example.test',
@@ -27,7 +30,7 @@ const server = createServer(async (request, response) => {
     response.setHeader('Access-Control-Allow-Origin', origin);
     response.setHeader('Access-Control-Allow-Credentials', 'true');
     response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     response.setHeader('Vary', 'Origin');
   }
   response.setHeader('Cache-Control', 'no-store');
@@ -39,9 +42,10 @@ const server = createServer(async (request, response) => {
   const json = (value, status = 200) => {
     response.writeHead(status).end(JSON.stringify(value));
   };
-  let body = '';
-  for await (const chunk of request) body += chunk;
-  const value = body ? JSON.parse(body) : {};
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  const body = Buffer.concat(chunks);
+  const value = body.length && request.headers['content-type']?.startsWith('application/json') ? JSON.parse(body.toString('utf8')) : {};
   const authorization = request.headers.authorization;
   const principal =
     authorization === 'Bearer sk-fixture-previous'
@@ -54,12 +58,13 @@ const server = createServer(async (request, response) => {
     calls = [];
     attempts.clear();
     pending.clear();
+    files.reset();
     password = 'fixture-current-password';
     json({ ok: true });
     return;
   }
   if (url.pathname === '/__fixture/state') {
-    json({ calls });
+    json({ calls, files: files.state() });
     return;
   }
   calls.push({
@@ -69,7 +74,9 @@ const server = createServer(async (request, response) => {
     authorized: !!authorization,
     browserBound: !!request.headers.cookie?.includes('nexus_oauth_binding='),
     ...(url.pathname.startsWith('/v2/search/') ? { params: value } : {}),
+    ...(url.pathname.startsWith('/v2/files') || url.pathname === '/v2/directories' ? { query: Object.fromEntries(url.searchParams), bytes: body.length, contentType: request.headers['content-type'], params: value } : {}),
   });
+  if (files.handle({ url, request, response, body, value, scenario, principal, json })) return;
   if (url.pathname === '/v2/search/glob' || url.pathname === '/v2/search/grep') {
     if (!principal) return json({ error: 'credential rejected' }, 401);
     if (scenario === 'search-unavailable') return json({ error: 'Search is unavailable' }, 503);
@@ -181,13 +188,6 @@ const server = createServer(async (request, response) => {
       return;
     }
     const method = url.pathname.split('/').at(-1);
-    if (method === 'list' && scenario === 'cache-isolation') {
-      const parent = (value.params?.path ?? '/').replace(/\/$/, '');
-      json({ jsonrpc: '2.0', id: value.id, result: { files: [
-        { path: `${parent}/private-${principal}`, is_directory: true, size: 0 },
-      ] } });
-      return;
-    }
     const result =
       method === 'list'
         ? { files: [] }

@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { toast } from 'sonner';
 import { AuthenticationError } from '../api/client';
+import type NexusAPIClient from '../api/client';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 import { fileKeys, useConnectors, useCreateDirectory, useDeleteFile, useFileList, useUploadFile } from '../hooks/useFiles';
@@ -22,6 +23,7 @@ import { LeftPanel } from './LeftPanel';
 import { ManagePermissionsDialog } from './ManagePermissionsDialog';
 import { ConnectorManagementDialog } from './ConnectorManagementDialog';
 import { RenameDialog } from './RenameDialog';
+import { isWithinPath, renamedPath } from '../utils/vfsPaths';
 import { StoreMemoryDialog } from './StoreMemoryDialog';
 import { LanguageSelector } from './LanguageSelector';
 import { ThemeToggle } from './ThemeToggle';
@@ -30,10 +32,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import { WorkspaceEmptyState } from './WorkspaceEmptyState';
 
 export function FileBrowser() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated, isUserAuthenticated, logout, apiClient, apiUrl, userInfo, userAccount, userLogout } = useAuth();
+  const { apiClient } = useAuth();
   
   if (!apiClient) {
     return (
@@ -45,7 +44,14 @@ export function FileBrowser() {
       </div>
     );
   }
-  
+  return <ConnectedFileBrowser apiClient={apiClient} />;
+}
+
+function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { isAuthenticated, isUserAuthenticated, logout, apiUrl, userInfo, userAccount, userLogout } = useAuth();
   const { t } = useTranslation();
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [currentPath, setCurrentPath] = useState('/');
@@ -140,6 +146,15 @@ export function FileBrowser() {
     setSelectedFile(null);
   };
 
+  const handleRenamed = (oldPath: string, newPath: string) => {
+    setCurrentPath((path) => renamedPath(path, oldPath, newPath));
+    setSelectedFile((file) => {
+      if (!file || !isWithinPath(file.path, oldPath)) return file;
+      const path = renamedPath(file.path, oldPath, newPath);
+      return { ...file, path, name: path.split('/').pop() || path };
+    });
+  };
+
   const handleCreateItem = async (path: string, type: 'file' | 'folder') => {
     try {
       if (type === 'folder') {
@@ -209,7 +224,7 @@ export function FileBrowser() {
               isDirectory: file.isDirectory,
             });
             // Clear selected file if it was deleted
-            if (selectedFile?.path === file.path) {
+            if (selectedFile && isWithinPath(selectedFile.path, file.path)) {
               setSelectedFile(null);
             }
           } catch (error) {
@@ -584,7 +599,7 @@ export function FileBrowser() {
         }}
       />
 
-      <RenameDialog open={!!renameFile} onOpenChange={(open) => !open && setRenameFile(null)} file={renameFile} />
+      <RenameDialog open={!!renameFile} onOpenChange={(open) => !open && setRenameFile(null)} file={renameFile} onRenamed={handleRenamed} />
 
       <ManagePermissionsDialog
         open={!!managePermissionsFile}

@@ -39,7 +39,7 @@ async function fetchAssignedSkills(
     const filesAPI = createFilesAPI(apiClient);
     
     // List all items in the skills folder
-    const items = await filesAPI.list(skillsFolderPath, { details: true });
+    const items = await filesAPI.list(skillsFolderPath);
     
     // Filter for directories only
     const skillDirs = items.filter(item => item.isDirectory);

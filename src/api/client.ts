@@ -1,6 +1,34 @@
 import axios, { type AxiosInstance } from 'axios';
 import type { RPCRequest, RPCResponse } from '../types/file';
 import type { GlobResult, GrepResult } from '../types/search';
+import { createVfsAPI } from './vfs';
+
+interface NativeRequestOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  params?: Record<string, string | number | boolean>;
+  data?: unknown;
+  responseType?: 'json' | 'arraybuffer';
+  contentType?: 'application/octet-stream';
+  timeout?: number;
+}
+
+export class NexusAPIError extends Error {
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'NexusAPIError';
+    this.status = status;
+  }
+}
+
+function errorMessage(value: unknown): string | undefined {
+  if (value instanceof ArrayBuffer) {
+    try { return errorMessage(JSON.parse(new TextDecoder().decode(value))); }
+    catch { return undefined; }
+  }
+  if (value && typeof value === 'object' && 'error' in value && typeof value.error === 'string') return value.error;
+}
 
 interface NativeIdentity {
   subject_type: string;
@@ -247,21 +275,27 @@ class NexusAPIClient {
     }
   }
 
-  private async discover<T extends GlobResult | GrepResult>(kind: 'glob' | 'grep', pattern: string, rootPath: string): Promise<T> {
+  async request<T>(path: `/v2/${string}`, options: NativeRequestOptions = {}): Promise<T> {
     try {
-      const { data } = await this.client.post<T>(`/v2/search/${kind}`, {
-        pattern,
-        root_path: rootPath,
-        max_results: 100,
-      }, { timeout: 30000 });
-      if (data.error) throw new Error(data.error);
+      const response = await this.client.request<T>({
+        url: path, method: options.method, params: options.params, data: options.data,
+        responseType: options.responseType, timeout: options.timeout,
+        ...(options.contentType ? { headers: { 'Content-Type': options.contentType } } : {}),
+      });
+      const data = response.data;
+      const message = options.responseType === 'arraybuffer' ? undefined : errorMessage(data);
+      if (message) throw new NexusAPIError(message, response.status);
       return data;
     } catch (error) {
-      if (axios.isAxiosError(error) && typeof error.response?.data?.error === 'string') {
-        throw new Error(error.response.data.error);
+      if (axios.isAxiosError(error)) {
+        throw new NexusAPIError(errorMessage(error.response?.data) ?? error.message, error.response?.status);
       }
       throw error;
     }
+  }
+
+  private discover<T extends GlobResult | GrepResult>(kind: 'glob' | 'grep', pattern: string, rootPath: string): Promise<T> {
+    return this.request(`/v2/search/${kind}`, { method: 'POST', data: { pattern, root_path: rootPath, max_results: 100 }, timeout: 30000 });
   }
 
   glob(pattern: string, rootPath = '/'): Promise<GlobResult> {
@@ -862,17 +896,14 @@ class NexusAPIClient {
         const skillsFolderPath = `/tenant:${tid}/user:${uid}/skill`;
 
         try {
-          const listResult = await this.call<{files: Array<{path: string; name?: string; is_directory?: boolean}>}>('list', {
-            path: skillsFolderPath,
-            details: true
-          });
+          const listResult = await createVfsAPI(this).list(skillsFolderPath);
 
           // Filter for directories and map to skill format
-          return listResult.files
+          return listResult.entries
             .filter(f => f.is_directory || f.path?.endsWith('/'))
             .map(f => {
               const path = f.path.endsWith('/') ? f.path : `${f.path}/`;
-              const name = f.name || path.split('/').filter(Boolean).pop() || 'unknown';
+              const name = path.split('/').filter(Boolean).pop() || 'unknown';
               return { name, path };
             });
         } catch (err) {

@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../i18n/useTranslation';
 import { copyToClipboard } from '../utils';
 import { createFilesAPI } from '../api/files';
+import type NexusAPIClient from '../api/client';
 import { PermissionInfoBox } from '../components/PermissionInfoBox';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -48,8 +49,7 @@ const AVAILABLE_PLATFORMS = [
 ];
 
 export function Agent() {
-  const navigate = useNavigate();
-  const { userInfo, apiClient, apiKey } = useAuth();
+  const { apiClient } = useAuth();
   
   if (!apiClient) {
     return (
@@ -61,7 +61,12 @@ export function Agent() {
       </div>
     );
   }
-  
+  return <ConnectedAgent apiClient={apiClient} />;
+}
+
+function ConnectedAgent({ apiClient }: { apiClient: NexusAPIClient }) {
+  const navigate = useNavigate();
+  const { userInfo, apiKey } = useAuth();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'list' | 'edit' | 'create'>('list');
 
@@ -208,7 +213,7 @@ export function Agent() {
       const skillsFolderPath = `/tenant:${tenantId}/user:${userId}/skill`;
 
       // List all items in the skills folder
-      const items = await filesAPI.list(skillsFolderPath, { details: true });
+      const items = await filesAPI.list(skillsFolderPath);
 
       // Filter for directories only
       const skillDirs = items.filter(item => item.isDirectory);
@@ -1393,6 +1398,7 @@ export function Agent() {
                         <div className="border-t pt-2 flex items-center gap-3 text-xs">
                           {/* Nexus Status - Clickable */}
                           <button
+                            type="button"
                             onClick={() => {
                               if (connectionStatus.nexusStatus === 'disconnected' || connectionStatus.nexusStatus === 'error') {
                                 handleConnectNexus(agent.agent_id);
@@ -1420,6 +1426,7 @@ export function Agent() {
 
                           {/* Sandbox Status - Clickable */}
                           <button
+                            type="button"
                             onClick={() => {
                               if (
                                 connectionStatus.nexusStatus === 'connected' &&

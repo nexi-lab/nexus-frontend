@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -26,6 +27,8 @@ const secrets = [admin];
 const issued = [];
 const grants = [];
 const checks = [];
+const fileRoot = `/browser-files-${randomUUID()}`;
+let createdFiles = false;
 let browser;
 let preview;
 let failure;
@@ -33,7 +36,7 @@ let failure;
 async function adminRequest(path, options = {}) {
   const response = await fetch(`${nativeUrl}${path}`, {
     ...options,
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${admin}` },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${admin}`, ...options.headers },
     signal: AbortSignal.timeout(15000),
   });
   assert.equal(response.ok, true, `native administrator request failed: ${response.status}`);
@@ -161,6 +164,62 @@ try {
   assert.equal(await search.getByText(fixture.visible, { exact: true }).count(), 0);
   await adminRequest('/v2/rebac/tuples', { method: 'POST', body: JSON.stringify(fixture.grant) });
   checks.push('native relation revocation removes warmed browser search results');
+
+  await adminRequest('/v2/directories', { method: 'POST', body: JSON.stringify({ path: fileRoot, parents: true }) });
+  createdFiles = true;
+  const initialName = 'notes & 测试.txt';
+  const finalName = 'renamed & 测试.txt';
+  const initialPath = `${fileRoot}/${initialName}`;
+  const finalPath = `${fileRoot}/${finalName}`;
+  await adminRequest(`/v2/files?path=${encodeURIComponent(initialPath)}`, {
+    method: 'PUT', body: '{"error":"actual file content"}', headers: { 'content-type': 'application/octet-stream' },
+  });
+  const fileCalls = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.origin === nativeUrl) fileCalls.push(url.pathname);
+  });
+  await page.goto(`${uiUrl}/login`);
+  await page.getByLabel('Nexus Server URL').fill(nativeUrl);
+  await page.getByLabel('API Key', { exact: true }).fill(admin);
+  await page.getByRole('button', { name: 'Sign in with API Key' }).click();
+  await page.waitForURL(`${uiUrl}/`);
+  const rootName = fileRoot.slice(1);
+  const folder = page.getByRole('checkbox', { name: `Select ${rootName}`, exact: true }).locator('..');
+  await folder.click();
+  await page.getByText(initialName, { exact: true }).first().click();
+  await page.getByText('{"error":"actual file content"}', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByPlaceholder('Enter text content...').fill('edited ✓ & 中文');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByText('edited ✓ & 中文', { exact: true }).waitFor();
+  await page.getByRole('checkbox', { name: `Select ${initialName}`, exact: true }).locator('..').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  await page.getByPlaceholder('Enter new name').fill(finalName);
+  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await page.getByRole('heading', { name: finalName, exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByPlaceholder('Enter text content...').fill('saved after rename ✓');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByText('saved after rename ✓', { exact: true }).waitFor();
+  assert.equal(await (await adminRequest(`/v2/files?path=${encodeURIComponent(finalPath)}`)).text(), 'saved after rename ✓');
+  const absent = await fetch(`${nativeUrl}/v2/files?path=${encodeURIComponent(initialPath)}`, { headers: { authorization: `Bearer ${admin}` } });
+  assert.equal(absent.status, 404);
+  assert.equal(fileCalls.some((path) => /^\/api\/nfs\/(list|read|write|rename|delete|exists|is_directory|mkdir|rmdir)$/.test(path)), false);
+  checks.push('native file browsing, JSON-looking bytes, UTF-8 edits and saving after rename');
+  await page.screenshot({ path: `${output}/native-file-editor.png` });
+
+  await folder.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'New Folder', exact: true }).click();
+  await page.getByPlaceholder('folder name').fill('created & 测试');
+  await page.getByPlaceholder('folder name').press('Enter');
+  await page.getByRole('checkbox', { name: 'Select created & 测试', exact: true }).waitFor();
+  page.on('dialog', (dialog) => dialog.accept());
+  await folder.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await folder.waitFor({ state: 'detached' });
+  assert.equal(await page.getByRole('heading', { name: finalName, exact: true }).count(), 0);
+  checks.push('native browser directory creation and recursive deletion clear selected descendants');
 } catch (error) {
   failure = error;
 } finally {
@@ -175,6 +234,13 @@ try {
   ]);
   for (const result of cleanup) {
     if (result.status === 'rejected') failure ??= result.reason;
+  }
+  if (createdFiles) {
+    try {
+      await adminRequest(`/v2/files?path=${encodeURIComponent(fileRoot)}&recursive=true`, { method: 'DELETE' });
+    } catch (error) {
+      failure ??= error;
+    }
   }
   for (const grant of grants) {
     try {

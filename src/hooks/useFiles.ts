@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
+import { isWithinPath } from '../utils/vfsPaths';
 
 // Query keys
 export const fileKeys = {
@@ -54,7 +55,7 @@ export function useFileList(path: string, enabled = true) {
     queryKey: fileKeys.list(path),
     queryFn: () => {
       if (!filesAPI) throw new Error('API client not initialized');
-      return filesAPI.list(path, { details: true });
+      return filesAPI.list(path);
     },
     enabled,
   });
@@ -136,18 +137,15 @@ export function useDeleteFile() {
   return useMutation({
     mutationFn: async ({ path, isDirectory }: { path: string; isDirectory: boolean }) => {
       if (!filesAPI) throw new Error('API client not initialized');
-      if (isDirectory) {
-        await filesAPI.rmdir(path, true);
-      } else {
-        await filesAPI.delete(path);
-      }
+      await filesAPI.delete(path, isDirectory);
     },
     onSuccess: (_, { path }) => {
       // Invalidate parent directory
       const parentPath = path.substring(0, path.lastIndexOf('/')) || '/';
       queryClient.invalidateQueries({ queryKey: fileKeys.list(parentPath) });
       // Remove from cache
-      queryClient.removeQueries({ queryKey: fileKeys.file(path) });
+      queryClient.removeQueries({ predicate: ({ queryKey }) => queryKey[0] === 'files' &&
+        ['file', 'list'].includes(queryKey[1] as string) && typeof queryKey[2] === 'string' && isWithinPath(queryKey[2], path) });
     },
   });
 }
@@ -171,7 +169,9 @@ export function useRenameFile() {
         queryClient.invalidateQueries({ queryKey: fileKeys.list(newParent) });
       }
       // Remove old file from cache
-      queryClient.removeQueries({ queryKey: fileKeys.file(oldPath) });
+      queryClient.removeQueries({ predicate: ({ queryKey }) => queryKey[0] === 'files' &&
+        ['file', 'list'].includes(queryKey[1] as string) && typeof queryKey[2] === 'string' && isWithinPath(queryKey[2], oldPath) });
+      queryClient.invalidateQueries({ queryKey: fileKeys.file(newPath) });
     },
   });
 }

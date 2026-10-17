@@ -10,6 +10,7 @@ import { SkillEditor } from '../components/SkillEditor';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../i18n/useTranslation';
+import { createVfsAPI } from '../api/vfs';
 
 interface EditingSkill {
   name: string;
@@ -35,13 +36,7 @@ export function Skill() {
     queryFn: async (): Promise<string> => {
       if (!editingSkill || !apiClient) return '';
       // The path from skills list is already the full path to SKILL.md
-      const result = await apiClient.call<any>('read', { path: editingSkill.path });
-
-      // Convert Uint8Array to string
-      if (result instanceof Uint8Array) {
-        return new TextDecoder().decode(result);
-      }
-      return result as string;
+      return new TextDecoder().decode(await createVfsAPI(apiClient).read(editingSkill.path));
     },
     enabled: !!editingSkill,
     staleTime: 0, // Always consider data stale
@@ -54,29 +49,7 @@ export function Skill() {
     mutationFn: async (content: string) => {
       if (!editingSkill) throw new Error('No skill selected');
       if (!apiClient) throw new Error('API client not initialized');
-      // The path from skills list is already the full path to SKILL.md
-
-      // Convert string to bytes for base64 encoding (handle large files properly)
-      const bytes = new TextEncoder().encode(content);
-
-      // Convert to base64 using a method that handles large arrays
-      let binary = '';
-      const len = bytes.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64Content = btoa(binary);
-
-      // Send bytes in the format expected by the JSON-RPC protocol
-      const result = await apiClient.call('write', {
-        path: editingSkill.path,
-        content: {
-          __type__: 'bytes',
-          data: base64Content,
-        },
-      });
-
-      return result;
+      return createVfsAPI(apiClient).write(editingSkill.path, content);
     },
     onSuccess: () => {
       toast.success(t('skill.saved'));

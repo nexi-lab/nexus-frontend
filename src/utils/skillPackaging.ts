@@ -49,7 +49,7 @@ export async function createSkillZipFromDirectory(
   const skillName = parseSkillNameFromContent(skillMdText) || folderName;
 
   // List all files in the directory recursively
-  const sourceFiles = await filesAPI.list(folderPath, { recursive: true, details: true });
+  const sourceFiles = await filesAPI.list(folderPath, { recursive: true });
 
   // Create ZIP package
   const zip = new JSZip();

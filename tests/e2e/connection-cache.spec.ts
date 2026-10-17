@@ -24,16 +24,14 @@ test('a response started by the previous credential cannot populate the new conn
   await request.post(`${backend}/__fixture/reset`, { data: { scenario: 'cache-isolation' } });
   const isRootList = (request: Request) => {
     const url = new URL(request.url());
-    return request.headers().authorization === 'Bearer sk-fixture-server-alice' && (
-      (url.pathname === '/api/nfs/list' && request.postDataJSON().params.path === '/') ||
-      (url.pathname === '/v2/directories' && url.searchParams.get('path') === '/')
-    );
+    return request.headers().authorization === 'Bearer sk-fixture-server-alice' &&
+      url.pathname === '/v2/directories' && url.searchParams.get('path') === '/';
   };
   let received!: () => void;
   let release!: () => void;
   const pending = new Promise<void>((resolve) => { received = resolve; });
   const gate = new Promise<void>((resolve) => { release = resolve; });
-  await page.route((url) => url.origin === backend && ['/api/nfs/list', '/v2/directories'].includes(url.pathname), async (route) => {
+  await page.route(`${backend}/v2/directories?*`, async (route) => {
     if (!isRootList(route.request())) return route.continue();
     const response = await route.fetch();
     received();

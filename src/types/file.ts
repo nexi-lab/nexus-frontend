@@ -36,10 +36,6 @@ export interface RPCResponse<T = any> {
   id: string | number | null;
 }
 
-export interface ListResult {
-  files: FileInfo[];
-}
-
 export interface NamespacesResult {
   namespaces: string[];
 }
