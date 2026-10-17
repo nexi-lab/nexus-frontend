@@ -40,29 +40,6 @@ export interface ListResult {
   files: FileInfo[];
 }
 
-export interface GlobResult {
-  matches: string[];
-}
-
-export interface GrepMatch {
-  file: string; // Backend returns "file" not "path"
-  line: number; // Backend returns "line" not "line_number"
-  content: string; // Backend returns "content" not "line"
-  match: string;
-  source?: string; // Backend includes "source" field
-}
-
-export interface GrepResult {
-  results: GrepMatch[];
-}
-
-export interface SearchResult {
-  path: string;
-  name: string;
-  type: 'file' | 'directory';
-  matches?: GrepMatch[];
-}
-
 export interface NamespacesResult {
   namespaces: string[];
 }

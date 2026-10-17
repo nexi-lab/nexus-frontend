@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
-
-const backend = 'http://127.0.0.1:4181';
+import { backend, prepareBrowser } from './backend';
 
 test('an API key user can inspect the verified connection and log out from settings', async ({ page }) => {
   await page.addInitScript((server) => {
@@ -53,12 +52,7 @@ test('password changes use the account contract and retain identity after a reje
 });
 
 test.beforeEach(async ({ request, context }) => {
-  await request.post(`${backend}/__fixture/reset`, { data: {} });
-  await context.route('**/*', async (route) => {
-    const url = new URL(route.request().url());
-    if (url.origin === 'http://127.0.0.1:4173' || url.origin === backend) await route.continue();
-    else await route.abort('blockedbyclient');
-  });
+  await prepareBrowser(request, context);
   await context.route('https://accounts.google.com/**', async (route) => {
     const authorization = new URL(route.request().url());
     const redirectUri = authorization.searchParams.get('redirect_uri');

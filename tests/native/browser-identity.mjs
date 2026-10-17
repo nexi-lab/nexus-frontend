@@ -9,11 +9,12 @@ const { values } = parseArgs({
   options: {
     'http-url': { type: 'string' },
     'admin-key-file': { type: 'string' },
+    'search-fixture': { type: 'string' },
     'output-dir': { type: 'string' },
     'ui-port': { type: 'string', default: '4173' },
   },
 });
-for (const key of ['http-url', 'admin-key-file', 'output-dir']) {
+for (const key of ['http-url', 'admin-key-file', 'search-fixture', 'output-dir']) {
   if (!values[key]) throw new Error(`--${key} is required`);
 }
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -23,6 +24,7 @@ const output = values['output-dir'];
 const admin = (await readFile(values['admin-key-file'], 'utf8')).trim();
 const secrets = [admin];
 const issued = [];
+const grants = [];
 const checks = [];
 let browser;
 let preview;
@@ -40,6 +42,10 @@ async function adminRequest(path, options = {}) {
 
 try {
   await mkdir(output, { recursive: true });
+  const fixture = JSON.parse(await readFile(values['search-fixture'], 'utf8'));
+  secrets.push(fixture.readerKey);
+  assert.equal(fixture.url, nativeUrl);
+  assert.equal(typeof fixture.subject, 'string');
   for (const name of ['alice', 'bob']) {
     const response = await adminRequest('/v2/auth/keys', {
       method: 'POST',
@@ -109,6 +115,52 @@ try {
 
   await login(issued[1], 'browser-bob');
   checks.push('another native user remains valid after revocation');
+
+  await login({ key: fixture.readerKey }, fixture.subject);
+  await page.goto(`${uiUrl}/`);
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  const search = page.getByRole('search', { name: 'File search' });
+  const runSearch = async (kind) => {
+    const received = page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/search/${kind}` && response.request().method() === 'POST');
+    await search.getByRole('button', { name: 'Search', exact: true }).click();
+    const response = await received;
+    return { status: response.status(), body: await response.json() };
+  };
+  await search.getByRole('textbox', { name: 'Search files' }).fill('**/*.txt');
+  const denied = await runSearch('glob');
+  assert.equal(denied.status, 403, JSON.stringify(denied.body));
+  await search.getByRole('alert').filter({ hasText: 'search path is not readable' }).waitFor();
+  assert.equal(await search.getByText('No results found', { exact: true }).count(), 0);
+  checks.push('native unreadable search root remains a visible permission error');
+
+  const rootGrant = { ...fixture.grant, object_id: '/' };
+  await adminRequest('/v2/rebac/tuples', { method: 'POST', body: JSON.stringify(rootGrant) });
+  grants.push(rootGrant);
+  const glob = await runSearch('glob');
+  assert.equal(glob.status, 200, JSON.stringify(glob.body));
+  assert.deepEqual(glob.body.paths, [fixture.visible]);
+  await search.getByText(fixture.visible, { exact: true }).waitFor();
+  assert.equal(await search.getByText(fixture.hidden, { exact: true }).count(), 0);
+  checks.push('native glob keeps unreadable files out of browser results');
+
+  await search.getByRole('button', { name: 'Content', exact: true }).click();
+  await search.getByRole('textbox', { name: 'Search files' }).fill(fixture.needle);
+  const grep = await runSearch('grep');
+  assert.equal(grep.status, 200, JSON.stringify(grep.body));
+  const matches = grep.body.matches;
+  assert.deepEqual(matches.map((match) => match.path), [fixture.visible]);
+  assert.equal(matches[0].line_number, 2);
+  assert.equal(matches[0].line.includes(fixture.needle), true);
+  await search.getByText('1 match', { exact: true }).waitFor();
+  await page.screenshot({ path: `${output}/native-file-search.png` });
+  checks.push('native grep renders real current file content and match counts');
+
+  await adminRequest('/v2/rebac/tuples', { method: 'DELETE', body: JSON.stringify(fixture.grant) });
+  await search.getByRole('button', { name: 'Search', exact: true }).click();
+  await search.getByText('No results found', { exact: true }).waitFor();
+  assert.equal(await search.getByText(fixture.visible, { exact: true }).count(), 0);
+  await adminRequest('/v2/rebac/tuples', { method: 'POST', body: JSON.stringify(fixture.grant) });
+  checks.push('native relation revocation removes warmed browser search results');
 } catch (error) {
   failure = error;
 } finally {
@@ -123,6 +175,13 @@ try {
   ]);
   for (const result of cleanup) {
     if (result.status === 'rejected') failure ??= result.reason;
+  }
+  for (const grant of grants) {
+    try {
+      await adminRequest('/v2/rebac/tuples', { method: 'DELETE', body: JSON.stringify(grant) });
+    } catch (error) {
+      failure ??= error;
+    }
   }
   for (const credential of issued) {
     try {

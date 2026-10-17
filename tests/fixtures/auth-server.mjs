@@ -68,7 +68,26 @@ const server = createServer(async (request, response) => {
     principal,
     authorized: !!authorization,
     browserBound: !!request.headers.cookie?.includes('nexus_oauth_binding='),
+    ...(url.pathname.startsWith('/v2/search/') ? { params: value } : {}),
   });
+  if (url.pathname === '/v2/search/glob' || url.pathname === '/v2/search/grep') {
+    if (!principal) return json({ error: 'credential rejected' }, 401);
+    if (scenario === 'search-unavailable') return json({ error: 'Search is unavailable' }, 503);
+    if (scenario === 'search-application-error') return json({ paths: [], truncated: false, error: 'Search is unavailable' });
+    if (request.method !== 'POST' || typeof value.root_path !== 'string' || typeof value.pattern !== 'string') {
+      return json({ error: 'native discovery parameters required' }, 400);
+    }
+    if (url.pathname.endsWith('/glob')) {
+      return json({ paths: value.pattern === 'absent' ? [] : ['/docs/visible & notes.md'], truncated: value.pattern !== 'absent' });
+    }
+    return json({
+      matches: [
+        { path: '/docs/visible & notes.md', line_number: 1, line: 'needle & 测试', before: [], after: [] },
+        { path: '/docs/visible & notes.md', line_number: 2, line: 'another needle & 测试', before: [], after: [] },
+      ],
+      truncated: false,
+    });
+  }
   if (url.pathname === '/v2/status') {
     json({ status: 'ok', version: 'fixture' });
     return;

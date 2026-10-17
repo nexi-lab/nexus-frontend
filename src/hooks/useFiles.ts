@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -178,17 +178,20 @@ export function useRenameFile() {
 
 // Search files
 export function useSearchFiles() {
-  const filesAPI = useFilesAPI();
-  return useMutation({
+  const { apiClient } = useAuth();
+  const mutation = useMutation({
     mutationFn: async ({ query, searchType, path = '/' }: { query: string; searchType: 'glob' | 'grep'; path?: string }) => {
-      if (!filesAPI) throw new Error('API client not initialized');
+      if (!apiClient) throw new Error('API client not initialized');
       if (searchType === 'glob') {
-        return await filesAPI.glob(query, path);
+        return await apiClient.glob(query, path);
       } else {
-        return await filesAPI.grep(query, { path });
+        return await apiClient.grep(query, path);
       }
     },
   });
+  const { reset } = mutation;
+  useEffect(() => reset(), [apiClient, reset]);
+  return mutation;
 }
 
 // Create workspace (mkdir + register)

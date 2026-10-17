@@ -1,4 +1,4 @@
-import type { ConnectorInfo, FileInfo, GlobResult, GrepResult, ListResult } from '../types/file';
+import type { ConnectorInfo, FileInfo, ListResult } from '../types/file';
 import type NexusAPIClient from './client';
 
 // Helper function to find the connector for a given path
@@ -155,35 +155,6 @@ export function createFilesAPI(client: NexusAPIClient) {
     async isDirectory(path: string): Promise<boolean> {
       const result = await client.call<{ is_directory: boolean }>('is_directory', { path });
       return result.is_directory;
-    },
-
-    // Search files by pattern (glob)
-    async glob(pattern: string, path?: string): Promise<string[]> {
-      const result = await client.call<GlobResult>('glob', {
-        pattern,
-        path: path ?? '/',
-      });
-      return result.matches;
-    },
-
-    // Search file contents (grep)
-    async grep(
-      pattern: string,
-      options?: {
-        path?: string;
-        file_pattern?: string;
-        ignore_case?: boolean;
-        max_results?: number;
-      },
-    ): Promise<GrepResult['results']> {
-      const result = await client.call<GrepResult>('grep', {
-        pattern,
-        path: options?.path ?? '/',
-        file_pattern: options?.file_pattern,
-        ignore_case: options?.ignore_case ?? false,
-        max_results: options?.max_results ?? 100,
-      });
-      return result.results;
     },
 
     // Rename/move file

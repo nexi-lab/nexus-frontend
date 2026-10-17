@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from 'axios';
 import type { RPCRequest, RPCResponse } from '../types/file';
+import type { GlobResult, GrepResult } from '../types/search';
 
 interface NativeIdentity {
   subject_type: string;
@@ -244,6 +245,31 @@ class NexusAPIClient {
       }
       throw error;
     }
+  }
+
+  private async discover<T extends GlobResult | GrepResult>(kind: 'glob' | 'grep', pattern: string, rootPath: string): Promise<T> {
+    try {
+      const { data } = await this.client.post<T>(`/v2/search/${kind}`, {
+        pattern,
+        root_path: rootPath,
+        max_results: 100,
+      }, { timeout: 30000 });
+      if (data.error) throw new Error(data.error);
+      return data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && typeof error.response?.data?.error === 'string') {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  glob(pattern: string, rootPath = '/'): Promise<GlobResult> {
+    return this.discover('glob', pattern, rootPath);
+  }
+
+  grep(pattern: string, rootPath = '/'): Promise<GrepResult> {
+    return this.discover('grep', pattern, rootPath);
   }
 
   // ===== User Authentication Methods =====

@@ -10,6 +10,8 @@ pnpm run dev
 
 Enter the server URL on the login screen. API key login resolves the credential through `GET /v2/auth/whoami`; administrator UI state comes from that response. The server enforces access on every request.
 
+File name and content searches use the same caller credential with native `POST /v2/search/glob` and `/v2/search/grep`. Search errors remain visible, truncated results prompt a narrower query, and clearing or changing a query discards its pending response. Results are held only in memory.
+
 Google sign-in starts at the selected server's `/auth/oauth/google/authorize` endpoint. The server must verify the provider identity and browser binding, then return the user's own Nexus credentials. New users review their account information before confirmation. The frontend does not contain a shared login credential or verify Google identities itself.
 
 ## Verification
@@ -21,16 +23,16 @@ pnpm exec playwright install chromium
 pnpm run test:e2e
 ```
 
-Browser tests serve the production build against a local HTTP protocol fixture. They exercise server selection, credential replacement, account confirmation, password changes, browser cookies, rejected callbacks, revocation, cached administrator flags, and a 1 MiB login JavaScript budget. Provider navigation is simulated; these tests do not prove a real Google exchange or the Rust account backend. Native daemon authorization and revocation are tested in nexus-vfs.
+Browser tests serve the production build against a local HTTP protocol fixture. They exercise server selection, credential replacement, account confirmation, password changes, browser cookies, rejected callbacks, revocation, cached administrator flags, native file discovery, explicit errors, truncation, late responses, and a 1 MiB login JavaScript budget. Provider navigation is simulated; these tests do not prove a real Google exchange or the Rust account backend.
 
 CI runs the same browser journeys without retries. For a locally installed Chrome, set `NEXUS_TEST_CHROME` to its executable path. The test browser uses an isolated profile and blocks external requests.
 
 ### Native daemon browser acceptance
 
-Build this frontend, then run `scripts/test_search_local.py` from the Nexus repository with `--frontend-checkout <this-checkout>`, `--browser-origin http://127.0.0.1:4173`, and the native daemon/plugin paths. Use `--keyword-only` for this identity journey. The harness starts an isolated native daemon with TLS and ReBAC, issues temporary credentials, runs the browser, and cleans up the fixture. It retains sanitized results and screenshots.
+Build this frontend, then run `scripts/test_search_local.py` from the Nexus repository with `--frontend-checkout <this-checkout>`, `--browser-origin http://127.0.0.1:4173`, and the native daemon/plugin paths. Use `--keyword-only` for this journey. The harness starts an isolated native daemon with TLS and ReBAC, issues temporary credentials, supplies `--search-fixture` to the browser runner, and cleans up the fixture. It retains sanitized results and screenshots.
 
-The browser serves the production frontend on port 4173 and connects directly to the Rust HTTP listener. It verifies bearer identity, explicit browser CORS, non-admin UI restrictions, a readable 401 after warmed credential revocation, and another user's continued access. This journey needs no Google credentials. The native daemon's `NEXUS_HTTP_ALLOWED_ORIGINS` must include the exact frontend origin when the two use different origins.
+The browser serves the production frontend on port 4173 and connects directly to the Rust HTTP listener. It verifies bearer identity, explicit browser CORS, non-admin UI restrictions, a readable 401 after warmed credential revocation, and another user's continued access. Real file discovery verifies unreadable-root errors, hidden-file filtering, current content, and relation revocation after warming a search. This journey needs no Google credentials. The native daemon's `NEXUS_HTTP_ALLOWED_ORIGINS` must include the exact frontend origin when the two use different origins.
 
 ## Migration status
 
-The current identity and status requests use native `/v2` endpoints. Account routes and the console's remaining `/api/nfs/*` consumers still require migration before Python server retirement. This branch is not a complete frontend migration.
+Identity, status, and file discovery requests use native `/v2` endpoints. Account routes and the console's remaining `/api/nfs/*` consumers still require migration before Python server retirement. This branch is not a complete frontend migration.
