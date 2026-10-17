@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 const origin = 'http://127.0.0.1:4173';
 let scenario = 'existing';
 let calls = [];
+let password = 'fixture-current-password';
 const attempts = new Map();
 const pending = new Set();
 const user = {
@@ -53,6 +54,7 @@ const server = createServer(async (request, response) => {
     calls = [];
     attempts.clear();
     pending.clear();
+    password = 'fixture-current-password';
     json({ ok: true });
     return;
   }
@@ -100,6 +102,23 @@ const server = createServer(async (request, response) => {
     target.searchParams.set('state', state);
     target.searchParams.set('redirect_uri', `${origin}/oauth/callback`);
     json({ auth_url: scenario === 'malformed' ? 'javascript:void(0)' : target.href, state });
+    return;
+  }
+  if (url.pathname === '/auth/change-password' && request.method === 'POST') {
+    if (principal !== user.user_id) {
+      json({ detail: 'credential rejected' }, 401);
+      return;
+    }
+    if (typeof value.current_password !== 'string' || typeof value.new_password !== 'string') {
+      json({ detail: 'current_password and new_password are required' }, 422);
+      return;
+    }
+    if (value.current_password !== password) {
+      json({ detail: 'Current password is incorrect' }, 400);
+      return;
+    }
+    password = value.new_password;
+    json({ success: true, message: 'Password changed' });
     return;
   }
   if (url.pathname === '/auth/oauth/check') {

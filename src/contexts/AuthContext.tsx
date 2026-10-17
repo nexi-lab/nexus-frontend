@@ -318,7 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('API URL is required. Please configure the Nexus server URL first.');
     }
     await apiClient.authChangePassword({
-      old_password: oldPassword,
+      current_password: oldPassword,
       new_password: newPassword,
     });
   };

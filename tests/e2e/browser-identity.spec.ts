@@ -2,6 +2,35 @@ import { expect, test } from '@playwright/test';
 
 const backend = 'http://127.0.0.1:4181';
 
+test('password changes use the account contract and retain identity after a rejected current password', async ({ page }) => {
+  await page.addInitScript((server) => {
+    localStorage.setItem('nexus_api_url', server);
+    localStorage.setItem('nexus_jwt_token', 'fixture-alice-session');
+    localStorage.setItem(
+      'nexus_user_account',
+      JSON.stringify({
+        user_id: 'server-alice',
+        email: 'alice@example.test',
+        primary_auth_method: 'password',
+        created_at: '2026-01-01T00:00:00Z',
+        is_global_admin: false,
+      }),
+    );
+  }, backend);
+  await page.goto('/settings');
+  await page.getByLabel('Current Password', { exact: true }).fill('incorrect-password');
+  await page.getByLabel('New Password', { exact: true }).fill('fixture-replacement-password');
+  await page.getByLabel('Confirm New Password', { exact: true }).fill('fixture-replacement-password');
+  await page.getByRole('button', { name: 'Change Password', exact: true }).click();
+  await expect(page.getByText('Current password is incorrect', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL('/settings');
+  await page.getByLabel('Current Password', { exact: true }).fill('fixture-current-password');
+  await page.getByRole('button', { name: 'Change Password', exact: true }).click();
+  await expect(page.getByText('Password changed successfully!', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Current Password', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('New Password', { exact: true })).toHaveValue('');
+});
+
 test.beforeEach(async ({ request, context }) => {
   await request.post(`${backend}/__fixture/reset`, { data: {} });
   await context.route('**/*', async (route) => {

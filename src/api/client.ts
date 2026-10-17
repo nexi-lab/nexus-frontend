@@ -303,29 +303,6 @@ class NexusAPIClient {
   }
 
   /**
-   * Get current user profile.
-   *
-   * @returns Current user information
-   */
-  async authGetProfile(): Promise<{
-    user_id: string;
-    email: string;
-    username: string | null;
-    display_name: string | null;
-    avatar_url: string | null;
-    primary_auth_method: string;
-    is_global_admin: boolean;
-    email_verified: boolean;
-    api_key: string | null;
-    tenant_id: string | null;
-    created_at: string;
-    last_login_at: string | null;
-  }> {
-    const response = await this.client.get('/auth/me');
-    return response.data;
-  }
-
-  /**
    * Update current user profile.
    *
    * @param params - Profile update parameters
@@ -353,36 +330,13 @@ class NexusAPIClient {
   }
 
   /**
-   * Get current user information.
-   *
-   * @returns Current user account information
-   */
-  async authGetMe(): Promise<{
-    user_id: string;
-    email: string;
-    username: string | null;
-    display_name: string | null;
-    avatar_url: string | null;
-    primary_auth_method: string;
-    is_global_admin: boolean;
-    email_verified: boolean;
-    api_key: string | null;
-    tenant_id: string | null;
-    created_at: string;
-    last_login_at: string | null;
-  }> {
-    const response = await this.client.get('/auth/me');
-    return response.data;
-  }
-
-  /**
    * Change user password.
    *
    * @param params - Password change parameters
    * @returns Success status
    */
   async authChangePassword(params: {
-    old_password: string;
+    current_password: string;
     new_password: string;
   }): Promise<{
     message: string;
