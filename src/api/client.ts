@@ -455,36 +455,6 @@ class NexusAPIClient {
     return response.data;
   }
 
-  /**
-   * Handle OAuth callback.
-   */
-  async authOAuthCallback(params: {
-    provider: string;
-    code: string;
-    state: string;
-  }): Promise<{
-    token: string;
-    user: {
-      user_id: string;
-      email: string;
-      username: string | null;
-      display_name: string | null;
-      avatar_url: string | null;
-      primary_auth_method: string;
-      is_global_admin: boolean;
-      email_verified: boolean;
-      created_at: string;
-      last_login_at: string | null;
-    };
-    is_new_user: boolean;
-    api_key: string | null;
-    tenant_id: string | null;
-    message: string;
-  }> {
-    const response = await this.client.post('/auth/oauth/callback', params, { withCredentials: true });
-    return response.data;
-  }
-
   // Admin API - Create a new API key for a user
   async adminCreateKey(params: {
     tenant_id: string;
@@ -509,11 +479,6 @@ class NexusAPIClient {
     offset?: number;
   }): Promise<{ keys: Array<any>; total: number; limit: number; offset: number }> {
     return await this.call('admin_list_keys', params || {});
-  }
-
-  // Admin API - Get API key details
-  async adminGetKey(keyId: string): Promise<any> {
-    return await this.call('admin_get_key', { key_id: keyId });
   }
 
   // Admin API - Revoke an API key
@@ -555,18 +520,6 @@ class NexusAPIClient {
   // Workspace API - Unregister a workspace
   async unregisterWorkspace(path: string): Promise<boolean> {
     return await this.call('unregister_workspace', { path });
-  }
-
-  // Workspace API - Get workspace info
-  async getWorkspaceInfo(path: string): Promise<{
-    path: string;
-    name: string | null;
-    description: string;
-    created_at: string;
-    created_by: string | null;
-    metadata: Record<string, any>;
-  } | null> {
-    return await this.call('get_workspace_info', { path });
   }
 
   // Agent API - Register a new agent
@@ -641,29 +594,6 @@ class NexusAPIClient {
     return await this.call('delete_agent', { agent_id: agentId });
   }
 
-  // Sandbox API - Create a new sandbox
-  async sandboxCreate(params: {
-    name: string;
-    ttl_minutes?: number;
-    template_id?: string;
-    provider?: string;
-  }): Promise<{
-    sandbox_id: string;
-    name: string;
-    user_id: string;
-    agent_id: string | null;
-    tenant_id: string;
-    provider: string;
-    template_id: string | null;
-    status: string;
-    created_at: string;
-    last_active_at: string;
-    ttl_minutes: number;
-    expires_at: string | null;
-  }> {
-    return await this.call('sandbox_create', params);
-  }
-
   // Sandbox API - Connect to user-managed sandbox
   async sandboxConnect(params: {
     sandbox_id: string;
@@ -680,20 +610,6 @@ class NexusAPIClient {
     mounted_at: string;
   }> {
     return await this.call('sandbox_connect', params);
-  }
-
-  // Sandbox API - Disconnect from user-managed sandbox
-  async sandboxDisconnect(params: {
-    sandbox_id: string;
-    provider?: string;
-    sandbox_api_key?: string;
-  }): Promise<{
-    success: boolean;
-    sandbox_id: string;
-    provider: string;
-    unmounted_at: string;
-  }> {
-    return await this.call('sandbox_disconnect', params);
   }
 
   // Sandbox API - List sandboxes
@@ -746,21 +662,6 @@ class NexusAPIClient {
     uptime_seconds: number;
   }> {
     return await this.call('sandbox_status', { sandbox_id });
-  }
-
-  // Sandbox API - Run code in sandbox
-  async sandboxRun(params: {
-    sandbox_id: string;
-    language: string;
-    code: string;
-    timeout?: number;
-  }): Promise<{
-    stdout: string;
-    stderr: string;
-    exit_code: number;
-    execution_time: number;
-  }> {
-    return await this.call('sandbox_run', params);
   }
 
   // Sandbox API - Pause sandbox
@@ -1060,12 +961,6 @@ class NexusAPIClient {
     }
   }
 
-  // Backward compatibility: Keep old method name
-  async hasDirectoryAccess(agentId: string, directory: string): Promise<boolean> {
-    const result = await this.getDirectoryAccess(agentId, directory);
-    return result.hasAccess;
-  }
-
   // Helper: Check if agent has access to all workspaces and return permission level
   async getAllWorkspacesAccess(
     agentId: string,
@@ -1163,18 +1058,6 @@ class NexusAPIClient {
     return await this.call('unregister_memory', { path });
   }
 
-  // Memory Path Registration API - Get memory path info
-  async getMemoryInfo(path: string): Promise<{
-    path: string;
-    name: string | null;
-    description: string;
-    created_at: string;
-    created_by: string | null;
-    metadata: Record<string, any>;
-  } | null> {
-    return await this.call('get_memory_info', { path });
-  }
-
   // Memory API - Store a memory record
   async storeMemory(params: {
     content: string;
@@ -1187,25 +1070,6 @@ class NexusAPIClient {
     tags?: string[];
   }): Promise<{ memory_id: string }> {
     return await this.call('store_memory', params);
-  }
-
-  // Memory API - List memory records
-  async listMemoryRecords(params?: { scope?: string; memory_type?: string; limit?: number }): Promise<{
-    memories: Array<{
-      memory_id: string;
-      content_hash: string;
-      tenant_id: string | null;
-      user_id: string | null;
-      agent_id: string | null;
-      scope: string;
-      visibility: string;
-      memory_type: string | null;
-      importance: number | null;
-      created_at: string | null;
-      updated_at: string | null;
-    }>;
-  }> {
-    return await this.call('list_memories', params || {});
   }
 
   // Memory API - Query memory records
@@ -1285,54 +1149,6 @@ class NexusAPIClient {
     metadata: Record<string, any>;
   }>> {
     return await this.call('oauth_list_providers', {});
-  }
-
-  /**
-   * Get OAuth authorization URL for Google Drive.
-   *
-   * @param redirectUri - OAuth redirect URI (default: http://localhost:5173/oauth/callback)
-   * @returns Authorization URL and state token
-   */
-  async oauthGetDriveAuthUrl(redirectUri?: string): Promise<{
-    url: string;
-    state: string;
-  }> {
-    return await this.call('oauth_get_auth_url', {
-      provider: 'google-drive',
-      redirect_uri: redirectUri || 'http://localhost:5173/oauth/callback',
-    });
-  }
-
-  /**
-   * Get OAuth authorization URL for Gmail.
-   *
-   * @param redirectUri - OAuth redirect URI (default: http://localhost:5173/oauth/callback)
-   * @returns Authorization URL and state token
-   */
-  async oauthGetGmailAuthUrl(redirectUri?: string): Promise<{
-    url: string;
-    state: string;
-  }> {
-    return await this.call('oauth_get_auth_url', {
-      provider: 'gmail',
-      redirect_uri: redirectUri || 'http://localhost:5173/oauth/callback',
-    });
-  }
-
-  /**
-   * Get OAuth authorization URL for Google Cloud Storage.
-   *
-   * @param redirectUri - OAuth redirect URI (default: http://localhost:5173/oauth/callback)
-   * @returns Authorization URL and state token
-   */
-  async oauthGetCloudStorageAuthUrl(redirectUri?: string): Promise<{
-    url: string;
-    state: string;
-  }> {
-    return await this.call('oauth_get_auth_url', {
-      provider: 'google-cloud-storage',
-      redirect_uri: redirectUri || 'http://localhost:5173/oauth/callback',
-    });
   }
 
   /**
@@ -1423,89 +1239,6 @@ class NexusAPIClient {
     error?: string;
   }> {
     return await this.call('oauth_test_credential', params);
-  }
-
-  // ===== Skills Methods =====
-
-  /**
-   * List all skills.
-   *
-   * @param params - Optional parameters
-   * @returns Skills list with metadata
-   */
-  async skillsList(params?: {
-    tier?: string;
-    include_metadata?: boolean;
-  }): Promise<{
-    skills: Array<{
-      name: string;
-      description: string;
-      version?: string;
-      author?: string;
-      tier?: string;
-      file_path?: string;
-      created_at?: string;
-      modified_at?: string;
-      requires?: string[];
-    }>;
-    count: number;
-  }> {
-    return await this.call('skills_list', params || {});
-  }
-
-  /**
-   * Discover skills with permission-based filtering and pagination.
-   *
-   * @param params - Discovery parameters
-   * @returns Skills list with permission info and pagination metadata
-   */
-  async skillsDiscover(params?: {
-    filter?: 'all' | 'owned' | 'subscribed' | 'shared' | 'public';
-    offset?: number;
-    limit?: number;
-    include_total?: boolean;
-  }): Promise<{
-    skills: Array<{
-      path: string;
-      name: string;
-      description: string;
-      owner: string;
-      is_subscribed: boolean;
-      is_public: boolean;
-      version?: string;
-      tags?: string[];
-    }>;
-    count: number;
-    offset: number;
-    limit: number;
-    total_count: number;
-    has_more: boolean;
-  }> {
-    return await this.call('skills_discover', params || {});
-  }
-
-  /**
-   * Subscribe to a skill.
-   */
-  async skillsSubscribe(params: {
-    skill_path: string;
-  }): Promise<{
-    success: boolean;
-    skill_path: string;
-  }> {
-    return await this.call('skills_subscribe', params);
-  }
-
-  /**
-   * Unsubscribe from a skill.
-   */
-  async skillsUnsubscribe(params: {
-    skill_path: string;
-  }): Promise<{
-    success: boolean;
-    skill_path: string;
-  }> {
-    return await this.call('skills_unsubscribe', params);
   }
 
   /**
@@ -1618,31 +1351,6 @@ class NexusAPIClient {
     };
   }> {
     return await this.call('provision_user', params);
-  }
-
-  /**
-   * Deprovision user and remove all their resources.
-   *
-   * @param params - Deprovisioning parameters
-   * @returns Success status
-   */
-  async deprovisionUser(params: {
-    user_id: string;
-    tenant_id?: string;
-    delete_user_record?: boolean;
-    force?: boolean;
-  }): Promise<{
-    user_id: string;
-    tenant_id: string;
-    deleted_resources: {
-      directories: string[];
-      workspaces: number;
-      agents: number;
-      skills: number;
-      api_keys: number;
-    };
-  }> {
-    return await this.call('deprovision_user', params);
   }
 }
 
