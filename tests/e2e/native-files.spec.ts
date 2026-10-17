@@ -113,3 +113,9 @@ test('metadata helpers distinguish missing entries from denied and unavailable r
     await expect(files.isDirectory('/docs')).rejects.toMatchObject({ status });
   }
 });
+
+test('a failed root listing is visible instead of showing an empty directory', async ({ page, request }) => {
+  await request.post(`${backend}/__fixture/reset`, { data: { scenario: 'files-unavailable' } });
+  await page.reload();
+  await expect(page.getByRole('alert').filter({ hasText: 'VFS is unavailable' }).first()).toBeVisible();
+});

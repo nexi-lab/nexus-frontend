@@ -328,7 +328,7 @@ function TreeNode({
         </div>
       </FileContextMenu>
 
-      {isExpanded && !isLoading && error && error instanceof AuthenticationError && (
+      {isExpanded && !isLoading && error && (
         <div className="px-2 py-2 text-xs text-destructive bg-destructive/10 rounded-md mx-2 my-1" style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}>
           <div className="flex items-center gap-2">
             <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
@@ -463,7 +463,7 @@ export function FileTree({
   const tenantDirPath = `/tenant:${tenantId}`;
   
   // Fetch files for different sections
-  const { data: rootFiles } = useFileList('/', !searchResults);
+  const { data: rootFiles, error: rootError } = useFileList('/', !searchResults);
   const { data: userDirFiles } = useFileList(userDirPath, !searchResults && !!userDirPath);
   const { data: tenantDirFiles } = useFileList(tenantDirPath, !searchResults && !!tenantId);
   
@@ -527,6 +527,11 @@ export function FileTree({
   if (organizedSections) {
     return (
       <div className="h-full overflow-auto">
+        {rootError && (
+          <div role="alert" className="p-3 text-sm text-destructive">
+            Failed to list /: {rootError instanceof Error ? rootError.message : 'Unknown error'}
+          </div>
+        )}
         {/* User's Own Space Section */}
         <div className="mb-4">
           <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b sticky top-0 z-10">

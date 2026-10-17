@@ -227,6 +227,10 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
             if (selectedFile && isWithinPath(selectedFile.path, file.path)) {
               setSelectedFile(null);
             }
+            if (file.isDirectory) {
+              const parent = file.path.substring(0, file.path.lastIndexOf('/')) || '/';
+              setCurrentPath((path) => isWithinPath(path, file.path) ? parent : path);
+            }
           } catch (error) {
             console.error('Failed to delete:', error);
             alert(`Failed to delete ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
