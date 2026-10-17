@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { ArrowLeft, Check, Copy, Eye, EyeOff, Key, LogOut, User } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Copy, Eye, EyeOff, Check, ArrowLeft, User, Key, LogOut } from 'lucide-react';
-import { copyToClipboard } from '../utils';
-import { Button } from '../components/ui/button';
 import { DeleteAccountDialog } from '../components/DeleteAccountDialog';
+import { Button } from '../components/ui/button';
+import { useAuth } from '../contexts/AuthContext';
+import { copyToClipboard } from '../utils';
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { userAccount, isUserAuthenticated, changePassword, deleteAccount, userLogout, logout } = useAuth();
+  const { apiUrl, apiKey, userInfo, userAccount, changePassword, deleteAccount, userLogout } = useAuth();
+  const personalApiKey = userAccount?.api_key || apiKey;
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -22,13 +23,6 @@ export default function Settings() {
   const [copied, setCopied] = useState(false);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isUserAuthenticated) {
-      navigate('/login');
-      return;
-    }
-  }, [isUserAuthenticated, navigate]);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,17 +55,13 @@ export default function Settings() {
   };
 
   const handleLogout = () => {
-    if (isUserAuthenticated) {
-      userLogout();
-    } else {
-      logout();
-    }
+    userLogout();
     navigate('/login');
   };
 
   const handleCopyApiKey = async () => {
-    if (!userAccount?.api_key) return;
-    await copyToClipboard(userAccount.api_key);
+    if (!personalApiKey) return;
+    await copyToClipboard(personalApiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -85,17 +75,11 @@ export default function Settings() {
   };
 
   const handleDeleteAccount = async () => {
-    try {
-      await deleteAccount();
-      // Redirect to login page (will happen automatically after userLogout in deleteAccount)
-      navigate('/login');
-    } catch (error) {
-      // Error will be handled by the dialog component
-      throw error;
-    }
+    await deleteAccount();
+    navigate('/login');
   };
 
-  if (!userAccount) {
+  if (!userInfo) {
     return null;
   }
 
@@ -122,86 +106,103 @@ export default function Settings() {
       <main className="flex-1 overflow-auto p-6">
         <div className="max-w-3xl mx-auto">
           <div className="bg-card shadow rounded-lg border">
-            {/* Account Information */}
             <div className="px-6 py-4 border-b border-border">
-              <div className="flex items-center gap-2 mb-4">
-                <User className="h-5 w-5 text-muted-foreground" />
-                <h2 className="text-lg font-medium">Account Information</h2>
-              </div>
-              <div className="space-y-3">
+              <h2 className="text-lg font-medium mb-4">Nexus Connection</h2>
+              <dl className="space-y-3 text-sm">
                 <div>
-                  <span className="text-sm font-medium text-muted-foreground">Email:</span>
-                  <p className="mt-1 text-sm">{userAccount.email}</p>
+                  <dt className="text-muted-foreground">Server</dt>
+                  <dd>{apiUrl}</dd>
                 </div>
-                {userAccount.username && (
+                <div>
+                  <dt className="text-muted-foreground">Subject</dt>
+                  <dd>{userInfo.subject_id}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Subject Type</dt>
+                  <dd>{userInfo.subject_type}</dd>
+                </div>
+              </dl>
+            </div>
+            {/* Account Information */}
+            {userAccount && (
+              <div className="px-6 py-4 border-b border-border">
+                <div className="flex items-center gap-2 mb-4">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="text-lg font-medium">Account Information</h2>
+                </div>
+                <div className="space-y-3">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Username:</span>
-                    <p className="mt-1 text-sm">{userAccount.username}</p>
+                    <span className="text-sm font-medium text-muted-foreground">Email:</span>
+                    <p className="mt-1 text-sm">{userAccount.email}</p>
                   </div>
-                )}
-                {userAccount.display_name && (
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">Display Name:</span>
-                    <p className="mt-1 text-sm">{userAccount.display_name}</p>
-                  </div>
-                )}
-                {userAccount.avatar_url && (
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">Avatar:</span>
-                    <div className="mt-2">
-                      <img
-                        src={userAccount.avatar_url}
-                        alt="User avatar"
-                        className="h-16 w-16 rounded-full object-cover border-2 border-border"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
+                  {userAccount.username && (
+                    <div>
+                      <span className="text-sm font-medium text-muted-foreground">Username:</span>
+                      <p className="mt-1 text-sm">{userAccount.username}</p>
                     </div>
-                  </div>
-                )}
-                <div>
-                  <span className="text-sm font-medium text-muted-foreground">User ID:</span>
-                  <p className="mt-1 text-sm font-mono">{userAccount.user_id}</p>
-                </div>
-                {userAccount.created_at && (
+                  )}
+                  {userAccount.display_name && (
+                    <div>
+                      <span className="text-sm font-medium text-muted-foreground">Display Name:</span>
+                      <p className="mt-1 text-sm">{userAccount.display_name}</p>
+                    </div>
+                  )}
+                  {userAccount.avatar_url && (
+                    <div>
+                      <span className="text-sm font-medium text-muted-foreground">Avatar:</span>
+                      <div className="mt-2">
+                        <img
+                          src={userAccount.avatar_url}
+                          alt="User avatar"
+                          className="h-16 w-16 rounded-full object-cover border-2 border-border"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Account Created:</span>
-                    <p className="mt-1 text-sm">
-                      {new Date(userAccount.created_at).toLocaleDateString()}
+                    <span className="text-sm font-medium text-muted-foreground">User ID:</span>
+                    <p className="mt-1 text-sm font-mono">{userAccount.user_id}</p>
+                  </div>
+                  {userAccount.created_at && (
+                    <div>
+                      <span className="text-sm font-medium text-muted-foreground">Account Created:</span>
+                      <p className="mt-1 text-sm">{new Date(userAccount.created_at).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">Authentication Method:</span>
+                    <p className="mt-1 text-sm capitalize">
+                      {userAccount.primary_auth_method === 'oauth' || userAccount.primary_auth_method === 'google'
+                        ? 'Google OAuth'
+                        : userAccount.primary_auth_method || 'oauth'}
                     </p>
                   </div>
-                )}
-                <div>
-                  <span className="text-sm font-medium text-muted-foreground">Authentication Method:</span>
-                  <p className="mt-1 text-sm capitalize">
-                    {userAccount.primary_auth_method === 'oauth' || userAccount.primary_auth_method === 'google'
-                      ? 'Google OAuth'
-                      : userAccount.primary_auth_method || 'oauth'}
-                  </p>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* API Key Section */}
-            {userAccount.api_key && (
+            {personalApiKey && (
               <div className="px-6 py-4 border-b border-border">
                 <div className="flex items-center gap-2 mb-4">
                   <Key className="h-5 w-5 text-muted-foreground" />
                   <h2 className="text-lg font-medium">API Access</h2>
                 </div>
                 <div className="space-y-3">
-                  {userAccount.tenant_id && (
+                  {userInfo.tenant_id && (
                     <div>
                       <span className="text-sm font-medium text-muted-foreground">Tenant ID:</span>
-                      <p className="mt-1 text-sm font-mono">{userAccount.tenant_id}</p>
+                      <p className="mt-1 text-sm font-mono">{userInfo.tenant_id}</p>
                     </div>
                   )}
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">Personal API Key:</span>
                     <div className="mt-2 flex gap-2">
                       <div className="flex-1 bg-muted p-3 rounded-md font-mono text-sm break-all border border-border">
-                        {showApiKey ? userAccount.api_key : maskApiKey(userAccount.api_key)}
+                        {showApiKey ? personalApiKey : maskApiKey(personalApiKey)}
                       </div>
                       <Button
                         type="button"
@@ -212,34 +213,23 @@ export default function Settings() {
                       >
                         {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={handleCopyApiKey}
-                        title="Copy to clipboard"
-                      >
+                      <Button type="button" variant="outline" size="icon" onClick={handleCopyApiKey} title="Copy to clipboard">
                         {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                       </Button>
                     </div>
-                    {copied && (
-                      <p className="mt-2 text-sm text-green-600 dark:text-green-400">
-                        API key copied to clipboard!
-                      </p>
-                    )}
+                    {copied && <p className="mt-2 text-sm text-green-600 dark:text-green-400">API key copied to clipboard!</p>}
                     <p className="mt-2 text-xs text-muted-foreground">
                       Use this API key to access Nexus programmatically via the Python SDK or direct API calls.
                     </p>
                     <div className="mt-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                       <p className="text-xs text-blue-800 dark:text-blue-200">
-                        <strong>Note:</strong> This API key is automatically provided on every login.
-                        You don't need to manually save it - just log in again if you need to retrieve it.
+                        <strong>Note:</strong> This API key is automatically provided on every login. You don't need to manually save it - just log in again if
+                        you need to retrieve it.
                       </p>
                     </div>
                     <div className="mt-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                       <p className="text-xs text-yellow-800 dark:text-yellow-200">
-                        <strong>Security:</strong> Keep your API key secure and never share it publicly.
-                        It provides full access to your account.
+                        <strong>Security:</strong> Keep your API key secure and never share it publicly. It provides full access to your account.
                       </p>
                     </div>
                   </div>
@@ -248,7 +238,7 @@ export default function Settings() {
             )}
 
             {/* Change Password - Only for password-based auth users */}
-            {userAccount.primary_auth_method === 'password' && (
+            {userAccount?.primary_auth_method === 'password' && (
               <div className="px-6 py-4">
                 <h2 className="text-lg font-medium mb-4">Change Password</h2>
 
@@ -294,9 +284,7 @@ export default function Settings() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Password must be at least 12 characters long
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">Password must be at least 12 characters long</p>
                   </div>
 
                   <div>
@@ -314,11 +302,7 @@ export default function Settings() {
                     />
                   </div>
 
-                  <Button
-                    type="submit"
-                    disabled={passwordLoading}
-                    className="w-full"
-                  >
+                  <Button type="submit" disabled={passwordLoading} className="w-full">
                     {passwordLoading ? 'Changing...' : 'Change Password'}
                   </Button>
                 </form>
@@ -326,28 +310,23 @@ export default function Settings() {
             )}
 
             {/* Delete Account - Danger Zone */}
-            <div className="px-6 py-4 border-t-2 border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20">
-              <h2 className="text-lg font-medium text-red-900 dark:text-red-100 mb-2">Danger Zone</h2>
-              <p className="text-sm text-red-800 dark:text-red-200 mb-4">
-                Permanently delete your account and all associated data. This action cannot be undone.
-              </p>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => setDeleteDialogOpen(true)}
-              >
-                Delete My Account
-              </Button>
-            </div>
+            {userAccount && (
+              <div className="px-6 py-4 border-t-2 border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20">
+                <h2 className="text-lg font-medium text-red-900 dark:text-red-100 mb-2">Danger Zone</h2>
+                <p className="text-sm text-red-800 dark:text-red-200 mb-4">
+                  Permanently delete your account and all associated data. This action cannot be undone.
+                </p>
+                <Button type="button" variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                  Delete My Account
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Delete Account Dialog */}
-          <DeleteAccountDialog
-            open={deleteDialogOpen}
-            onOpenChange={setDeleteDialogOpen}
-            onConfirm={handleDeleteAccount}
-            userEmail={userAccount.email}
-          />
+          {userAccount && (
+            <DeleteAccountDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} onConfirm={handleDeleteAccount} userEmail={userAccount.email} />
+          )}
         </div>
       </main>
     </div>

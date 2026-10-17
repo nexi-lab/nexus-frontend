@@ -2,6 +2,27 @@ import { expect, test } from '@playwright/test';
 
 const backend = 'http://127.0.0.1:4181';
 
+test('an API key user can inspect the verified connection and log out from settings', async ({ page }) => {
+  await page.addInitScript((server) => {
+    if (sessionStorage.getItem('fixture-seeded')) return;
+    sessionStorage.setItem('fixture-seeded', 'true');
+    localStorage.setItem('nexus_api_url', server);
+    localStorage.setItem('nexus_api_key', 'sk-fixture-server-alice');
+  }, backend);
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: 'Profile & Settings', exact: true })).toBeVisible();
+  await expect(page.getByText('server-alice', { exact: true })).toBeVisible();
+  await expect(page.getByText(backend, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Change Password', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Delete My Account', exact: true })).toHaveCount(0);
+  await expect(page.getByText('sk-fixture-server-alice', { exact: true })).toHaveCount(0);
+  await page.getByTitle('Show API key', { exact: true }).click();
+  await expect(page.getByText('sk-fixture-server-alice', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Logout', exact: true }).click();
+  await expect(page).toHaveURL('/login');
+  expect(await page.evaluate(() => localStorage.getItem('nexus_api_key'))).toBeNull();
+});
+
 test('password changes use the account contract and retain identity after a rejected current password', async ({ page }) => {
   await page.addInitScript((server) => {
     localStorage.setItem('nexus_api_url', server);

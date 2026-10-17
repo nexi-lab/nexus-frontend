@@ -87,6 +87,15 @@ try {
   await page.screenshot({ path: `${output}/native-admin-denied.png` });
   checks.push('native non-admin cannot enter administrator UI');
 
+  await page.goto(`${uiUrl}/settings`);
+  await page.getByRole('heading', { name: 'Nexus Connection', exact: true }).waitFor();
+  await page.getByText('browser-alice', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Change Password', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Delete My Account', exact: true }).count(), 0);
+  assert.equal(await page.getByText(issued[0].key, { exact: true }).count(), 0);
+  await page.screenshot({ path: `${output}/native-key-settings.png` });
+  checks.push('native API key settings show the verified subject');
+
   await adminRequest(`/v2/auth/keys/${issued[0].key_hash}`, { method: 'DELETE' });
   const revokedResponsePromise = page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/auth/whoami` && response.request().method() === 'GET');
   await page.reload();
