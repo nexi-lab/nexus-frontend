@@ -356,17 +356,17 @@ export function FileBrowser() {
       
       {/* Header */}
       <header className="relative z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-4 flex-1">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4">
+          <div className="flex shrink-0 items-center gap-4">
             <img src="/logo.png" alt="Nexus Logo" className="h-10 w-10" />
             <h1 className="text-2xl font-bold">{t('landing.nexus')}</h1>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-2 items-center">
             {(isAuthenticated || isUserAuthenticated) ? (
               <>
                 {/* Show user info from OAuth account or API key auth */}
                 {(userAccount?.email || userInfo?.user) && (
-                  <span className="text-sm text-muted-foreground mr-2">
+                  <span className="min-w-0 break-all text-sm text-muted-foreground mr-2">
                     <span className="font-medium">{t('landing.user')}:</span> {userAccount?.email || userInfo?.user}
                     {(userAccount?.tenant_id || userInfo?.tenant_id) && (
                       <>
