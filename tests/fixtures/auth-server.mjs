@@ -181,6 +181,13 @@ const server = createServer(async (request, response) => {
       return;
     }
     const method = url.pathname.split('/').at(-1);
+    if (method === 'list' && scenario === 'cache-isolation') {
+      const parent = (value.params?.path ?? '/').replace(/\/$/, '');
+      json({ jsonrpc: '2.0', id: value.id, result: { files: [
+        { path: `${parent}/private-${principal}`, is_directory: true, size: 0 },
+      ] } });
+      return;
+    }
     const result =
       method === 'list'
         ? { files: [] }

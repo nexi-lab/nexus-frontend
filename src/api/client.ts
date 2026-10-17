@@ -377,7 +377,7 @@ class NexusAPIClient {
    *
    * @param token - JWT token
    */
-  setAuthToken(token: string | null) {
+  private setAuthToken(token: string | null) {
     if (token) {
       this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     } else {

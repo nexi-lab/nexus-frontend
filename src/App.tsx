@@ -1,7 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ConnectionQueries } from './contexts/QueryProvider';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import OAuthCallback from './pages/OAuthCallback';
@@ -9,7 +9,6 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import './index.css';
 import { Toaster } from 'sonner';
-import { AuthenticationError } from './api/client';
 
 const FileBrowser = lazy(async () => ({ default: (await import('./components/FileBrowser')).FileBrowser }));
 const AdminSettings = lazy(async () => ({ default: (await import('./pages/AdminSettings')).AdminSettings }));
@@ -20,31 +19,6 @@ const Agent = lazy(async () => ({ default: (await import('./pages/Agent')).Agent
 const Workspace = lazy(async () => ({ default: (await import('./pages/Workspace')).Workspace }));
 const Memory = lazy(async () => ({ default: (await import('./pages/Memory')).Memory }));
 const Settings = lazy(() => import('./pages/Settings'));
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: (_failureCount, error) => {
-        // Don't retry on authentication errors
-        if (error instanceof AuthenticationError) {
-          return false;
-        }
-        return _failureCount < 1;
-      },
-      staleTime: 30000, // 30 seconds
-    },
-    mutations: {
-      retry: (_failureCount, error) => {
-        // Don't retry on authentication errors
-        if (error instanceof AuthenticationError) {
-          return false;
-        }
-        return false; // Don't retry mutations by default
-      },
-    },
-  },
-});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isUserAuthenticated, isAuthenticated, isResolvingIdentity, identityError } = useAuth();
@@ -76,7 +50,7 @@ function AppContent() {
         }}
       />
       <AuthProvider>
-        <QueryClientProvider client={queryClient}>
+        <ConnectionQueries>
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<ProtectedRoute><FileBrowser /></ProtectedRoute>} />
@@ -99,7 +73,7 @@ function AppContent() {
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
-        </QueryClientProvider>
+        </ConnectionQueries>
       </AuthProvider>
     </>
   );
