@@ -1,5 +1,5 @@
 import { AlertCircle, Code, Download, Edit, FileIcon, FileJson, FileText, Film, History, Image as ImageIcon, Loader2, Maximize2, Minimize2, Save, Trash2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AuthenticationError } from '../api/client';
@@ -7,13 +7,14 @@ import type NexusAPIClient from '../api/client';
 import { createFilesAPI } from '../api/files';
 import { useDeleteFile, useFileContent, useUpdateFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
-import ExcelViewer from './ExcelViewer';
 import { FileVersionHistoryDialog } from './FileVersionHistoryDialog';
-import { PDFViewer } from './PDFViewer';
 import { NexusConnection } from './NexusConnection';
-import WordViewer from './WordViewer';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
+
+const ExcelViewer = lazy(() => import('./ExcelViewer'));
+const WordViewer = lazy(() => import('./WordViewer'));
+const PDFViewer = lazy(() => import('./PDFViewer').then(({ PDFViewer }) => ({ default: PDFViewer })));
 
 function bytesToString(bytes?: Uint8Array): string {
   return bytes ? new TextDecoder().decode(bytes) : '';
@@ -652,7 +653,11 @@ function ConnectedFileContentViewer({ file, onFileDeleted, apiClient }: FileCont
       )}
 
       {/* File Content */}
-      <div className={`flex-1 overflow-auto ${hasParsedMarkdown && parsedMdContent && !parsedMdError ? '' : 'p-6'}`}>{renderContent()}</div>
+      <div className={`flex-1 overflow-auto ${hasParsedMarkdown && parsedMdContent && !parsedMdError ? '' : 'p-6'}`}>
+        <Suspense fallback={<div role="status" className="flex h-full items-center justify-center gap-2"><Loader2 className="h-5 w-5 animate-spin" />Loading preview...</div>}>
+          {renderContent()}
+        </Suspense>
+      </div>
 
       {/* Version History Dialog */}
       {file && !file.isDirectory && <FileVersionHistoryDialog open={versionHistoryOpen} onOpenChange={setVersionHistoryOpen} filePath={filePath} />}
