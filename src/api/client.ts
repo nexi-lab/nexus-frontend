@@ -703,27 +703,6 @@ class NexusAPIClient {
     return await this.call('sandbox_list', params || {});
   }
 
-  // Sandbox API - Get sandbox status
-  async sandboxStatus(sandbox_id: string): Promise<{
-    sandbox_id: string;
-    name: string;
-    user_id: string;
-    agent_id: string | null;
-    tenant_id: string;
-    provider: string;
-    template_id: string | null;
-    status: string;
-    created_at: string;
-    last_active_at: string;
-    paused_at: string | null;
-    stopped_at: string | null;
-    ttl_minutes: number;
-    expires_at: string | null;
-    uptime_seconds: number;
-  }> {
-    return await this.call('sandbox_status', { sandbox_id });
-  }
-
   // Sandbox API - Pause sandbox
   async sandboxPause(sandbox_id: string): Promise<{
     sandbox_id: string;
@@ -1165,29 +1144,6 @@ class NexusAPIClient {
   // Memory API - Deactivate a memory record
   async deactivateMemory(memory_id: string): Promise<{ deactivated: boolean }> {
     return await this.call('deactivate_memory', { memory_id });
-  }
-
-  // Memory API - Update a memory record
-  async updateMemory(params: { memory_id: string; content?: string; importance?: number }): Promise<{
-    memory: {
-      memory_id: string;
-      content: string;
-      content_hash: string;
-      tenant_id: string | null;
-      user_id: string | null;
-      agent_id: string | null;
-      scope: string;
-      visibility: string;
-      memory_type: string | null;
-      importance: number | null;
-      state: string | null;
-      namespace: string | null;
-      path_key: string | null;
-      created_at: string | null;
-      updated_at: string | null;
-    };
-  }> {
-    return await this.call('update_memory', params);
   }
 
   // ===== OAuth Methods =====

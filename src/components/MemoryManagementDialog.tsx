@@ -66,13 +66,6 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
   const [storeMemoryDialogOpen, setStoreMemoryDialogOpen] = useState(false);
   const [selectedNamespace, setSelectedNamespace] = useState<string | null>(null);
 
-  // Edit memory dialog state - Disabled until backend update_memory is fully implemented
-  // const [editMemoryDialogOpen, setEditMemoryDialogOpen] = useState(false);
-  // const [editingMemory, setEditingMemory] = useState<StoredMemory | null>(null);
-  // const [editContent, setEditContent] = useState('');
-  // const [editImportance, setEditImportance] = useState(0.5);
-  // const [isUpdating, setIsUpdating] = useState(false);
-
   // Create memory state
   const [path, setPath] = useState('');
   const [name, setName] = useState('');
@@ -224,54 +217,6 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
       await loadStoredMemories();
     }
   };
-
-  // Edit handlers - Disabled until backend update_memory is fully implemented
-  /*
-  const handleOpenEditMemory = (memory: StoredMemory) => {
-    setEditingMemory(memory);
-    setEditContent(memory.content);
-    setEditImportance(memory.importance ?? 0.5);
-    setEditMemoryDialogOpen(true);
-  };
-
-  const handleUpdateMemory = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!editingMemory) return;
-
-    setIsUpdating(true);
-    setStoredMemoryError(null);
-
-    try {
-      const result = await apiClient.updateMemory({
-        memory_id: editingMemory.memory_id,
-        content: editContent.trim() !== editingMemory.content ? editContent.trim() : undefined,
-        importance: editImportance !== editingMemory.importance ? editImportance : undefined,
-      });
-
-      // Update the memory in the list
-      setStoredMemories((prev) =>
-        prev.map((mem) =>
-          mem.memory_id === editingMemory.memory_id ? result.memory : mem
-        )
-      );
-
-      // Close dialog
-      setEditMemoryDialogOpen(false);
-      setEditingMemory(null);
-    } catch (err) {
-      setStoredMemoryError(err instanceof Error ? err.message : 'Failed to update memory');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleCloseEditDialog = () => {
-    setEditMemoryDialogOpen(false);
-    setEditingMemory(null);
-    setStoredMemoryError(null);
-  };
-  */
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -503,16 +448,6 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
                               />
                             </button>
                           </div>
-                          {/* Edit functionality disabled - backend update_memory not fully implemented
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenEditMemory(memory)}
-                            title="Edit memory"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          */}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -753,74 +688,6 @@ export function MemoryManagementDialog({ open, onOpenChange }: MemoryManagementD
         }}
       />
 
-      {/* Edit Memory Dialog - Disabled until backend update_memory is fully implemented
-      <Dialog open={editMemoryDialogOpen} onOpenChange={handleCloseEditDialog}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5" />
-              Edit Memory
-            </DialogTitle>
-            <DialogDescription>Update the content or importance of this memory record.</DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleUpdateMemory}>
-            <div className="space-y-4">
-              {storedMemoryError && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{storedMemoryError}</div>}
-
-              {editingMemory && (
-                <div className="text-xs text-muted-foreground font-mono bg-muted px-3 py-2 rounded">
-                  ID: {editingMemory.memory_id}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label htmlFor="edit-memory-content" className="text-sm font-medium">
-                  Memory Content *
-                </label>
-                <Textarea
-                  id="edit-memory-content"
-                  placeholder="Enter memory content"
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  disabled={isUpdating}
-                  rows={6}
-                  className="resize-none"
-                />
-                <p className="text-xs text-muted-foreground">Update the content of this memory record</p>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="edit-importance" className="text-sm font-medium">
-                  Importance: {editImportance.toFixed(2)}
-                </label>
-                <input
-                  id="edit-importance"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={editImportance}
-                  onChange={(e) => setEditImportance(parseFloat(e.target.value))}
-                  disabled={isUpdating}
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground">How important is this memory? (0.0 = low, 1.0 = high)</p>
-              </div>
-            </div>
-
-            <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={handleCloseEditDialog} disabled={isUpdating}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? 'Updating...' : 'Update Memory'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      */}
     </Dialog>
   );
 }
