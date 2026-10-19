@@ -1,16 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { createFilesFixture } from './files.mjs';
 import { startAccounts } from './accounts.mjs';
+import { createFilesFixture } from './files.mjs';
 
 const accounts = await startAccounts();
 
 const origin = 'http://127.0.0.1:4173';
 let scenario = 'existing';
 let calls = [];
-let password = 'fixture-current-password';
 const attempts = new Map();
-const pending = new Set();
 const files = createFilesFixture();
 files.reset();
 const user = {
@@ -19,13 +17,14 @@ const user = {
   username: 'alice',
   display_name: 'Alice',
   avatar_url: null,
-  primary_auth_method: 'google',
+  primary_auth_method: 'oauth',
   is_global_admin: false,
   email_verified: true,
+  zone_id: null,
   created_at: '2026-01-01T00:00:00Z',
   last_login_at: '2026-01-01T00:00:00Z',
 };
-const session = () => ({ token: 'fixture-alice-session', user, api_key: 'sk-fixture-server-alice', tenant_id: 'sharedzone' });
+const session = () => ({ token: 'fixture-alice-session', user });
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, 'http://127.0.0.1:4181');
@@ -50,19 +49,12 @@ const server = createServer(async (request, response) => {
   const body = Buffer.concat(chunks);
   const value = body.length && request.headers['content-type']?.startsWith('application/json') ? JSON.parse(body.toString('utf8')) : {};
   const authorization = request.headers.authorization;
-  const principal =
-    authorization === 'Bearer sk-fixture-previous'
-      ? 'previous-user'
-      : ['Bearer sk-fixture-server-alice', 'Bearer fixture-alice-session'].includes(authorization)
-        ? user.user_id
-        : null;
+  const principal = authorization === 'Bearer sk-fixture-previous' ? 'previous-user' : authorization === 'Bearer sk-fixture-server-alice' ? user.user_id : null;
   if (url.pathname === '/__fixture/reset') {
     scenario = value.scenario || 'existing';
     calls = [];
     attempts.clear();
-    pending.clear();
     files.reset();
-    password = 'fixture-current-password';
     json({ ok: true });
     return;
   }
@@ -90,12 +82,22 @@ const server = createServer(async (request, response) => {
     authorized: !!authorization,
     browserBound: !!request.headers.cookie?.includes('nexus_oauth_binding='),
     ...(url.pathname.startsWith('/v2/search/') ? { params: value } : {}),
-    ...(url.pathname.startsWith('/v2/files') || url.pathname === '/v2/directories' ? { query: Object.fromEntries(url.searchParams), bytes: body.length, contentType: request.headers['content-type'], params: value } : {}),
+    ...(url.pathname.startsWith('/v2/files') || url.pathname === '/v2/directories'
+      ? { query: Object.fromEntries(url.searchParams), bytes: body.length, contentType: request.headers['content-type'], params: value }
+      : {}),
   });
-  if (['/auth/register', '/auth/request-verification', '/auth/verify-email'].includes(url.pathname)) {
+  if (url.pathname === '/auth/me' && authorization === 'Bearer fixture-alice-session') {
+    json(user);
+    return;
+  }
+  if (['/auth/register', '/auth/request-verification', '/auth/verify-email', '/auth/login', '/auth/me', '/auth/change-password'].includes(url.pathname)) {
     if (!accounts) return json({ detail: 'Actual Rust account fixture is required' }, 503);
+    const headers = { 'Content-Type': 'application/json' };
+    if (['/auth/me', '/auth/change-password'].includes(url.pathname) && authorization) headers.Authorization = authorization;
     const upstream = await fetch(accounts.base + url.pathname, {
-      method: request.method, headers: { 'Content-Type': 'application/json' }, body,
+      method: request.method,
+      headers,
+      ...(request.method === 'GET' ? {} : { body }),
     });
     json(await upstream.json(), upstream.status);
     return;
@@ -154,55 +156,14 @@ const server = createServer(async (request, response) => {
     json({ auth_url: scenario === 'malformed' ? 'javascript:void(0)' : target.href, state });
     return;
   }
-  if (url.pathname === '/auth/change-password' && request.method === 'POST') {
-    if (principal !== user.user_id) {
-      json({ detail: 'credential rejected' }, 401);
-      return;
-    }
-    if (typeof value.current_password !== 'string' || typeof value.new_password !== 'string') {
-      json({ detail: 'current_password and new_password are required' }, 422);
-      return;
-    }
-    if (value.current_password !== password) {
-      json({ detail: 'Current password is incorrect' }, 400);
-      return;
-    }
-    password = value.new_password;
-    json({ success: true, message: 'Password changed' });
-    return;
-  }
-  if (url.pathname === '/auth/oauth/check') {
+  if (url.pathname === '/auth/oauth/google/callback') {
     const binding = attempts.get(value.state);
     attempts.delete(value.state);
-    if (
-      !binding ||
-      !request.headers.cookie?.includes(`nexus_oauth_binding=${binding}`) ||
-      value.provider !== 'google' ||
-      value.code !== 'provider-accepted-code' ||
-      scenario === 'rejected'
-    ) {
+    if (!binding || !request.headers.cookie?.includes(`nexus_oauth_binding=${binding}`) || value.code !== 'provider-accepted-code' || scenario === 'rejected') {
       json({ detail: 'provider or browser binding rejected' }, 400);
       return;
     }
-    if (scenario === 'new') {
-      const ticket = randomUUID();
-      pending.add(ticket);
-      json({
-        needs_confirmation: true,
-        pending_token: ticket,
-        user_info: { email: user.email, display_name: user.display_name, avatar_url: null, oauth_provider: 'google' },
-        tenant_info: { tenant_id: 'sharedzone', name: 'Test workspace', domain: null, description: null, is_personal: true, can_edit_name: true },
-      });
-      return;
-    }
-    json({ needs_confirmation: false, ...session(), is_new_user: false });
-    return;
-  }
-  if (url.pathname === '/auth/oauth/confirm') {
-    if (!pending.delete(value.pending_token)) {
-      json({ detail: 'unknown confirmation' }, 400);
-      return;
-    }
+    response.setHeader('Set-Cookie', 'nexus_oauth_binding=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
     json(session());
     return;
   }

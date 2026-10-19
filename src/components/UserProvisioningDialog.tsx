@@ -25,7 +25,7 @@ export function UserProvisioningDialog({
   onOpenChange,
   onSuccess,
 }: UserProvisioningDialogProps) {
-  const { apiClient, userInfo, userAccount } = useAuth();
+  const { apiClient, userInfo } = useAuth();
   const [isProvisioning, setIsProvisioning] = useState(false);
   const [createAgents, setCreateAgents] = useState(true);
   const [importSkills, setImportSkills] = useState(true);
@@ -41,8 +41,8 @@ export function UserProvisioningDialog({
 
       // Determine user details
       const userId = userInfo.subject_id || 'unknown';
-      const email = userAccount?.email || `${userId}@nexus.local`;
-      const displayName = userAccount?.display_name || userId;
+      const email = `${userId}@nexus.local`;
+      const displayName = userId;
       const tenantId = userInfo.tenant_id;
 
       toast.info('Setting up your workspace...', {

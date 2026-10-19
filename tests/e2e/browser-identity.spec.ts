@@ -22,35 +22,6 @@ test('an API key user can inspect the verified connection and log out from setti
   expect(await page.evaluate(() => localStorage.getItem('nexus_api_key'))).toBeNull();
 });
 
-test('password changes use the account contract and retain identity after a rejected current password', async ({ page }) => {
-  await page.addInitScript((server) => {
-    localStorage.setItem('nexus_api_url', server);
-    localStorage.setItem('nexus_jwt_token', 'fixture-alice-session');
-    localStorage.setItem(
-      'nexus_user_account',
-      JSON.stringify({
-        user_id: 'server-alice',
-        email: 'alice@example.test',
-        primary_auth_method: 'password',
-        created_at: '2026-01-01T00:00:00Z',
-        is_global_admin: false,
-      }),
-    );
-  }, backend);
-  await page.goto('/settings');
-  await page.getByLabel('Current Password', { exact: true }).fill('incorrect-password');
-  await page.getByLabel('New Password', { exact: true }).fill('fixture-replacement-password');
-  await page.getByLabel('Confirm New Password', { exact: true }).fill('fixture-replacement-password');
-  await page.getByRole('button', { name: 'Change Password', exact: true }).click();
-  await expect(page.getByText('Current password is incorrect', { exact: true })).toBeVisible();
-  await expect(page).toHaveURL('/settings');
-  await page.getByLabel('Current Password', { exact: true }).fill('fixture-current-password');
-  await page.getByRole('button', { name: 'Change Password', exact: true }).click();
-  await expect(page.getByText('Password changed successfully!', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Current Password', { exact: true })).toHaveValue('');
-  await expect(page.getByLabel('New Password', { exact: true })).toHaveValue('');
-});
-
 test.beforeEach(async ({ request, context }) => {
   await prepareBrowser(request, context);
   await context.route('https://accounts.google.com/**', async (route) => {
@@ -77,7 +48,7 @@ test('the login page loads less than 1 MiB of JavaScript', async ({ page }) => {
   expect(sizes.reduce((total, size) => total + size, 0)).toBeLessThan(1024 * 1024);
 });
 
-test('Google login uses the selected backend and replaces the old credential', async ({ page, request }) => {
+test('Google uses the selected account server and preserves the native connection', async ({ page, request }) => {
   await page.addInitScript((server) => {
     if (sessionStorage.getItem('fixture-seeded')) return;
     sessionStorage.setItem('fixture-seeded', 'true');
@@ -86,43 +57,45 @@ test('Google login uses the selected backend and replaces the old credential', a
     localStorage.setItem('nexus_user_info', JSON.stringify({ is_admin: true, user: 'forged-user' }));
   }, backend);
   await page.goto('/login');
+  await page.getByLabel('Nexus Server URL').fill(`${backend}/`);
   await page.getByRole('button', { name: 'Google', exact: true }).click();
-  await expect(page).toHaveURL('http://127.0.0.1:4173/');
-  await expect
-    .poll(async () =>
-      (await (await request.get(`${backend}/__fixture/state`)).json()).calls.some(
-        (call: { path: string; principal: string }) => call.path === '/v2/auth/whoami' && call.principal === 'server-alice',
-      ),
-    )
-    .toBe(true);
+  await expect(page).toHaveURL('/account');
+  await expect(page.getByText('alice@example.test', { exact: true })).toBeVisible();
   const saved = await page.evaluate(() => ({
-    previousKey: localStorage.getItem('nexus_api_key'),
+    nativeServer: localStorage.getItem('nexus_api_url'),
+    nativeKey: localStorage.getItem('nexus_api_key'),
     cachedIdentity: localStorage.getItem('nexus_user_info'),
-    account: JSON.parse(localStorage.getItem('nexus_user_account') || '{}'),
+    session: JSON.parse(sessionStorage.getItem('nexus_account_session') || '{}'),
+    attempt: sessionStorage.getItem('nexus_google_login'),
   }));
-  expect(saved.previousKey).toBeNull();
+  expect(saved.nativeServer).toBe(backend);
+  expect(saved.nativeKey).toBe('sk-fixture-previous');
   expect(saved.cachedIdentity).toBeNull();
-  expect(saved.account.user_id).toBe('server-alice');
+  expect(saved.session).toEqual({ serverUrl: `${backend}/`, token: 'fixture-alice-session' });
+  expect(saved.attempt).toBeNull();
   const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
-  expect(calls.find((call: { path: string }) => call.path === '/auth/oauth/google/authorize').authorized).toBe(false);
-  expect(calls.filter((call: { path: string }) => call.path === '/auth/oauth/check')).toHaveLength(1);
-  expect(calls.find((call: { path: string }) => call.path === '/auth/oauth/check').authorized).toBe(false);
+  const accountCalls = calls.filter((call: { path: string }) => call.path.startsWith('/auth/'));
+  expect(accountCalls.map((call: { path: string }) => call.path)).toEqual(['/auth/oauth/google/authorize', '/auth/oauth/google/callback']);
+  expect(accountCalls.every((call: { authorized: boolean }) => !call.authorized)).toBe(true);
+  expect(
+    calls.filter((call: { path: string }) => call.path === '/v2/auth/whoami').every((call: { principal: string }) => call.principal === 'previous-user'),
+  ).toBe(true);
 });
 
-test('a new Google user confirms account information before receiving credentials', async ({ page, request }) => {
-  await request.post(`${backend}/__fixture/reset`, { data: { scenario: 'new' } });
+test('a Google account without native credentials can manage its profile and cannot open files', async ({ page, request }) => {
   await page.goto('/login');
-  await page.locator('#apiUrl').fill(backend);
+  await page.getByLabel('Nexus Server URL').fill(backend);
   await page.getByRole('button', { name: 'Google', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Confirm Your Information' })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('nexus_jwt_token'))).toBeNull();
-  await page.getByLabel('Organization Slug').fill('alice-space');
-  await page.getByRole('button', { name: 'Confirm and Continue' }).click();
-  await expect(page).toHaveURL('http://127.0.0.1:4173/');
+  await expect(page).toHaveURL('/account');
+  await expect(page.getByRole('heading', { name: 'Your Nexus account' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Change Password', exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText('alice@example.test', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Files', exact: true }).click();
+  await expect(page).toHaveURL('/login');
   const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
-  expect(calls.filter((call: { path: string }) => call.path === '/auth/oauth/confirm')).toHaveLength(1);
-  expect(calls.find((call: { path: string }) => call.path === '/auth/oauth/confirm').authorized).toBe(false);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('nexus_user_account') || '{}').user_id)).toBe('server-alice');
+  expect(calls.some((call: { path: string }) => call.path.startsWith('/v2/'))).toBe(false);
+  expect(await page.evaluate(() => localStorage.getItem('nexus_api_key'))).toBeNull();
 });
 
 test('a callback without its browser binding cannot establish credentials', async ({ page, context, request }) => {
@@ -136,14 +109,15 @@ test('a callback without its browser binding cannot establish credentials', asyn
   await expect(page.getByText(/Failed to sign in: provider or browser binding rejected/)).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('nexus_jwt_token'))).toBeNull();
   const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
-  expect(calls.find((call: { path: string }) => call.path === '/auth/oauth/check').browserBound).toBe(false);
+  expect(calls.find((call: { path: string }) => call.path === '/auth/oauth/google/callback').browserBound).toBe(false);
 });
 
 test('a cached account cannot grant administrator access', async ({ page }) => {
   await page.addInitScript((server) => {
     localStorage.setItem('nexus_api_url', server);
+    localStorage.setItem('nexus_api_key', 'sk-fixture-server-alice');
     localStorage.setItem('nexus_jwt_token', 'fixture-alice-session');
-    localStorage.setItem('nexus_user_account', JSON.stringify({ user_id: 'server-alice', api_key: 'sk-fixture-server-alice', is_global_admin: true }));
+    localStorage.setItem('nexus_user_account', JSON.stringify({ user_id: 'forged-user', api_key: 'sk-fixture-previous', is_global_admin: true }));
     localStorage.setItem('nexus_user_info', JSON.stringify({ is_admin: true, user: 'operator' }));
   }, backend);
   await page.goto('/admin');
@@ -162,8 +136,12 @@ for (const scenario of ['unconfigured', 'malformed', 'rejected']) {
     } else {
       await expect(page.getByRole('alert')).toBeVisible();
     }
-    const credentials = await page.evaluate(() => [localStorage.getItem('nexus_api_key'), localStorage.getItem('nexus_jwt_token')]);
-    expect(credentials).toEqual([null, null]);
+    const credentials = await page.evaluate(() => [
+      localStorage.getItem('nexus_api_key'),
+      sessionStorage.getItem('nexus_account_session'),
+      sessionStorage.getItem('nexus_google_login'),
+    ]);
+    expect(credentials).toEqual([null, null, null]);
     const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
     expect(calls.some((call: { path: string }) => call.path === '/v2/auth/whoami')).toBe(false);
   });
@@ -172,7 +150,7 @@ for (const scenario of ['unconfigured', 'malformed', 'rejected']) {
 test('a callback with another state never reaches the authentication backend', async ({ page, request }) => {
   await page.addInitScript((server) => {
     localStorage.setItem('nexus_api_url', server);
-    sessionStorage.setItem('oauth_state', 'expected-state');
+    sessionStorage.setItem('nexus_google_login', JSON.stringify({ serverUrl: server, state: 'expected-state' }));
   }, backend);
   await page.goto('/oauth/callback?code=untrusted-code&state=another-state');
   await expect(page.getByText(/The sign-in state does not match this browser/)).toBeVisible();

@@ -1,25 +1,25 @@
-import { type ComponentProps, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, Loader2, XCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { accountErrorMessage, createAccountsAPI } from '../api/accounts';
+import { clearGoogleLogin, consumeGoogleLogin } from '../auth/google';
+import { useAccount } from '../contexts/AccountContext';
 import { useAuth } from '../contexts/AuthContext';
-import OAuthConfirmation from './OAuthConfirmation';
-import NexusAPIClient from '../api/client';
-
-type ConfirmationData = ComponentProps<typeof OAuthConfirmation>['confirmationData'];
 
 export default function OAuthCallback() {
-  const [searchParams] = useSearchParams();
+  const [searchParams] = useState(() => new URLSearchParams(window.location.search));
   const navigate = useNavigate();
-  const { apiClient, completeUserLogin } = useAuth();
-  const [status, setStatus] = useState<'processing' | 'success' | 'error' | 'confirmation'>('processing');
+  const { apiClient } = useAuth();
+  const { completeLogin } = useAccount();
+  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [message, setMessage] = useState('Processing OAuth callback...');
-  const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
   const [provider] = useState(() => sessionStorage.getItem('oauth_provider'));
   const hasProcessedRef = useRef(false);
 
   useEffect(() => {
     if (hasProcessedRef.current) return;
     hasProcessedRef.current = true;
+    window.history.replaceState(window.history.state, '', window.location.pathname);
     const inPopup = window.opener && !window.opener.closed;
 
     const completeCallback = async () => {
@@ -29,12 +29,9 @@ export default function OAuthCallback() {
         const code = searchParams.get('code');
         const state = searchParams.get('state');
         if (!code || !state) throw new Error('Missing authorization code or state parameter');
-        if (sessionStorage.getItem('oauth_state') !== state) {
-          throw new Error('The sign-in state does not match this browser. Please start again.');
-        }
-        if (!apiClient) throw new Error('Please configure your Nexus server before signing in.');
-
         if (provider) {
+          if (sessionStorage.getItem('oauth_state') !== state) throw new Error('The sign-in state does not match this browser. Please start again.');
+          if (!apiClient) throw new Error('Please configure your Nexus server before signing in.');
           setMessage('Connecting your integration...');
           const result = await apiClient.oauthExchangeCode({
             provider,
@@ -56,29 +53,25 @@ export default function OAuthCallback() {
         }
 
         setMessage('Signing in with Google...');
-        const response = await new NexusAPIClient(apiClient.getBaseURL()).authOAuthCheck({ provider: 'google', code, state });
-        if (response.needs_confirmation) {
-          setConfirmationData(response);
-          setStatus('confirmation');
-          return;
-        }
-        completeUserLogin(response);
-        sessionStorage.removeItem('oauth_state');
-        navigate('/', { replace: true });
-      } catch (error: any) {
-        const detail = error.response?.data?.detail || error.message || 'Unknown error';
+        const serverUrl = consumeGoogleLogin(state);
+        const response = await createAccountsAPI(serverUrl).finishGoogle(code, state);
+        completeLogin(serverUrl, response);
+        navigate('/account', { replace: true });
+      } catch (error) {
+        const detail = accountErrorMessage(error, 'Unknown error');
         setStatus('error');
         setMessage(`Failed to sign in: ${detail}`);
         if (inPopup) {
           window.opener.postMessage({ type: 'oauth_error', error: detail }, window.location.origin);
           setTimeout(() => window.close(), 2000);
         }
+      } finally {
+        for (const key of ['oauth_code', 'oauth_state', 'oauth_provider']) sessionStorage.removeItem(key);
+        clearGoogleLogin();
       }
     };
     void completeCallback();
-  }, [searchParams, navigate, apiClient, completeUserLogin, provider]);
-
-  if (status === 'confirmation' && confirmationData) return <OAuthConfirmation confirmationData={confirmationData} />;
+  }, [searchParams, navigate, apiClient, completeLogin, provider]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

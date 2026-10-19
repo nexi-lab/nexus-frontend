@@ -1,11 +1,12 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { AccountProvider } from './contexts/AccountContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ConnectionQueries } from './contexts/QueryProvider';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { ConnectionQueries } from './contexts/QueryProvider';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
-import OAuthCallback from './pages/OAuthCallback';
 import Login from './pages/Login';
+import OAuthCallback from './pages/OAuthCallback';
 import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
 import './index.css';
@@ -20,19 +21,33 @@ const Agent = lazy(async () => ({ default: (await import('./pages/Agent')).Agent
 const Workspace = lazy(async () => ({ default: (await import('./pages/Workspace')).Workspace }));
 const Memory = lazy(async () => ({ default: (await import('./pages/Memory')).Memory }));
 const Settings = lazy(() => import('./pages/Settings'));
+const Account = lazy(() => import('./pages/Account'));
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isUserAuthenticated, isAuthenticated, isResolvingIdentity, identityError } = useAuth();
+function ProtectedRoute() {
+  const { isAuthenticated, isResolvingIdentity, identityError } = useAuth();
 
-  if (isResolvingIdentity) return <p role="status">Verifying your Nexus connection...</p>;
-  if (identityError) return <div role="alert">{identityError} <button type="button" onClick={() => window.location.reload()}>Retry</button></div>;
+  if (isResolvingIdentity) return <output>Verifying your Nexus connection...</output>;
+  if (identityError)
+    return (
+      <div role="alert">
+        {identityError}{' '}
+        <button type="button" onClick={() => window.location.reload()}>
+          Retry
+        </button>
+      </div>
+    );
 
-  // Allow access if either user account (JWT) or API key is authenticated
-  if (!isUserAuthenticated && !isAuthenticated) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  return <Suspense fallback={<p role="status">Loading...</p>}>{children}</Suspense>;
+  return (
+    <ConnectionQueries>
+      <Suspense fallback={<output>Loading...</output>}>
+        <Outlet />
+      </Suspense>
+    </ConnectionQueries>
+  );
 }
 
 function AppContent() {
@@ -51,31 +66,41 @@ function AppContent() {
         }}
       />
       <AuthProvider>
-        <ConnectionQueries>
+        <AccountProvider>
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<ProtectedRoute><FileBrowser /></ProtectedRoute>} />
-              <Route path="/files" element={<ProtectedRoute><FileBrowser /></ProtectedRoute>} />
-              <Route path="/admin" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
-              <Route path="/integration" element={<ProtectedRoute><Integration /></ProtectedRoute>} />
-              <Route path="/connector" element={<ProtectedRoute><Connector /></ProtectedRoute>} />
-              <Route path="/skills" element={<ProtectedRoute><Skill /></ProtectedRoute>} />
-              <Route path="/skill" element={<Navigate to="/skills" replace />} />
-              <Route path="/agent" element={<ProtectedRoute><Agent /></ProtectedRoute>} />
-              <Route path="/workspace" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
-              <Route path="/memory" element={<ProtectedRoute><Memory /></ProtectedRoute>} />
-              <Route path="/mounts" element={<Navigate to="/connector" replace />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<FileBrowser />} />
+                <Route path="/files" element={<FileBrowser />} />
+                <Route path="/admin" element={<AdminSettings />} />
+                <Route path="/integration" element={<Integration />} />
+                <Route path="/connector" element={<Connector />} />
+                <Route path="/skills" element={<Skill />} />
+                <Route path="/skill" element={<Navigate to="/skills" replace />} />
+                <Route path="/agent" element={<Agent />} />
+                <Route path="/workspace" element={<Workspace />} />
+                <Route path="/memory" element={<Memory />} />
+                <Route path="/mounts" element={<Navigate to="/connector" replace />} />
+                <Route path="/settings" element={<Settings />} />
+              </Route>
               <Route path="/oauth/callback" element={<OAuthCallback />} />
 
               {/* User Authentication Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/profile" element={<Navigate to="/settings" replace />} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/profile" element={<Navigate to="/account" replace />} />
+              <Route
+                path="/account"
+                element={
+                  <Suspense fallback={<output>Loading...</output>}>
+                    <Account />
+                  </Suspense>
+                }
+              />
             </Routes>
           </BrowserRouter>
-        </ConnectionQueries>
+        </AccountProvider>
       </AuthProvider>
     </>
   );

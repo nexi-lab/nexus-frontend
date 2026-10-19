@@ -1,8 +1,8 @@
 import { Loader2 } from 'lucide-react';
-import { isAxiosError } from 'axios';
 import { useState } from 'react';
-import NexusAPIClient from '@/api/client';
+import { accountErrorMessage } from '@/api/accounts';
 import GoogleIcon from '@/assets/icon_google.svg?react';
+import { startGoogleLogin } from '@/auth/google';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from './ui/button';
 
@@ -17,19 +17,9 @@ export default function ThirdAuth({ apiUrl: configuredUrl }: ThirdAuthProps) {
     setIsGoogleLoading(true);
     setError(null);
     try {
-      const client = new NexusAPIClient(serverUrl);
-      const { auth_url, state } = await client.authGoogleAuthorize();
-      const authorizationUrl = new URL(auth_url);
-      if (authorizationUrl.protocol !== 'https:' || !state) {
-        throw new Error('The server returned an invalid Google sign-in response.');
-      }
-      sessionStorage.setItem('oauth_state', state);
-      sessionStorage.removeItem('oauth_provider');
-      localStorage.setItem('nexus_api_url', serverUrl);
-      window.location.assign(authorizationUrl.href);
+      await startGoogleLogin(serverUrl);
     } catch (failure) {
-      const detail = isAxiosError(failure) ? failure.response?.data?.detail : failure instanceof Error ? failure.message : null;
-      setError(typeof detail === 'string' ? detail : 'Google sign-in could not start. Please check your Nexus connection.');
+      setError(accountErrorMessage(failure, 'Google sign-in could not start. Please check your Nexus connection.'));
       setIsGoogleLoading(false);
     }
   };

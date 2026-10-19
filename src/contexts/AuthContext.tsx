@@ -9,22 +9,6 @@ interface UserInfo {
   user?: string;
 }
 
-// User account information (for JWT authentication)
-interface UserAccount {
-  user_id: string;
-  email: string;
-  username: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
-  primary_auth_method: string;
-  is_global_admin: boolean;
-  email_verified: boolean;
-  api_key: string | null;
-  tenant_id: string | null;
-  created_at: string;
-  last_login_at: string | null;
-}
-
 interface AuthContextType {
   // API Key authentication (backend auth)
   apiUrl: string | null;
@@ -33,50 +17,27 @@ interface AuthContextType {
   isResolvingIdentity: boolean;
   identityError: string | null;
   userInfo: UserInfo | null;
-  login: (apiKey: string) => Promise<UserInfo>;
   logout: () => void;
   apiClient: NexusAPIClient | null;
   updateConnection: (apiUrl: string, apiKey: string) => Promise<UserInfo>;
-
-  // User JWT authentication (user accounts)
-  jwtToken: string | null;
-  userAccount: UserAccount | null;
-  isUserAuthenticated: boolean;
-  userLogin: (identifier: string, password: string) => Promise<UserAccount>;
-  completeUserLogin: (session: AuthenticatedUserSession) => UserAccount;
-  userLogout: () => void;
-  updateUserProfile: (displayName?: string, avatarUrl?: string) => Promise<UserAccount>;
-  changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
-  deleteAccount: () => Promise<void>;
-}
-
-interface AuthenticatedUserSession {
-  token: string;
-  user: Omit<UserAccount, 'api_key' | 'tenant_id'> & Partial<Pick<UserAccount, 'api_key' | 'tenant_id'>>;
-  api_key?: string | null;
-  tenant_id?: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_KEY_STORAGE_KEY = 'nexus_api_key';
-const USER_INFO_STORAGE_KEY = 'nexus_user_info';
 const API_URL_STORAGE_KEY = 'nexus_api_url';
-const JWT_TOKEN_STORAGE_KEY = 'nexus_jwt_token';
-const USER_ACCOUNT_STORAGE_KEY = 'nexus_user_account';
+const OBSOLETE_IDENTITY_KEYS = [
+  'nexus_jwt_token',
+  'nexus_user_account',
+  'nexus_user_info',
+  'nexus_user_api_key',
+  'nexus_tenant_id',
+  'nexus_last_oauth_debug',
+  'nexus_last_oauth_error',
+];
 
 const clearStoredIdentity = () => {
-  for (const key of [
-    API_KEY_STORAGE_KEY,
-    JWT_TOKEN_STORAGE_KEY,
-    USER_ACCOUNT_STORAGE_KEY,
-    USER_INFO_STORAGE_KEY,
-    'nexus_user_api_key',
-    'nexus_tenant_id',
-    'nexus_last_oauth_debug',
-    'nexus_last_oauth_error',
-  ])
-    localStorage.removeItem(key);
+  for (const key of [API_KEY_STORAGE_KEY, ...OBSOLETE_IDENTITY_KEYS]) localStorage.removeItem(key);
 };
 
 // Get API URL from localStorage or environment
@@ -113,6 +74,9 @@ const getApiURL = (): string | null => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    for (const key of OBSOLETE_IDENTITY_KEYS) localStorage.removeItem(key);
+  }, []);
   const [apiUrl, setApiUrl] = useState<string | null>(() => {
     // Initialize API URL from localStorage (no default)
     return getApiURL();
@@ -124,23 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return storedKey || null;
   });
 
-  // User JWT authentication state
-  const [jwtToken, setJwtToken] = useState<string | null>(() => {
-    const storedToken = localStorage.getItem(JWT_TOKEN_STORAGE_KEY);
-    return storedToken || null;
-  });
-
-  const [userAccount, setUserAccount] = useState<UserAccount | null>(() => {
-    const storedAccount = localStorage.getItem(USER_ACCOUNT_STORAGE_KEY);
-    try {
-      return storedAccount ? JSON.parse(storedAccount) : null;
-    } catch {
-      localStorage.removeItem(USER_ACCOUNT_STORAGE_KEY);
-      return null;
-    }
-  });
-
-  const credential = userAccount?.api_key || jwtToken || apiKey;
+  const credential = apiKey;
   const apiClient = useMemo(() => (apiUrl ? new NexusAPIClient(apiUrl, credential || undefined) : null), [apiUrl, credential]);
   const [identity, setIdentity] = useState<{
     url: string;
@@ -176,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       } catch (error) {
         if (!active) return;
-        if (error instanceof AuthenticationError) userLogout();
+        if (error instanceof AuthenticationError) logout();
         else setIdentity({ url: apiUrl, credential, info: null, error: 'Unable to verify your Nexus connection. Please try again.' });
       }
     };
@@ -185,20 +133,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false;
     };
   }, [apiUrl, credential, apiClient]);
-
-  const login = async (newApiKey: string): Promise<UserInfo> => {
-    if (!apiUrl) {
-      throw new Error('API URL is required. Please configure the Nexus server URL first.');
-    }
-    return updateConnection(apiUrl, newApiKey);
-  };
-
-  const logout = async () => {
-    if (!confirm('Are you sure you want to logout?')) {
-      return;
-    }
-    userLogout();
-  };
 
   const updateConnection = async (newApiUrl: string, newApiKey: string): Promise<UserInfo> => {
     // Create a temporary client with the new settings
@@ -221,8 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     // Store API URL, API key, and user info
-    setJwtToken(null);
-    setUserAccount(null);
     clearStoredIdentity();
     localStorage.setItem(API_URL_STORAGE_KEY, newApiUrl);
     localStorage.setItem(API_KEY_STORAGE_KEY, newApiKey);
@@ -235,83 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return newUserInfo;
   };
 
-  // User authentication methods
-  const completeUserLogin = (session: AuthenticatedUserSession): UserAccount => {
-    const account: UserAccount = {
-      ...session.user,
-      api_key: 'api_key' in session ? (session.api_key ?? null) : (session.user.api_key ?? null),
-      tenant_id: 'tenant_id' in session ? (session.tenant_id ?? null) : (session.user.tenant_id ?? null),
-    };
+  const logout = () => {
     setApiKey(null);
     setIdentity(null);
     clearStoredIdentity();
-    setJwtToken(session.token);
-    setUserAccount(account);
-    localStorage.setItem(JWT_TOKEN_STORAGE_KEY, session.token);
-    localStorage.setItem(USER_ACCOUNT_STORAGE_KEY, JSON.stringify(account));
-    return account;
-  };
-
-  const userLogin = async (identifier: string, password: string): Promise<UserAccount> => {
-    if (!apiClient) {
-      throw new Error('API URL is required. Please configure the Nexus server URL first.');
-    }
-    const response = await apiClient.authLogin({ identifier, password });
-
-    return completeUserLogin(response);
-  };
-
-  const userLogout = () => {
-    setApiKey(null);
-    setJwtToken(null);
-    setUserAccount(null);
-    setIdentity(null);
-    clearStoredIdentity();
-  };
-
-  const updateUserProfile = async (displayName?: string, avatarUrl?: string): Promise<UserAccount> => {
-    if (!apiClient) {
-      throw new Error('API URL is required. Please configure the Nexus server URL first.');
-    }
-    const updatedUser = await apiClient.authUpdateProfile({
-      display_name: displayName,
-      avatar_url: avatarUrl,
-    });
-
-    setUserAccount(updatedUser);
-    localStorage.setItem(USER_ACCOUNT_STORAGE_KEY, JSON.stringify(updatedUser));
-
-    return updatedUser;
-  };
-
-  const changePassword = async (oldPassword: string, newPassword: string): Promise<void> => {
-    if (!apiClient) {
-      throw new Error('API URL is required. Please configure the Nexus server URL first.');
-    }
-    await apiClient.authChangePassword({
-      current_password: oldPassword,
-      new_password: newPassword,
-    });
-  };
-
-  const deleteAccount = async (): Promise<void> => {
-    if (!apiClient) {
-      throw new Error('API URL is required. Please configure the Nexus server URL first.');
-    }
-    if (!userAccount) {
-      throw new Error('No user account found');
-    }
-
-    // Call deprovision_user RPC method
-    await apiClient.call('deprovision_user', {
-      user_id: userAccount.user_id,
-      tenant_id: userAccount.tenant_id,
-      delete_user_record: true,
-      force: false,
-    });
-
-    // Clear all local state and logout
-    userLogout();
   };
 
   const value: AuthContextType = {
@@ -322,21 +181,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isResolvingIdentity,
     identityError,
     userInfo,
-    login,
     logout,
     apiClient,
     updateConnection,
-
-    // User JWT authentication
-    jwtToken,
-    userAccount,
-    isUserAuthenticated: !!userInfo && !!jwtToken && !!userAccount,
-    userLogin,
-    completeUserLogin,
-    userLogout,
-    updateUserProfile,
-    changePassword,
-    deleteAccount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -40,7 +40,7 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated, isUserAuthenticated, logout, apiUrl, userInfo, userAccount, userLogout } = useAuth();
+  const { isAuthenticated, logout, apiUrl, userInfo } = useAuth();
   const { t } = useTranslation();
   const filesAPI = useMemo(() => createFilesAPI(apiClient), [apiClient]);
   const [currentPath, setCurrentPath] = useState('/');
@@ -82,7 +82,7 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
         return [];
       }
     },
-    enabled: !!(isAuthenticated || isUserAuthenticated) && !!apiClient && !!userInfo,
+    enabled: isAuthenticated && !!apiClient && !!userInfo,
     staleTime: 30 * 1000, // 30 seconds
   });
 
@@ -98,12 +98,12 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
 
   useEffect(() => {
     // Only show provisioning if authenticated, workspaces loaded, and not provisioned
-    if ((isAuthenticated || isUserAuthenticated) && !loadingWorkspaces && !isProvisioned && userInfo) {
+    if (isAuthenticated && !loadingWorkspaces && !isProvisioned && userInfo) {
       setNeedsProvisioning(true);
     } else {
       setNeedsProvisioning(false);
     }
-  }, [isAuthenticated, isUserAuthenticated, loadingWorkspaces, isProvisioned, userInfo]);
+  }, [isAuthenticated, loadingWorkspaces, isProvisioned, userInfo]);
 
   const handleWorkspaceCreated = () => {
     // Refresh file list and reset provisioning state
@@ -346,12 +346,7 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
               variant="ghost"
               size="sm"
               onClick={() => {
-                // Use appropriate logout function
-                if (isUserAuthenticated) {
-                  userLogout();
-                } else {
-                  logout();
-                }
+                logout();
                 navigate('/login');
               }}
               className="text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -370,16 +365,15 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
             <h1 className="text-2xl font-bold">{t('landing.nexus')}</h1>
           </div>
           <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-2 items-center">
-            {(isAuthenticated || isUserAuthenticated) ? (
+            {isAuthenticated ? (
               <>
-                {/* Show user info from OAuth account or API key auth */}
-                {(userAccount?.email || userInfo?.user) && (
+                {userInfo?.user && (
                   <span className="min-w-0 break-all text-sm text-muted-foreground mr-2">
-                    <span className="font-medium">{t('landing.user')}:</span> {userAccount?.email || userInfo?.user}
-                    {(userAccount?.tenant_id || userInfo?.tenant_id) && (
+                    <span className="font-medium">{t('landing.user')}:</span> {userInfo.user}
+                    {userInfo.tenant_id && (
                       <>
                         <span className="mx-2">|</span>
-                        <span className="font-medium">{t('landing.tenant')}:</span> {userAccount?.tenant_id || userInfo?.tenant_id}
+                        <span className="font-medium">{t('landing.tenant')}:</span> {userInfo.tenant_id}
                       </>
                     )}
                     {apiUrl && (
@@ -420,12 +414,7 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    // Use appropriate logout function
-                    if (isUserAuthenticated) {
-                      userLogout();
-                    } else {
-                      logout();
-                    }
+                    logout();
                     navigate('/login');
                   }}
                 >

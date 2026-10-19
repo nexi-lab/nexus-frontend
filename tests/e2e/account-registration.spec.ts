@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
+import { verificationLink } from './accounts';
 import { backend, prepareBrowser } from './backend';
 
 const password = 'browser-registration-password-2026';
@@ -22,19 +23,7 @@ test('registration verifies a real Rust account through SMTP without creating br
   await expect(page.getByRole('status')).toHaveText('Verification request accepted. Check your inbox.');
   const facts = async () => (await (await request.get(`${backend}/__fixture/account-facts`, { params: { email } })).json()).users;
   expect(await facts()).toEqual([{ email_verified: 0, zone_id: null, api_key: null, is_global_admin: 0 }]);
-  await expect
-    .poll(async () => {
-      const { messages } = await (await request.get(`${backend}/__fixture/mail`)).json();
-      return messages.some((message: string) => message.includes(email));
-    })
-    .toBe(true);
-  const { messages } = await (await request.get(`${backend}/__fixture/mail`)).json();
-  const message = messages
-    .find((message: string) => message.includes(email))
-    .replaceAll('=\r\n', '')
-    .replaceAll('=3D', '=');
-  const link = message.match(/http:\/\/127\.0\.0\.1:4173\/verify-email\?token=[\w.%-]+/)?.[0];
-  expect(link).toBeTruthy();
+  const link = await verificationLink(request, email);
   await page.goto(link);
   await expect(page).toHaveURL('/verify-email');
   await page.getByLabel('Nexus Server URL').fill(backend);

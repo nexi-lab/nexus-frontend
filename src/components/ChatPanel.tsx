@@ -501,9 +501,8 @@ function ChatPanelContent({
 }
 
 export function ChatPanel({ isOpen, onClose, initialSelectedAgentId, openedFilePath }: ChatPanelProps) {
-  const { apiKey, apiUrl, userInfo, apiClient, userAccount } = useAuth();
-  // User's personal API key: prefer userAccount.api_key (OAuth users), fallback to apiKey (direct API key auth)
-  const userPersonalApiKey = userAccount?.api_key || apiKey || '';
+  const { apiKey, apiUrl, userInfo, apiClient } = useAuth();
+  const userPersonalApiKey = apiKey || '';
   // filesAPI always uses user's API key from AuthContext (not agent's key)
   const filesAPI = apiClient ? createFilesAPI(apiClient) : null;
   const registerAgentMutation = useRegisterAgent();

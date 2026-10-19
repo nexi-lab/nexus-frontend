@@ -12,7 +12,9 @@ Enter the server URL on the login screen. API key login resolves the credential 
 
 File name and content searches use the same caller credential with native `POST /v2/search/glob` and `/v2/search/grep`. Search errors remain visible, truncated results prompt a narrower query, and clearing or changing a query discards its pending response. Results are held only in memory.
 
-Google sign-in starts at the selected server's `/auth/oauth/google/authorize` endpoint. The server must verify the provider identity and browser binding, then return the user's own Nexus credentials. New users review their account information before confirmation. The frontend does not contain a shared login credential or verify Google identities itself.
+Account password login and Google sign-in open `/account`, where users can update their profile and change a password. Google starts at the selected server's `/auth/oauth/google/authorize` endpoint and finishes with `/auth/oauth/google/callback`. The Rust account service verifies the provider identity and its HttpOnly browser binding before issuing an account JWT. Callback parameters are removed from the address bar.
+
+The tab retains only the account server and JWT in session storage; profile facts are fetched from Rust after a refresh. Native file access uses the separately configured API key and verified `whoami` identity. Account sign-in and sign-out preserve that connection, and rejection of either credential clears only its own session. Account profile roles and zones grant no native permissions.
 
 ## Verification
 
@@ -27,7 +29,9 @@ pnpm run test:e2e
 
 Registration and email verification run against the actual Rust account binary, a temporary SQLite database initialized from that source's canonical fixture, and a loopback SMTP server. The browser opens the link delivered by Rust, verifies the durable email fact and checks that registration creates no browser session or native credential. A failed verification request can be resent without registering again. Verification tokens stay in page memory and are removed from the address bar. The selected server must be confirmed before submitting a token.
 
-The other journeys use a local HTTP protocol fixture. They exercise server selection, credential replacement, account confirmation, password changes, browser cookies, rejected callbacks, revocation, cached administrator flags, native file discovery, explicit errors, truncation, late responses, a 1 MiB login JavaScript budget and a 2 MiB browsing/text budget. Provider navigation is simulated; these tests do not prove a real Google exchange or native credential handoff.
+Password login, profile refresh/editing and password changes also use the actual Rust account binary. Cases cover unverified accounts, rejected passwords, durable profile edits, independent account/native logout and credential rejection, and the absence of native grants.
+
+The other journeys use a local HTTP protocol fixture. They exercise Google server selection and its Rust callback wire contract, browser cookies, rejected callbacks, revocation, cached administrator flags, native file discovery, explicit errors, truncation, late responses, a 1 MiB login JavaScript budget and a 2 MiB browsing/text budget. Provider navigation is simulated; these tests do not prove a real Google exchange or native credential handoff. File-read faults are configured before navigation and affect reads alone; directory-wide failures have a separate case.
 
 CI builds the account binary from the pinned validated Nexus revision in its workflow and runs the same browser journeys without retries. For local acceptance, build `nexusd-accounts` from that revision and set both paths above. For a locally installed Chrome, set `NEXUS_TEST_CHROME` to its executable path. The test browser uses an isolated profile and blocks external requests. Teardown stops the Rust process and removes the temporary account database.
 
@@ -39,4 +43,4 @@ The browser serves the production frontend on port 4173 and connects directly to
 
 ## Migration status
 
-Identity, status, files and file discovery use native `/v2` endpoints. Registration and email verification use the Rust account contract and create no login credentials. Account login, Google callbacks, native credential handoff and the remaining `/api/nfs/*` consumers still require migration before Python server retirement.
+Identity, status, files and file discovery use native `/v2` endpoints. Registration, email verification, password login, profile edits, password changes and Google callbacks use the Rust account contract. Native credential handoff, account deletion and the remaining `/api/nfs/*` consumers still require work before Python server retirement. The frontend remains a draft until those contracts and real integration acceptance are complete.
