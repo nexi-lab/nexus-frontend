@@ -37,6 +37,7 @@ jobs:
       - name: Retain container diagnostics and clean up
         if: always()
         run: |
+          docker inspect --format '{{json .State.Health}}' frontend-acceptance || true
           docker logs frontend-acceptance || true
           docker rm --force frontend-acceptance || true
 

@@ -10,9 +10,10 @@ export async function verifyManagement({ page, uiUrl, nativeUrl, adminRequest, f
   await page.getByLabel('Name', { exact: true }).fill(label);
   await page.getByLabel('Subject ID', { exact: true }).fill(subject);
   await page.getByLabel('Zone grants', { exact: false }).fill('sharedzone:r');
-  const minted = page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/auth/keys` && response.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Create credential', exact: true }).click();
-  const response = await minted;
+  const [response] = await Promise.all([
+    page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/auth/keys` && response.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Create credential', exact: true }).click(),
+  ]);
   assert.equal(response.status(), 200);
   const credential = await response.json();
   assert.equal(typeof credential.key, 'string');
@@ -43,9 +44,11 @@ export async function verifyManagement({ page, uiUrl, nativeUrl, adminRequest, f
   await page.getByLabel('Zone', { exact: true }).fill('sharedzone');
   await page.getByLabel('Subject ID', { exact: true }).fill(subject);
   await page.getByLabel('Relation', { exact: true }).fill('reader');
-  const granted = page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/rebac/tuples` && response.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Grant relationship', exact: true }).click();
-  assert.equal((await granted).status(), 200);
+  const [granted] = await Promise.all([
+    page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/rebac/tuples` && response.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Grant relationship', exact: true }).click(),
+  ]);
+  assert.equal(granted.status(), 200);
   grants.push(tuple);
   const revoke = page.getByRole('button', { name: `Revoke user:${subject} reader`, exact: true });
   await revoke.waitFor();
@@ -54,18 +57,22 @@ export async function verifyManagement({ page, uiUrl, nativeUrl, adminRequest, f
   assert.equal(await allowed.text(), 'saved after rename ✓');
   const listed = await (await adminRequest('/v2/rebac/tuples?zone=sharedzone')).json();
   assert(listed.tuples.some((item) => Object.entries(tuple).every(([key, value]) => item[key] === value)));
-  const revoked = page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/rebac/tuples` && response.request().method() === 'DELETE');
-  await revoke.click();
-  assert.equal((await revoked).status(), 200);
+  const [revoked] = await Promise.all([
+    page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/rebac/tuples` && response.request().method() === 'DELETE'),
+    revoke.click(),
+  ]);
+  assert.equal(revoked.status(), 200);
   await revoke.waitFor({ state: 'detached' });
   assert.equal((await read()).status, 403);
   await page.goto(`${uiUrl}/admin`);
+  const revokeKey = page.getByRole('button', { name: `Revoke ${label}`, exact: true });
+  await revokeKey.waitFor();
   page.once('dialog', (dialog) => dialog.accept());
-  const removed = page.waitForResponse(
-    (response) => response.url() === `${nativeUrl}/v2/auth/keys/${credential.key_hash}` && response.request().method() === 'DELETE',
-  );
-  await page.getByRole('button', { name: `Revoke ${label}`, exact: true }).click();
-  assert.equal((await removed).status(), 200);
+  const [removed] = await Promise.all([
+    page.waitForResponse((response) => response.url() === `${nativeUrl}/v2/auth/keys/${credential.key_hash}` && response.request().method() === 'DELETE'),
+    revokeKey.click(),
+  ]);
+  assert.equal(removed.status(), 200);
   await page.getByRole('heading', { name: label, exact: true }).waitFor({ state: 'detached' });
   const whoami = await fetch(`${nativeUrl}/v2/auth/whoami`, { headers: { authorization: `Bearer ${credential.key}` }, signal: AbortSignal.timeout(15000) });
   assert.equal(whoami.status, 401);
