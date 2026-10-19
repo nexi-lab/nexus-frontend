@@ -51,7 +51,7 @@ export default function Settings() {
             <dt>Subject Type</dt>
             <dd>{userInfo.subject_type}</dd>
             <dt>Zone</dt>
-            <dd>{userInfo.tenant_id}</dd>
+            <dd>{userInfo.zone_id}</dd>
           </dl>
         </section>
         {apiKey && (

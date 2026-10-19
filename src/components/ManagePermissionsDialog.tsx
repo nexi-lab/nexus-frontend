@@ -1,11 +1,11 @@
-import { Loader2, Plus, RefreshCw, Shield, Trash2, User, Users } from 'lucide-react';
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { type FormEvent, useMemo, useState } from 'react';
+import type NexusAPIClient from '../api/client';
+import { createPermissionsAPI, type NativeTuple, tupleIdentity } from '../api/permissions';
 import { useAuth } from '../contexts/AuthContext';
-import { useFilePermissions } from '../hooks/usePermissions';
+import { NexusConnection } from './NexusConnection';
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { Input } from './ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 
 interface ManagePermissionsDialogProps {
   open: boolean;
@@ -13,211 +13,117 @@ interface ManagePermissionsDialogProps {
   filePath: string;
 }
 
-const relationLabels: Record<string, { label: string; color: string }> = {
-  direct_owner: { label: 'Owner', color: 'text-red-600 bg-red-50 border-red-200' },
-  direct_editor: { label: 'Editor', color: 'text-orange-600 bg-orange-50 border-orange-200' },
-  direct_viewer: { label: 'Viewer', color: 'text-blue-600 bg-blue-50 border-blue-200' },
-  owner: { label: 'Owner', color: 'text-red-600 bg-red-50 border-red-200' },
-  editor: { label: 'Editor', color: 'text-orange-600 bg-orange-50 border-orange-200' },
-  viewer: { label: 'Viewer', color: 'text-blue-600 bg-blue-50 border-blue-200' },
-};
+export function ManagePermissionsDialog(props: ManagePermissionsDialogProps) {
+  const { userInfo } = useAuth();
+  if (!userInfo?.is_admin || !props.open) return null;
+  return <NexusConnection>{(client) => <Permissions {...props} client={client} initialZone={userInfo.zone_id} />}</NexusConnection>;
+}
 
-const subjectTypeIcons: Record<string, any> = {
-  user: User,
-  group: Users,
-};
-
-export function ManagePermissionsDialog({ open, onOpenChange, filePath }: ManagePermissionsDialogProps) {
-  const { apiClient } = useAuth();
-  
-  if (!apiClient) {
-    return null;
-  }
-  
-  const { data: rawPermissions, isLoading, refetch } = useFilePermissions(filePath);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [granting, setGranting] = useState(false);
-  const [newUserId, setNewUserId] = useState('');
-  const [newPermission, setNewPermission] = useState<string>('direct_viewer');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  // Use raw fields directly from backend
-  const permissions = rawPermissions?.map((perm: any) => ({
-    tuple_id: perm.tuple_id,
-    subject_type: perm.subject_type,
-    subject_id: perm.subject_id,
-    relation: perm.relation,
-    object_type: perm.object_type,
-    object_id: perm.object_id,
-    created_at: perm.created_at,
-  }));
-
-  const handleDelete = async (tupleId: string) => {
-    setDeleting(tupleId);
-    setError(null);
-    setSuccess(null);
-
+function Permissions({ client, initialZone, filePath, ...props }: ManagePermissionsDialogProps & { client: NexusAPIClient; initialZone: string }) {
+  const api = useMemo(() => createPermissionsAPI(client), [client]);
+  const [zone, setZone] = useState(initialZone);
+  const [subjectType, setSubjectType] = useState('user');
+  const [subject, setSubject] = useState('');
+  const [relation, setRelation] = useState('');
+  const [subjectRelation, setSubjectRelation] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const tuples = useQuery({ queryKey: ['native-relationships', zone], queryFn: () => api.list(zone), enabled: !!zone });
+  const relationships = tuples.data?.filter((tuple) => tuple.object_type === 'file' && tuple.object_id === filePath);
+  const grant = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
     try {
-      await apiClient.rebacDelete({ tuple_id: tupleId });
-      setSuccess('Permission removed successfully');
-      refetch();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove permission');
-    } finally {
-      setDeleting(null);
-    }
-  };
-
-  const handleGrant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (!newUserId.trim()) {
-      setError('User ID is required');
-      return;
-    }
-
-    setGranting(true);
-
-    try {
-      await apiClient.rebacCreate({
-        subject: ['user', newUserId.trim()],
-        relation: newPermission,
-        object: ['file', filePath],
-        tenant_id: 'default',
+      await api.grant({
+        zone,
+        object_type: 'file',
+        object_id: filePath,
+        relation: relation.trim(),
+        subject_type: subjectType.trim(),
+        subject_id: subject.trim(),
+        ...(subjectRelation.trim() ? { subject_relation: subjectRelation.trim() } : {}),
       });
-      setSuccess(`Permission granted to ${newUserId}`);
-      setNewUserId('');
-      setNewPermission('direct_viewer');
-      refetch();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to grant permission');
+      await tuples.refetch();
+      setSubject('');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to grant relationship.');
     } finally {
-      setGranting(false);
+      setBusy(false);
     }
   };
-
+  const revoke = async (tuple: NativeTuple) => {
+    setBusy(true);
+    setError('');
+    try {
+      await api.revoke(tuple);
+      await tuples.refetch();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to revoke relationship.');
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col">
+    <Dialog {...props}>
+      <DialogContent className="max-h-[85vh] overflow-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Manage Permissions
-          </DialogTitle>
-          <DialogDescription>
-            Control who has access to: <code className="text-xs bg-muted px-1 py-0.5 rounded">{filePath}</code>
-          </DialogDescription>
+          <DialogTitle>Manage Permissions</DialogTitle>
+          <DialogDescription>Relationships for {filePath}</DialogDescription>
         </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto py-4 space-y-6">
-          {/* Current Permissions */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium">Current Permissions</span>
-              <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
-                <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+        <label className="block">
+          Zone
+          <input className="block w-full rounded border p-2" required disabled={busy} value={zone} onChange={(event) => setZone(event.target.value)} />
+        </label>
+        <Button onClick={() => tuples.refetch()} disabled={!zone || tuples.isFetching || busy}>
+          Refresh relationships
+        </Button>
+        {tuples.isLoading && <output>Loading relationships...</output>}
+        {tuples.error && <p role="alert">{tuples.error.message}</p>}
+        {!tuples.isLoading && !tuples.error && relationships?.length === 0 && <p>No relationships for this file.</p>}
+        <ul className="space-y-2">
+          {relationships?.map((tuple) => (
+            <li key={tupleIdentity(tuple)} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2">
+              <span>
+                {tuple.subject_type}:{tuple.subject_id}
+                {tuple.subject_relation ? `#${tuple.subject_relation}` : ''} — {tuple.relation}
+              </span>
+              <Button
+                variant="destructive"
+                disabled={busy}
+                onClick={() => revoke(tuple)}
+                aria-label={`Revoke ${tuple.subject_type}:${tuple.subject_id} ${tuple.relation}`}
+              >
+                Revoke
               </Button>
-            </div>
-
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            ) : !permissions || permissions.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground border rounded-lg bg-muted/20">
-                <Shield className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No permissions set for this file</p>
-                <p className="text-xs mt-1">Add permissions below</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {permissions
-                  .filter((perm) => perm.relation.startsWith('direct_'))
-                  .map((perm) => {
-                    const relationInfo = relationLabels[perm.relation] || {
-                      label: perm.relation,
-                      color: 'text-gray-600 bg-gray-50 border-gray-200',
-                    };
-                    const Icon = subjectTypeIcons[perm.subject_type] || User;
-
-                    return (
-                      <div key={perm.tuple_id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                          <span className="text-sm font-medium truncate">{perm.subject_id}</span>
-                          <div className={`text-xs px-2 py-0.5 rounded border ${relationInfo.color} font-medium whitespace-nowrap`}>{relationInfo.label}</div>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(perm.tuple_id)} disabled={deleting === perm.tuple_id}>
-                          {deleting === perm.tuple_id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
-                        </Button>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-          </div>
-
-          {/* Add Permission Form */}
-          <div className="border-t pt-6">
-            <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Add New Permission
-            </h3>
-            <form onSubmit={handleGrant} className="space-y-3">
-              <div>
-                <label htmlFor="user-id" className="text-xs font-medium mb-1 block">
-                  User ID
-                </label>
-                <Input id="user-id" placeholder="alice" value={newUserId} onChange={(e) => setNewUserId(e.target.value)} disabled={granting} />
-              </div>
-
-              <div>
-                <label htmlFor="permission" className="text-xs font-medium mb-1 block">
-                  Permission Level
-                </label>
-                <Select value={newPermission} onValueChange={setNewPermission} disabled={granting}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="direct_viewer">Viewer (Read-only)</SelectItem>
-                    <SelectItem value="direct_editor">Editor (Read & Write)</SelectItem>
-                    <SelectItem value="direct_owner">Owner (Full control)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button type="submit" disabled={granting} className="w-full">
-                {granting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Granting...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Grant Permission
-                  </>
-                )}
-              </Button>
-            </form>
-          </div>
-
-          {/* Success/Error Messages */}
-          {success && <div className="bg-green-500/10 text-green-600 px-3 py-2 rounded-md text-sm">{success}</div>}
-          {error && <div className="bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm">{error}</div>}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        </DialogFooter>
+            </li>
+          ))}
+        </ul>
+        <form className="space-y-2 border-t pt-3" onSubmit={grant}>
+          <fieldset disabled={busy} className="space-y-2">
+            <h2 className="font-semibold">Grant relationship</h2>
+            <label className="block">
+              Subject type
+              <input className="block w-full rounded border p-2" required value={subjectType} onChange={(event) => setSubjectType(event.target.value)} />
+            </label>
+            <label className="block">
+              Subject ID
+              <input className="block w-full rounded border p-2" required value={subject} onChange={(event) => setSubject(event.target.value)} />
+            </label>
+            <label className="block">
+              Relation
+              <input className="block w-full rounded border p-2" required value={relation} onChange={(event) => setRelation(event.target.value)} />
+            </label>
+            <label className="block">
+              Subject relation (optional)
+              <input className="block w-full rounded border p-2" value={subjectRelation} onChange={(event) => setSubjectRelation(event.target.value)} />
+            </label>
+            <Button type="submit" disabled={!zone || busy}>
+              Grant relationship
+            </Button>
+          </fieldset>
+        </form>
+        {error && <p role="alert">{error}</p>}
       </DialogContent>
     </Dialog>
   );

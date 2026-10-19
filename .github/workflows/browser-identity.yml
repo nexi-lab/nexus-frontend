@@ -12,6 +12,14 @@ env:
   NEXUS_BACKEND_REVISION: 6809644192c95282ed3fcd9d7dcf06e5d9581995
 
 jobs:
+  container-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the static frontend image
+        run: docker build --tag nexus-frontend:acceptance .
+
   browser-identity:
     runs-on: ubuntu-latest
     timeout-minutes: 15

@@ -55,4 +55,16 @@ The same journey starts the actual Rust account service and SMTP fixture behind 
 
 ## Migration status
 
-Identity, status, files and file discovery use native `/v2` endpoints. Registration, email verification, password login, profile edits, password changes, account deletion and Google callbacks use the Rust account contract. Live Google acceptance and the remaining `/api/nfs/*` consumers still require work before Python server retirement. The frontend remains a draft until those contracts and real integration acceptance are complete.
+Identity, status, files, discovery, native credential administration and ReBAC relationships use native `/v2` endpoints. Registration, email verification, password login, profile edits, password changes, account deletion and Google callbacks use the Rust account contract. This frontend requires no Python RPC server. The frontend remains a draft pending live Google and deployment integration acceptance.
+
+The explorer displays the actual VFS tree. Files beneath mounts are ordinary files in that tree. Native administrators can list, mint and revoke credentials, and manage file relationships with an explicit zone and complete tuple fields. Credential plaintext is shown once in memory; the server remains the authority for roles, zone grants and relationships.
+
+HTML previews run in an iframe with an opaque origin, including fullscreen. PDF rendering uses a bundled worker from the frontend origin. Office and other binary files can be downloaded as their original bytes. File contents are never sent to an external conversion service.
+
+Browser regression journeys cover native management wire contracts, rejected or malformed responses, HTML origin isolation, real PDF pixels, byte-exact Office downloads, ancestor-aware bulk deletion and delayed file mutations. The actual native daemon journey additionally verifies credential and relationship changes through the UI and the resulting authorization decisions.
+
+## Development and container builds
+
+Copy `.env.example` to `.env.local` and configure the native and account services separately. Vite loads these values for development proxies. Native connection setup also accepts a complete server URL directly. Production server selection is explicit in the browser and can point to a gateway that routes `/auth` to the account service and `/v2` to the native daemon.
+
+The Dockerfile uses the same pinned pnpm version and lockfile as CI, builds with Node 22, and serves static assets with Nginx. `docker build -t nexus-frontend .` builds the image without deploying it. The PDF worker is served as JavaScript. No service credential belongs in a frontend build environment variable.

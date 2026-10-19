@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { startAccounts } from './accounts.mjs';
 import { createFilesFixture } from './files.mjs';
+import { createManagementFixture } from './management.mjs';
 
 const accounts = await startAccounts();
 
@@ -11,6 +12,8 @@ let calls = [];
 const attempts = new Map();
 const files = createFilesFixture();
 files.reset();
+const management = createManagementFixture();
+management.reset();
 const user = {
   user_id: 'server-alice',
   email: 'alice@example.test',
@@ -49,17 +52,19 @@ const server = createServer(async (request, response) => {
   const body = Buffer.concat(chunks);
   const value = body.length && request.headers['content-type']?.startsWith('application/json') ? JSON.parse(body.toString('utf8')) : {};
   const authorization = request.headers.authorization;
-  const principal = authorization === 'Bearer sk-fixture-previous' ? 'previous-user' : authorization === 'Bearer sk-fixture-server-alice' ? user.user_id : null;
+  const identity = management.identity(authorization);
+  const principal = identity?.subject_id ?? null;
   if (url.pathname === '/__fixture/reset') {
     scenario = value.scenario || 'existing';
     calls = [];
     attempts.clear();
     files.reset();
+    management.reset();
     json({ ok: true });
     return;
   }
   if (url.pathname === '/__fixture/state') {
-    json({ calls, files: files.state() });
+    json({ calls, files: files.state(), ...management.state() });
     return;
   }
   if (url.pathname === '/__fixture/mail') {
@@ -82,6 +87,7 @@ const server = createServer(async (request, response) => {
     authorized: !!authorization,
     browserBound: !!request.headers.cookie?.includes('nexus_oauth_binding='),
     ...(url.pathname.startsWith('/v2/search/') ? { params: value } : {}),
+    ...(url.pathname.startsWith('/v2/auth/keys') || url.pathname === '/v2/rebac/tuples' ? { query: Object.fromEntries(url.searchParams), params: value } : {}),
     ...(url.pathname.startsWith('/v2/files') || url.pathname === '/v2/directories'
       ? { query: Object.fromEntries(url.searchParams), bytes: body.length, contentType: request.headers['content-type'], params: value }
       : {}),
@@ -102,6 +108,7 @@ const server = createServer(async (request, response) => {
     json(await upstream.json(), upstream.status);
     return;
   }
+  if (management.handle({ url, request, value, identity, json })) return;
   if (files.handle({ url, request, response, body, value, scenario, principal, json })) return;
   if (url.pathname === '/v2/search/glob' || url.pathname === '/v2/search/grep') {
     if (!principal) return json({ error: 'credential rejected' }, 401);
@@ -130,15 +137,7 @@ const server = createServer(async (request, response) => {
       json({ error: 'credential rejected' }, 401);
       return;
     }
-    json({
-      subject_type: 'user',
-      subject_id: principal,
-      user_id: principal,
-      agent_id: null,
-      zone_id: 'sharedzone',
-      is_admin: false,
-      zone_perms: [['sharedzone', 'r']],
-    });
+    json(identity);
     return;
   }
   if (url.pathname === '/auth/oauth/google/authorize') {
@@ -165,27 +164,6 @@ const server = createServer(async (request, response) => {
     }
     response.setHeader('Set-Cookie', 'nexus_oauth_binding=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
     json(session());
-    return;
-  }
-  if (url.pathname.startsWith('/api/nfs/')) {
-    if (!principal) {
-      json({ error: 'credential rejected' }, 401);
-      return;
-    }
-    const method = url.pathname.split('/').at(-1);
-    const result =
-      method === 'list'
-        ? { files: [] }
-        : method === 'is_directory'
-          ? { is_directory: true }
-          : method === 'exists'
-            ? { exists: false }
-            : method === 'get_available_namespaces'
-              ? { namespaces: [] }
-              : method === 'oauth_exchange_code'
-                ? { success: true }
-                : [];
-    json({ jsonrpc: '2.0', id: value.id, result });
     return;
   }
   json({ error: 'unknown fixture route' }, 404);

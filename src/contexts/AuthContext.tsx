@@ -1,14 +1,7 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import NexusAPIClient, { AuthenticationError } from '../api/client';
 import { normalizeServerURL } from '../api/serverURL';
-
-interface UserInfo {
-  subject_type?: string;
-  subject_id?: string;
-  tenant_id?: string;
-  is_admin?: boolean;
-  user?: string;
-}
+import type { NativeIdentity } from '../types/identity';
 
 interface AuthContextType {
   // API Key authentication (backend auth)
@@ -17,10 +10,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isResolvingIdentity: boolean;
   identityError: string | null;
-  userInfo: UserInfo | null;
+  userInfo: NativeIdentity | null;
   logout: () => void;
   apiClient: NexusAPIClient | null;
-  updateConnection: (apiUrl: string, apiKey: string) => Promise<UserInfo>;
+  updateConnection: (apiUrl: string, apiKey: string) => Promise<NativeIdentity>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -80,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [identity, setIdentity] = useState<{
     url: string;
     credential: string;
-    info: UserInfo | null;
+    info: NativeIdentity | null;
     error: string | null;
   } | null>(null);
   const resolved = identity?.url === apiUrl && identity?.credential === credential;
@@ -96,18 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const whoami = await apiClient.whoami();
         if (!active) return;
-        if (!whoami.authenticated) throw new AuthenticationError();
         setIdentity({
           url: apiUrl,
           credential,
           error: null,
-          info: {
-            subject_type: whoami.subject_type,
-            subject_id: whoami.subject_id,
-            tenant_id: whoami.tenant_id,
-            is_admin: whoami.is_admin,
-            user: whoami.user || whoami.subject_id,
-          },
+          info: whoami,
         });
       } catch (error) {
         if (!active) return;
@@ -121,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [apiUrl, credential, apiClient]);
 
-  const updateConnection = async (newApiUrl: string, newApiKey: string): Promise<UserInfo> => {
+  const updateConnection = async (newApiUrl: string, newApiKey: string): Promise<NativeIdentity> => {
     // Create a temporary client with the new settings
     const tempClient = new NexusAPIClient(newApiUrl || '', newApiKey || undefined);
     const validatedUrl = tempClient.getBaseURL();
@@ -129,18 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Validate the connection by calling whoami
     const whoamiResponse = await tempClient.whoami();
 
-    if (!whoamiResponse.authenticated) {
-      throw new Error('Authentication failed');
-    }
-
-    // Extract user info
-    const newUserInfo: UserInfo = {
-      subject_type: whoamiResponse.subject_type,
-      subject_id: whoamiResponse.subject_id,
-      tenant_id: whoamiResponse.tenant_id,
-      is_admin: whoamiResponse.is_admin,
-      user: whoamiResponse.user,
-    };
+    const newUserInfo = whoamiResponse;
 
     // Store API URL, API key, and user info
     clearStoredIdentity();

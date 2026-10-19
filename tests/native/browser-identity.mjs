@@ -7,6 +7,7 @@ import { chromium } from '@playwright/test';
 import { preview as startPreview } from 'vite';
 import { startAccounts } from '../fixtures/accounts.mjs';
 import { verifyAccountClosure } from './account-closure.mjs';
+import { verifyManagement } from './management.mjs';
 
 const { values } = parseArgs({
   options: {
@@ -270,6 +271,11 @@ try {
   for await (const chunk of stream) chunks.push(chunk);
   assert.deepEqual(Buffer.concat(chunks), bytes);
   checks.push('native browser binary upload and download preserve every byte');
+
+  checks.push(...(await verifyManagement({ page, uiUrl, nativeUrl, adminRequest, filePath: finalPath, folderName: rootName, secrets, issued, grants })));
+  await page.goto(`${uiUrl}/files`);
+  await folder.click();
+  await page.getByText(finalName, { exact: true }).first().click();
 
   await folder.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New Folder', exact: true }).click();

@@ -1,5 +1,6 @@
 import axios, { type AxiosResponse } from 'axios';
 import { normalizeServerURL } from './serverURL';
+import { isRecord as record } from './validation';
 
 export interface UserProfile {
   user_id: string;
@@ -21,7 +22,6 @@ export interface AccountLogin {
 }
 
 const invalidResponse = () => new Error('The Nexus server returned an invalid account response.');
-const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
 function jsonResponse(response: AxiosResponse, status = 200): unknown {
   const contentType = response.headers['content-type'];

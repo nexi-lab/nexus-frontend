@@ -14,12 +14,6 @@ import { Toaster } from 'sonner';
 
 const FileBrowser = lazy(async () => ({ default: (await import('./components/FileBrowser')).FileBrowser }));
 const AdminSettings = lazy(async () => ({ default: (await import('./pages/AdminSettings')).AdminSettings }));
-const Integration = lazy(async () => ({ default: (await import('./pages/Integration')).Integration }));
-const Connector = lazy(async () => ({ default: (await import('./pages/Connector')).Connector }));
-const Skill = lazy(async () => ({ default: (await import('./pages/Skill')).Skill }));
-const Agent = lazy(async () => ({ default: (await import('./pages/Agent')).Agent }));
-const Workspace = lazy(async () => ({ default: (await import('./pages/Workspace')).Workspace }));
-const Memory = lazy(async () => ({ default: (await import('./pages/Memory')).Memory }));
 const Settings = lazy(() => import('./pages/Settings'));
 const Account = lazy(() => import('./pages/Account'));
 
@@ -73,14 +67,6 @@ function AppContent() {
                 <Route path="/" element={<FileBrowser />} />
                 <Route path="/files" element={<FileBrowser />} />
                 <Route path="/admin" element={<AdminSettings />} />
-                <Route path="/integration" element={<Integration />} />
-                <Route path="/connector" element={<Connector />} />
-                <Route path="/skills" element={<Skill />} />
-                <Route path="/skill" element={<Navigate to="/skills" replace />} />
-                <Route path="/agent" element={<Agent />} />
-                <Route path="/workspace" element={<Workspace />} />
-                <Route path="/memory" element={<Memory />} />
-                <Route path="/mounts" element={<Navigate to="/connector" replace />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
               <Route path="/oauth/callback" element={<OAuthCallback />} />
@@ -98,6 +84,7 @@ function AppContent() {
                   </Suspense>
                 }
               />
+              <Route path="*" element={<Navigate to="/files" replace />} />
             </Routes>
           </BrowserRouter>
         </AccountProvider>
