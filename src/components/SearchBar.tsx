@@ -1,7 +1,7 @@
 import { FileText, Folder, Search, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchFiles } from '../hooks/useFiles';
-import type { FileInfo, GrepMatch } from '../types/file';
+import type { FileInfo } from '../types/file';
 import { type ContextMenuAction, FileContextMenu } from './FileContextMenu';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -15,79 +15,38 @@ interface SearchBarProps {
 export function SearchBar({ currentPath, onFileSelect, onContextMenuAction }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState<'glob' | 'grep'>('glob');
-  const [searchResults, setSearchResults] = useState<FileInfo[] | null>(null);
   const searchMutation = useSearchFiles();
+  const { data: result, reset } = searchMutation;
+  useEffect(() => reset(), [currentPath, reset]);
+  const paths = result && ('paths' in result ? result.paths : [...new Set(result.matches.map((match) => match.path))]);
+  const counts = new Map<string, number>();
+  if (result && 'matches' in result) {
+    for (const match of result.matches) counts.set(match.path, (counts.get(match.path) ?? 0) + 1);
+  }
+  const searchResults = paths?.map((path) => ({
+    path,
+    name: path.split('/').filter(Boolean).pop() || path,
+    isDirectory: false,
+    matchCount: counts.get(path),
+  }));
 
-  const handleSearch = async () => {
+  const handleSearch = () => {
     if (!query.trim()) {
-      // Clear search if query is empty
-      setSearchResults(null);
+      reset();
       return;
     }
-
-    try {
-      const results = await searchMutation.mutateAsync({
-        query,
-        searchType,
-        path: currentPath,
-      });
-
-      // Transform results to FileInfo[] format
-      if (searchType === 'glob') {
-        // Glob returns string[] - transform to FileInfo[]
-        const fileInfoResults = (results as string[]).map((path: string) => ({
-          path,
-          name: path.split('/').filter(Boolean).pop() || path,
-          isDirectory: false,
-          size: undefined,
-          type: undefined,
-        }));
-        setSearchResults(fileInfoResults);
-      } else {
-        // Grep returns GrepMatch[] - transform to FileInfo[] with unique files
-        const grepResults = results as GrepMatch[];
-        const uniqueFiles = new Map<string, GrepMatch[]>();
-
-        // Group matches by file
-        grepResults.forEach((match) => {
-          if (!uniqueFiles.has(match.file)) {
-            uniqueFiles.set(match.file, []);
-          }
-          uniqueFiles.get(match.file)!.push(match);
-        });
-
-        // Convert to FileInfo[] with match information
-        const fileInfoResults = Array.from(uniqueFiles.entries()).map(([path, matches]) => ({
-          path,
-          name: path.split('/').filter(Boolean).pop() || path,
-          isDirectory: false,
-          size: undefined,
-          type: undefined,
-          // Store match count or matches for display
-          matchCount: matches.length,
-        }));
-
-        setSearchResults(fileInfoResults);
-      }
-    } catch (error) {
-      console.error('Search failed:', error);
-      setSearchResults([]);
-    }
+    searchMutation.mutate({ query, searchType, path: currentPath });
   };
 
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newQuery = e.target.value;
     setQuery(newQuery);
-
-    // Auto-clear search when input becomes empty
-    if (!newQuery.trim()) {
-      setSearchResults(null);
-    }
+    reset();
   };
 
   const handleClearClick = () => {
     setQuery('');
-    setSearchResults(null);
+    reset();
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -101,21 +60,26 @@ export function SearchBar({ currentPath, onFileSelect, onContextMenuAction }: Se
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <search aria-label="File search" className="flex flex-col h-full">
       {/* Search Input */}
       <div className="p-3 border-b space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
+            aria-label="Search files"
             placeholder={searchType === 'glob' ? 'Search files (e.g., *.txt)' : 'Search contents...'}
             value={query}
             onChange={handleQueryChange}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             className="pl-10 pr-10 text-sm"
           />
           {query && (
-            <button type='button' onClick={handleClearClick} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={handleClearClick}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
               <X className="h-4 w-4" />
             </button>
           )}
@@ -123,20 +87,28 @@ export function SearchBar({ currentPath, onFileSelect, onContextMenuAction }: Se
 
         <div className="flex gap-1">
           <button
-            type='button' 
+            type="button"
             className={`flex-1 px-2 py-1 text-xs rounded transition-colors ${
               searchType === 'glob' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
             }`}
-            onClick={() => setSearchType('glob')}
+            aria-pressed={searchType === 'glob'}
+            onClick={() => {
+              setSearchType('glob');
+              reset();
+            }}
           >
             Name
           </button>
           <button
-            type='button'
+            type="button"
             className={`flex-1 px-2 py-1 text-xs rounded transition-colors ${
               searchType === 'grep' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
             }`}
-            onClick={() => setSearchType('grep')}
+            aria-pressed={searchType === 'grep'}
+            onClick={() => {
+              setSearchType('grep');
+              reset();
+            }}
           >
             Content
           </button>
@@ -147,8 +119,17 @@ export function SearchBar({ currentPath, onFileSelect, onContextMenuAction }: Se
         </Button>
       </div>
 
+      {searchMutation.isError && (
+        <p role="alert" className="p-3 text-sm text-destructive">
+          {searchMutation.error.message}
+        </p>
+      )}
+      {result?.truncated && (
+        <output className="block p-3 text-sm text-muted-foreground">More results are available. Refine your query or search a smaller folder.</output>
+      )}
+
       {/* Search Results */}
-      {searchResults !== null && (
+      {searchResults && (
         <div className="flex-1 overflow-auto">
           <div className="p-2 border-b bg-muted/50">
             <p className="text-xs text-muted-foreground">{searchResults.length} result(s) found</p>
@@ -184,6 +165,6 @@ export function SearchBar({ currentPath, onFileSelect, onContextMenuAction }: Se
           </div>
         </div>
       )}
-    </div>
+    </search>
   );
 }

@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { accountErrorMessage, createAccountsAPI } from '../api/accounts';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Register() {
-  const navigate = useNavigate();
-  const { userRegister } = useAuth();
+  const { apiUrl } = useAuth();
+  const [serverUrl, setServerUrl] = useState(apiUrl ?? '');
+  const [registered, setRegistered] = useState(false);
+  const [verificationRequested, setVerificationRequested] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -17,12 +20,6 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
-    // Validation
-    if (password.length < 12) {
-      setError('Password must be at least 12 characters long');
-      return;
-    }
-
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -31,22 +28,54 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await userRegister(email, password, username || undefined, displayName || undefined);
-      navigate('/');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Registration failed');
+      await createAccountsAPI(serverUrl.trim()).register({ email, password, username: username || undefined, display_name: displayName || undefined });
+      setRegistered(true);
+      setPassword('');
+      setConfirmPassword('');
+      await requestVerification();
+    } catch (err) {
+      setError(accountErrorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }
   };
 
+  const requestVerification = async () => {
+    setLoading(true);
+    setError('');
+    setVerificationRequested(false);
+    try {
+      await createAccountsAPI(serverUrl.trim()).requestVerification(email);
+      setVerificationRequested(true);
+    } catch (err) {
+      setError(accountErrorMessage(err, 'Verification request failed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (registered)
+    return (
+      <main className="mx-auto max-w-md space-y-4 p-8">
+        <h1 className="text-2xl font-bold">Verify your email</h1>
+        <p>Your account has been created. Verify {email} using the link in your verification email.</p>
+        <p className="text-sm text-muted-foreground">Nexus server: {serverUrl}</p>
+        {verificationRequested && <output>Verification request accepted. Check your inbox.</output>}
+        {error && <p role="alert">{error}</p>}
+        <button type="button" disabled={loading} onClick={requestVerification}>
+          {loading ? 'Requesting...' : 'Resend verification email'}
+        </button>
+        <p>
+          <Link to="/login">Back to sign in</Link>
+        </p>
+      </main>
+    );
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            Create your account
-          </h2>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">Create your account</h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
             Or{' '}
             <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
@@ -57,12 +86,25 @@ export default function Register() {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+            <div role="alert" className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
               <div className="text-sm text-red-800 dark:text-red-200">{error}</div>
             </div>
           )}
 
           <div className="rounded-md shadow-sm space-y-4">
+            <div>
+              <label htmlFor="registration-server" className="block text-sm font-medium mb-1">
+                Nexus Server URL
+              </label>
+              <input
+                id="registration-server"
+                type="url"
+                required
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                className="w-full rounded-md border p-2"
+              />
+            </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Email <span className="text-red-500">*</span>
@@ -123,13 +165,11 @@ export default function Register() {
                 autoComplete="new-password"
                 required
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-800"
-                placeholder="At least 12 characters"
+                placeholder="Choose a password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Password must be at least 12 characters long
-              </p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Use a strong, unique password.</p>
             </div>
 
             <div>

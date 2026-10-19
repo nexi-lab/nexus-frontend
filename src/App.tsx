@@ -1,67 +1,54 @@
-import { GoogleOAuthProvider } from '@react-oauth/google';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { FileBrowser } from './components/FileBrowser';
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { AccountProvider } from './contexts/AccountContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { ConnectionQueries } from './contexts/QueryProvider';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
-import { AdminSettings } from './pages/AdminSettings';
-import { Integration } from './pages/Integration';
-import { Connector } from './pages/Connector';
-import { Skill } from './pages/Skill';
-import { Agent } from './pages/Agent';
-import { Workspace } from './pages/Workspace';
-import { Memory } from './pages/Memory';
-import OAuthCallback from './pages/OAuthCallback';
 import Login from './pages/Login';
+import OAuthCallback from './pages/OAuthCallback';
 import Register from './pages/Register';
-import Settings from './pages/Settings';
+import VerifyEmail from './pages/VerifyEmail';
 import './index.css';
 import { Toaster } from 'sonner';
-import { GOOGLE_CLIENT_ID } from './utils/config';
-import { AuthenticationError } from './api/client';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: (_failureCount, error) => {
-        // Don't retry on authentication errors
-        if (error instanceof AuthenticationError) {
-          return false;
-        }
-        return _failureCount < 1;
-      },
-      staleTime: 30000, // 30 seconds
-    },
-    mutations: {
-      retry: (_failureCount, error) => {
-        // Don't retry on authentication errors
-        if (error instanceof AuthenticationError) {
-          return false;
-        }
-        return false; // Don't retry mutations by default
-      },
-    },
-  },
-});
+const FileBrowser = lazy(async () => ({ default: (await import('./components/FileBrowser')).FileBrowser }));
+const AdminSettings = lazy(async () => ({ default: (await import('./pages/AdminSettings')).AdminSettings }));
+const Settings = lazy(() => import('./pages/Settings'));
+const Account = lazy(() => import('./pages/Account'));
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isUserAuthenticated, isAuthenticated } = useAuth();
+function ProtectedRoute() {
+  const { isAuthenticated, isResolvingIdentity, identityError } = useAuth();
 
-  // Allow access if either user account (JWT) or API key is authenticated
-  if (!isUserAuthenticated && !isAuthenticated) {
+  if (isResolvingIdentity) return <output>Verifying your Nexus connection...</output>;
+  if (identityError)
+    return (
+      <div role="alert">
+        {identityError}{' '}
+        <button type="button" onClick={() => window.location.reload()}>
+          Retry
+        </button>
+      </div>
+    );
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <ConnectionQueries>
+      <Suspense fallback={<output>Loading...</output>}>
+        <Outlet />
+      </Suspense>
+    </ConnectionQueries>
+  );
 }
 
 function AppContent() {
   const { resolvedTheme } = useTheme();
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <>
       <Toaster
         theme={resolvedTheme}
         position="top-center"
@@ -73,32 +60,36 @@ function AppContent() {
         }}
       />
       <AuthProvider>
-        <QueryClientProvider client={queryClient}>
+        <AccountProvider>
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<ProtectedRoute><FileBrowser /></ProtectedRoute>} />
-              <Route path="/files" element={<ProtectedRoute><FileBrowser /></ProtectedRoute>} />
-              <Route path="/admin" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
-              <Route path="/integration" element={<ProtectedRoute><Integration /></ProtectedRoute>} />
-              <Route path="/connector" element={<ProtectedRoute><Connector /></ProtectedRoute>} />
-              <Route path="/skills" element={<ProtectedRoute><Skill /></ProtectedRoute>} />
-              <Route path="/skill" element={<Navigate to="/skills" replace />} />
-              <Route path="/agent" element={<ProtectedRoute><Agent /></ProtectedRoute>} />
-              <Route path="/workspace" element={<ProtectedRoute><Workspace /></ProtectedRoute>} />
-              <Route path="/memory" element={<ProtectedRoute><Memory /></ProtectedRoute>} />
-              <Route path="/mounts" element={<Navigate to="/connector" replace />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<FileBrowser />} />
+                <Route path="/files" element={<FileBrowser />} />
+                <Route path="/admin" element={<AdminSettings />} />
+                <Route path="/settings" element={<Settings />} />
+              </Route>
               <Route path="/oauth/callback" element={<OAuthCallback />} />
 
               {/* User Authentication Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/profile" element={<Navigate to="/settings" replace />} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/profile" element={<Navigate to="/account" replace />} />
+              <Route
+                path="/account"
+                element={
+                  <Suspense fallback={<output>Loading...</output>}>
+                    <Account />
+                  </Suspense>
+                }
+              />
+              <Route path="*" element={<Navigate to="/files" replace />} />
             </Routes>
           </BrowserRouter>
-        </QueryClientProvider>
+        </AccountProvider>
       </AuthProvider>
-    </GoogleOAuthProvider>
+    </>
   );
 }
 

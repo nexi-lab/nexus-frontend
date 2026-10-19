@@ -3,7 +3,7 @@
 .env.*.local
 .env.production.local
 
-# Node modules (will be installed via npm ci)
+# Node modules
 node_modules
 
 # Build outputs

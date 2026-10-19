@@ -1,23 +1,10 @@
-import { v4 as uuidv4 } from 'uuid';
-
-export function getUniqueId(): string {
-  const id = window.localStorage.getItem('zz-unique_id');
-  if (id) {
-    return id;
-  } else {
-    const newId = uuidv4();
-    window.localStorage.setItem('zz-unique_id', newId);
-    return newId;
-  }
-}
-
 /**
  * Safely copy text to clipboard with fallback for environments where
  * navigator.clipboard is not available (non-secure contexts, older browsers, etc.)
  */
 export async function copyToClipboard(text: string): Promise<void> {
   // Try modern Clipboard API first
-  if (navigator.clipboard && navigator.clipboard.writeText) {
+  if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
       return;
@@ -37,10 +24,10 @@ export async function copyToClipboard(text: string): Promise<void> {
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    
+
     const successful = document.execCommand('copy');
     document.body.removeChild(textArea);
-    
+
     if (!successful) {
       throw new Error('execCommand copy failed');
     }

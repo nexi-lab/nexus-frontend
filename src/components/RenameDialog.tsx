@@ -9,9 +9,10 @@ interface RenameDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   file: FileInfo | null;
+  onRenamed: (oldPath: string, newPath: string) => void;
 }
 
-export function RenameDialog({ open, onOpenChange, file }: RenameDialogProps) {
+export function RenameDialog({ open, onOpenChange, file, onRenamed }: RenameDialogProps) {
   const [newName, setNewName] = useState('');
   const renameMutation = useRenameFile();
 
@@ -29,6 +30,7 @@ export function RenameDialog({ open, onOpenChange, file }: RenameDialogProps) {
 
     try {
       await renameMutation.mutateAsync({ oldPath: file.path, newPath });
+      onRenamed(file.path, newPath);
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to rename:', error);

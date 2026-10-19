@@ -1,12 +1,18 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { accountErrorMessage, createAccountsAPI } from '../api/accounts';
+import ThirdAuth from '../components/ThirdAuth';
+import { useAccount } from '../contexts/AccountContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
   const { updateConnection } = useAuth();
+  const { completeLogin } = useAccount();
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState(() => {
     // Get from localStorage (no default)
@@ -18,7 +24,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     if (!apiUrl.trim()) {
       setError('Nexus server URL is required');
       return;
@@ -34,8 +40,28 @@ export default function Login() {
       await updateConnection(apiUrl.trim(), apiKey.trim());
       toast.success('Login successful');
       navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Invalid API key or server URL');
+    } catch (err) {
+      setError(accountErrorMessage(err, 'Invalid API key or server URL'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    if (!apiUrl.trim()) {
+      setError('Nexus server URL is required');
+      return;
+    }
+    setLoading(true);
+    try {
+      const session = await createAccountsAPI(apiUrl.trim()).login(identifier.trim(), password);
+      completeLogin(apiUrl.trim(), session);
+      setPassword('');
+      navigate('/account');
+    } catch (error) {
+      setError(accountErrorMessage(error, 'Unable to sign in.'));
     } finally {
       setLoading(false);
     }
@@ -45,18 +71,16 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            Sign in to Nexus
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Connect to your Nexus server with an API key
-          </p>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">Sign in to Nexus</h2>
+          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">Connect to your Nexus server with an API key</p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
-              <div className="text-sm text-red-800 dark:text-red-200">{error}</div>
+              <div role="alert" className="text-sm text-red-800 dark:text-red-200">
+                {error}
+              </div>
             </div>
           )}
 
@@ -74,9 +98,7 @@ export default function Login() {
               value={apiUrl}
               onChange={(e) => setApiUrl(e.target.value)}
             />
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              Enter the URL of your Nexus server (required)
-            </p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Enter the URL of your Nexus server (required)</p>
           </div>
 
           <div>
@@ -92,10 +114,10 @@ export default function Login() {
               placeholder="Enter your API key (sk-...)"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              autoFocus
             />
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              Enter your Nexus API key to authenticate. API keys start with <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">sk-</code>
+              Enter your Nexus API key to authenticate. API keys start with{' '}
+              <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">sk-</code>
             </p>
           </div>
 
@@ -116,6 +138,39 @@ export default function Login() {
             </button>
           </div>
         </form>
+        <form onSubmit={handlePasswordLogin} className="space-y-3">
+          <h3 className="text-lg font-semibold">Account sign in</h3>
+          <label htmlFor="account-identifier">Email or username</label>
+          <input
+            id="account-identifier"
+            autoComplete="username"
+            required
+            className="w-full rounded border p-2"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+          />
+          <label htmlFor="account-password">Password</label>
+          <input
+            id="account-password"
+            type="password"
+            autoComplete="current-password"
+            required
+            className="w-full rounded border p-2"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button type="submit" disabled={loading}>
+            Sign in with password
+          </button>
+        </form>
+        <div className="mt-6">
+          <ThirdAuth apiUrl={apiUrl.trim()} />
+        </div>
+        <nav className="flex gap-4">
+          <Link to="/register">Create account</Link>
+          <Link to="/verify-email">Verify email</Link>
+          <Link to="/account">Your account</Link>
+        </nav>
       </div>
     </div>
   );

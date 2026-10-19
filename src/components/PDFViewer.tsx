@@ -1,207 +1,105 @@
-import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjs from 'pdfjs-dist';
+import pdfWorkerURL from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
 
-// Configure PDF.js worker - use unpkg CDN which is more reliable
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerURL;
 
-interface PDFViewerProps {
-  fileData: Uint8Array;
-  onDownload: () => void;
-}
-
-export function PDFViewer({ fileData, onDownload }: PDFViewerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
+export function PDFViewer({ fileData, onDownload }: { fileData: Uint8Array; onDownload: () => void }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [document, setDocument] = useState<pdfjs.PDFDocumentProxy | null>(null);
+  const [page, setPage] = useState(1);
   const [scale, setScale] = useState(1.5);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Load PDF document
+  const [error, setError] = useState('');
   useEffect(() => {
+    let active = true;
+    let task: pdfjs.PDFDocumentLoadingTask | undefined;
+    setDocument(null);
     setLoading(true);
-    setError(null);
-
-    const loadPDF = async () => {
-      try {
-        console.log('PDFViewer loading with fileData:', {
-          type: typeof fileData,
-          isUint8Array: fileData instanceof Uint8Array,
-          length: fileData?.length,
-          firstBytes: fileData?.slice(0, 10),
-        });
-
-        // Validate that fileData is a Uint8Array
-        if (!(fileData instanceof Uint8Array)) {
-          throw new Error(`Invalid data type: expected Uint8Array, got ${typeof fileData}`);
-        }
-
-        // Check if it looks like a PDF (starts with %PDF)
-        const header = String.fromCharCode(...fileData.slice(0, 4));
-        console.log('PDF header:', header);
-        if (!header.startsWith('%PDF')) {
-          throw new Error(`Invalid PDF format: file does not start with %PDF (got: ${header})`);
-        }
-
-        // Create a copy of the data to avoid detached ArrayBuffer issues
-        const dataCopy = new Uint8Array(fileData);
-        const loadingTask = pdfjsLib.getDocument({ data: dataCopy });
-        const pdfDoc = await loadingTask.promise;
-        setPdf(pdfDoc);
-        setTotalPages(pdfDoc.numPages);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error loading PDF:', err);
-        setError(`Failed to load PDF document: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        setLoading(false);
-      }
-    };
-
-    loadPDF();
-
+    setError('');
+    setPage(1);
+    if (new TextDecoder().decode(fileData.subarray(0, 4)) !== '%PDF') {
+      setError('Failed to load PDF document: Invalid PDF format: file does not start with %PDF');
+      setLoading(false);
+    } else {
+      task = pdfjs.getDocument({ data: fileData.slice(), isEvalSupported: false });
+      void task.promise.then(
+        (document) => {
+          if (active) {
+            setDocument(document);
+            setLoading(false);
+          }
+        },
+        (error: unknown) => {
+          if (active) {
+            setError(`Failed to load PDF document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setLoading(false);
+          }
+        },
+      );
+    }
     return () => {
-      pdf?.destroy();
+      active = false;
+      void task?.destroy().catch((error: unknown) => console.error('Unable to close PDF worker', error));
     };
   }, [fileData]);
-
-  // Render current page
   useEffect(() => {
-    if (!pdf || !canvasRef.current) {
-      console.log('Skipping render:', { hasPdf: !!pdf, hasCanvas: !!canvasRef.current });
-      return;
-    }
-
-    let renderTask: any = null;
-
-    const renderPage = async () => {
-      try {
-        console.log(`Rendering page ${currentPage} of ${totalPages} at scale ${scale}`);
-        const page = await pdf.getPage(currentPage);
+    if (!document) return;
+    let active = true;
+    let task: pdfjs.RenderTask | undefined;
+    void document
+      .getPage(page)
+      .then(async (page) => {
+        if (!active || !canvas.current) return;
+        const context = canvas.current.getContext('2d');
+        if (!context) throw new Error('Unable to create PDF canvas.');
         const viewport = page.getViewport({ scale });
-        const canvas = canvasRef.current;
-
-        if (!canvas) {
-          console.error('Canvas ref lost during render');
-          setError('Canvas element not found');
-          return;
-        }
-
-        const context = canvas.getContext('2d');
-        if (!context) {
-          console.error('Could not get 2D context');
-          setError('Could not create canvas context');
-          return;
-        }
-
-        console.log('Viewport:', { width: viewport.width, height: viewport.height });
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
-        };
-
-        console.log('Starting render...');
-        renderTask = page.render(renderContext as any);
-        await renderTask.promise;
-        console.log('Render complete');
-      } catch (err) {
-        // Ignore cancellation errors
-        if (err instanceof Error && err.message.includes('cancel')) {
-          console.log('Render cancelled');
-          return;
-        }
-        console.error('Error rendering page:', err);
-        setError(`Failed to render PDF page: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      }
-    };
-
-    renderPage();
-
-    // Cleanup: cancel any ongoing render operation
+        canvas.current.width = viewport.width;
+        canvas.current.height = viewport.height;
+        task = page.render({ canvas: canvas.current, canvasContext: context, viewport });
+        await task.promise;
+      })
+      .catch((error: unknown) => {
+        if (active) setError(`Failed to render PDF page: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      });
     return () => {
-      if (renderTask) {
-        console.log('Cancelling previous render task');
-        renderTask.cancel();
-      }
+      active = false;
+      task?.cancel();
     };
-  }, [pdf, currentPage, scale, totalPages]);
+  }, [document, page, scale]);
 
-  const handlePrevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-
-  const handleZoomIn = () => {
-    setScale((prev) => Math.min(prev + 0.25, 3));
-  };
-
-  const handleZoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.25, 0.5));
-  };
-
-  if (loading) {
+  if (loading) return <output>Loading PDF...</output>;
+  if (error)
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Loading PDF...</p>
+      <div role="alert" className="space-y-4 p-4">
+        <p>{error}</p>
+        <Button onClick={onDownload}>Download PDF</Button>
       </div>
     );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <p className="text-destructive mb-4">{error}</p>
-        <Button onClick={onDownload}>
-          <Download className="h-4 w-4 mr-2" />
-          Download PDF
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col h-full">
-      {/* PDF Controls */}
-      <div className="flex items-center justify-between p-3 border-b bg-muted/30">
+    <section className="flex h-full flex-col" aria-label="PDF preview">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handlePrevPage} disabled={currentPage === 1}>
-            <ChevronLeft className="h-4 w-4" />
+          <Button disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            Previous page
           </Button>
-          <span className="text-sm">
-            Page {currentPage} of {totalPages}
+          <span>
+            Page {page} of {document?.numPages}
           </span>
-          <Button variant="outline" size="sm" onClick={handleNextPage} disabled={currentPage === totalPages}>
-            <ChevronRight className="h-4 w-4" />
+          <Button disabled={page >= (document?.numPages ?? 0)} onClick={() => setPage(page + 1)}>
+            Next page
           </Button>
         </div>
-
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleZoomOut}>
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <span className="text-sm">{Math.round(scale * 100)}%</span>
-          <Button variant="outline" size="sm" onClick={handleZoomIn}>
-            <ZoomIn className="h-4 w-4" />
-          </Button>
+          <Button onClick={() => setScale(Math.max(0.5, scale - 0.25))}>Zoom out</Button>
+          <span>{Math.round(scale * 100)}%</span>
+          <Button onClick={() => setScale(Math.min(3, scale + 0.25))}>Zoom in</Button>
         </div>
       </div>
-
-      {/* PDF Canvas */}
-      <div className="flex-1 overflow-auto p-4 bg-muted/10 flex items-start justify-center">
-        <canvas ref={canvasRef} className="shadow-lg" />
+      <div className="flex-1 overflow-auto p-4">
+        <canvas ref={canvas} aria-label="PDF page" className="mx-auto" />
       </div>
-    </div>
+    </section>
   );
 }

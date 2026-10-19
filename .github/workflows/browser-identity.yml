@@ -1,0 +1,156 @@
+name: Browser identity
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  NEXUS_BACKEND_REVISION: 6809644192c95282ed3fcd9d7dcf06e5d9581995
+
+jobs:
+  container-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the static frontend image
+        run: docker build --tag nexus-frontend:acceptance .
+      - name: Verify Nginx serves the SPA and local PDF worker
+        run: |
+          docker run --detach --name frontend-acceptance --publish 127.0.0.1:4174:80 nexus-frontend:acceptance
+          deadline=$((SECONDS + 45))
+          until [ "$(docker inspect --format '{{.State.Health.Status}}' frontend-acceptance)" = healthy ]; do
+            test "$(docker inspect --format '{{.State.Running}}' frontend-acceptance)" = true
+            test "$SECONDS" -lt "$deadline"
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:4174/health
+          curl --fail http://127.0.0.1:4174/files | grep '<title>Nexus</title>'
+          worker=$(docker exec frontend-acceptance find /usr/share/nginx/html/assets -name 'pdf.worker*.mjs')
+          test -n "$worker"
+          curl --fail --head "http://127.0.0.1:4174/assets/$(basename "$worker")" | grep -i 'Content-Type: application/javascript'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:4174/assets/missing.mjs)" = 404
+      - name: Retain container diagnostics and clean up
+        if: always()
+        run: |
+          docker inspect --format '{{json .State.Health}}' frontend-acceptance || true
+          docker logs frontend-acceptance || true
+          docker rm --force frontend-acceptance || true
+
+  browser-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Check out the validated Rust account contract
+        uses: actions/checkout@v4
+        with:
+          repository: nexi-lab/nexus
+          ref: ${{ env.NEXUS_BACKEND_REVISION }}
+          path: account-backend
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: account-backend -> target
+      - name: Build the actual Rust account binary
+        working-directory: account-backend
+        run: cargo build --locked -p nexus-accounts --bin nexusd-accounts
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run test:e2e
+        env:
+          NEXUS_TEST_ACCOUNTS_BINARY: ${{ github.workspace }}/account-backend/target/debug/nexusd-accounts
+          NEXUS_TEST_ACCOUNTS_SCHEMA: ${{ github.workspace }}/account-backend/rust/services/accounts/tests/fixtures/users.sql
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-identity-failure
+          path: test-results/
+          retention-days: 7
+
+  native-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the validated Nexus acceptance harness
+        uses: actions/checkout@v4
+        with:
+          repository: nexi-lab/nexus
+          ref: ${{ env.NEXUS_BACKEND_REVISION }}
+          path: account-backend
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: account-backend/pyproject.toml
+      - name: Install the canonical acceptance dependencies
+        working-directory: account-backend
+        run: |
+          uv venv --python 3.14
+          uv pip install -e ".[dev,test]"
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: account-backend -> target
+          shared-key: frontend-native-search
+      - name: Build the actual daemon and signed Search plugin
+        working-directory: account-backend
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/account-backend/target
+        run: |
+          bash scripts/build_search_fixture.sh
+          ln -sf nexusd-cluster "$CARGO_TARGET_DIR/release/nexus-cluster"
+      - name: Build the current frontend and install Chromium
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+          pnpm exec playwright install --with-deps chromium
+      - name: Build the actual account service for the combined browser journey
+        working-directory: account-backend
+        run: cargo build --locked -p nexus-accounts --bin nexusd-accounts
+      - name: Verify the current frontend against the native daemon
+        timeout-minutes: 10
+        working-directory: account-backend
+        env:
+          NEXUS_TEST_ACCOUNTS_BINARY: ${{ github.workspace }}/account-backend/target/debug/nexusd-accounts
+          NEXUS_TEST_ACCOUNTS_SCHEMA: ${{ github.workspace }}/account-backend/rust/services/accounts/tests/fixtures/users.sql
+        run: |
+          uv run --no-sync python scripts/test_search_local.py \
+            --kernel-binary "$NEXUS_KERNEL_BINARY" \
+            --plugin-library "$NEXUS_SEARCH_PLUGIN_LIBRARY" \
+            --output-dir "$RUNNER_TEMP/native-browser" \
+            --keyword-only \
+            --browser-origin http://127.0.0.1:4173 \
+            --frontend-checkout "$GITHUB_WORKSPACE"
+      - name: Retain native browser evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-browser-evidence
+          path: |
+            ${{ runner.temp }}/native-browser/run-*/results.json
+            ${{ runner.temp }}/native-browser/run-*/native-browser/
+          retention-days: 7
