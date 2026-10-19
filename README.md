@@ -35,6 +35,8 @@ The other journeys use a local HTTP protocol fixture. They exercise Google serve
 
 CI builds the account binary from the pinned validated Nexus revision in its workflow and runs the same browser journeys without retries. For local acceptance, build `nexusd-accounts` from that revision and set both paths above. For a locally installed Chrome, set `NEXUS_TEST_CHROME` to its executable path. The test browser uses an isolated profile and blocks external requests. Teardown stops the Rust process and removes the temporary account database.
 
+A separate CI job reuses that Nexus revision's `build_search_fixture.sh` and `test_search_local.py` to build the matching native daemon/plugin and verify the current frontend checkout. It protects native key/relation revocation, Search filtering and actual file operations, and retains sanitized browser evidence. The account browser job keeps its fifteen-minute limit; native acceptance has the same ten-minute test step as Nexus CI, within a thirty-minute job that includes a cold Rust build.
+
 ### Native daemon browser acceptance
 
 Build this frontend, then run `scripts/test_search_local.py` from the Nexus repository with `--frontend-checkout <this-checkout>`, `--browser-origin http://127.0.0.1:4173`, and the native daemon/plugin paths. Use `--keyword-only` for this journey. The harness starts an isolated native daemon with TLS and ReBAC, issues temporary credentials, supplies `--search-fixture` to the browser runner, and cleans up the fixture. It retains sanitized results and screenshots.

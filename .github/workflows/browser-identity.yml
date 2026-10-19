@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NEXUS_BACKEND_REVISION: 0ce4227ac37a862b2a3fe1090e71a5c6f5e8098c
+
 jobs:
   browser-identity:
     runs-on: ubuntu-latest
@@ -23,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nexi-lab/nexus
-          ref: 0ce4227ac37a862b2a3fe1090e71a5c6f5e8098c
+          ref: ${{ env.NEXUS_BACKEND_REVISION }}
           path: account-backend
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -47,4 +50,72 @@ jobs:
         with:
           name: browser-identity-failure
           path: test-results/
+          retention-days: 7
+
+  native-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the validated Nexus acceptance harness
+        uses: actions/checkout@v4
+        with:
+          repository: nexi-lab/nexus
+          ref: ${{ env.NEXUS_BACKEND_REVISION }}
+          path: account-backend
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: account-backend/pyproject.toml
+      - name: Install the canonical acceptance dependencies
+        working-directory: account-backend
+        run: |
+          uv venv --python 3.14
+          uv pip install -e ".[dev,test]"
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: account-backend -> target
+          shared-key: frontend-native-search
+      - name: Build the actual daemon and signed Search plugin
+        working-directory: account-backend
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/account-backend/target
+        run: |
+          bash scripts/build_search_fixture.sh
+          ln -sf nexusd-cluster "$CARGO_TARGET_DIR/release/nexus-cluster"
+      - name: Build the current frontend and install Chromium
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+          pnpm exec playwright install --with-deps chromium
+      - name: Verify the current frontend against the native daemon
+        timeout-minutes: 10
+        working-directory: account-backend
+        run: |
+          uv run --no-sync python scripts/test_search_local.py \
+            --kernel-binary "$NEXUS_KERNEL_BINARY" \
+            --plugin-library "$NEXUS_SEARCH_PLUGIN_LIBRARY" \
+            --output-dir "$RUNNER_TEMP/native-browser" \
+            --keyword-only \
+            --browser-origin http://127.0.0.1:4173 \
+            --frontend-checkout "$GITHUB_WORKSPACE"
+      - name: Retain native browser evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-browser-evidence
+          path: |
+            ${{ runner.temp }}/native-browser/run-*/results.json
+            ${{ runner.temp }}/native-browser/run-*/native-browser/
           retention-days: 7
