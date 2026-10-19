@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  NEXUS_BACKEND_REVISION: f4689ab912836c1ae2350c417f76177ad6d0b9c8
+  NEXUS_BACKEND_REVISION: 6809644192c95282ed3fcd9d7dcf06e5d9581995
 
 jobs:
   browser-identity:
