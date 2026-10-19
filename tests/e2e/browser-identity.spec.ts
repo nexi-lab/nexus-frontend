@@ -71,7 +71,7 @@ test('Google uses the selected account server and preserves the native connectio
   expect(saved.nativeServer).toBe(backend);
   expect(saved.nativeKey).toBe('sk-fixture-previous');
   expect(saved.cachedIdentity).toBeNull();
-  expect(saved.session).toEqual({ serverUrl: `${backend}/`, token: 'fixture-alice-session' });
+  expect(saved.session).toEqual({ serverUrl: backend, token: 'fixture-alice-session' });
   expect(saved.attempt).toBeNull();
   const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
   const accountCalls = calls.filter((call: { path: string }) => call.path.startsWith('/auth/'));

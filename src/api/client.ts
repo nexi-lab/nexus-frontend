@@ -2,6 +2,7 @@ import axios, { type AxiosInstance } from 'axios';
 import type { RPCRequest, RPCResponse } from '../types/file';
 import type { GlobResult, GrepResult } from '../types/search';
 import { createVfsAPI } from './vfs';
+import { normalizeServerURL } from './serverURL';
 
 interface NativeRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -69,9 +70,9 @@ class NexusAPIClient {
   private baseURL: string;
 
   constructor(baseURL: string, apiKey?: string) {
-    this.baseURL = baseURL;
+    this.baseURL = normalizeServerURL(baseURL);
     this.client = axios.create({
-      baseURL,
+      baseURL: this.baseURL,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -248,6 +249,11 @@ class NexusAPIClient {
   }> {
     try {
       const { data } = await this.client.get<NativeIdentity>('/v2/auth/whoami', { timeout: 8000 });
+      if (!data || typeof data !== 'object' || typeof data.subject_type !== 'string' || !data.subject_type ||
+          typeof data.subject_id !== 'string' || !data.subject_id || typeof data.is_admin !== 'boolean' ||
+          typeof data.zone_id !== 'string' || !Array.isArray(data.zone_perms)) {
+        throw new NexusAPIError('The Nexus server returned an invalid identity response.');
+      }
       return {
         authenticated: true,
         subject_type: data.subject_type,

@@ -1,4 +1,5 @@
 import { createAccountsAPI } from '../api/accounts';
+import { normalizeServerURL } from '../api/serverURL';
 
 const ATTEMPT_KEY = 'nexus_google_login';
 
@@ -7,9 +8,10 @@ export function clearGoogleLogin() {
 }
 
 export async function startGoogleLogin(serverUrl: string) {
+  serverUrl = normalizeServerURL(serverUrl);
   const { auth_url, state } = await createAccountsAPI(serverUrl).startGoogle();
   const target = new URL(auth_url);
-  if (target.protocol !== 'https:' || !state) throw new Error('The server returned an invalid Google sign-in response.');
+  if (target.protocol !== 'https:') throw new Error('The server returned an invalid Google sign-in response.');
   sessionStorage.setItem(ATTEMPT_KEY, JSON.stringify({ serverUrl, state }));
   for (const key of ['oauth_state', 'oauth_provider', 'oauth_code']) sessionStorage.removeItem(key);
   window.location.assign(target.href);

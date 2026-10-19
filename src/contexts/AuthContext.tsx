@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import NexusAPIClient, { AuthenticationError } from '../api/client';
+import { normalizeServerURL } from '../api/serverURL';
 
 interface UserInfo {
   subject_type?: string;
@@ -40,37 +41,23 @@ const clearStoredIdentity = () => {
   for (const key of [API_KEY_STORAGE_KEY, ...OBSOLETE_IDENTITY_KEYS]) localStorage.removeItem(key);
 };
 
-// Get API URL from localStorage or environment
 const getApiURL = (): string | null => {
-  // First try localStorage (user-configured URL)
   const storedUrl = localStorage.getItem(API_URL_STORAGE_KEY);
-  if (storedUrl) {
-    // Auto-upgrade HTTP to HTTPS for production deployments ONLY for non-localhost URLs
-    // This fixes Mixed Content errors when frontend is served over HTTPS
-    // BUT preserve localhost URLs exactly as entered (localhost doesn't have SSL)
-    const isLocalhost = storedUrl.includes('localhost') || storedUrl.includes('127.0.0.1');
-    if (storedUrl.startsWith('http://') && window.location.protocol === 'https:' && !isLocalhost) {
-      const httpsUrl = storedUrl.replace('http://', 'https://');
-      // Remove port 2026 if present (nginx handles this)
-      const cleanedUrl = httpsUrl.replace(':2026', '');
-      localStorage.setItem(API_URL_STORAGE_KEY, cleanedUrl);
-      return cleanedUrl;
+  const value = storedUrl || (import.meta.env.DEV ? import.meta.env.VITE_NEXUS_API_URL : null);
+  if (!value) return null;
+  try {
+    const url = new URL(normalizeServerURL(value));
+    const loopback = url.hostname === 'localhost' || url.hostname.endsWith('.localhost') || /^127\./.test(url.hostname) || url.hostname === '[::1]';
+    if (url.protocol === 'http:' && window.location.protocol === 'https:' && !loopback) {
+      url.protocol = 'https:';
+      if (url.port === '2026') url.port = '';
     }
-    return storedUrl;
+    const normalized = normalizeServerURL(url.href);
+    if (storedUrl && normalized !== storedUrl) localStorage.setItem(API_URL_STORAGE_KEY, normalized);
+    return normalized;
+  } catch {
+    return null;
   }
-
-  // In production, do NOT default to a specific backend.
-  // The hosted frontend should work with any Nexus backend the user provides.
-  // In dev, allow a local env default for convenience.
-  if (import.meta.env.DEV) {
-    const envUrl = import.meta.env.VITE_NEXUS_API_URL;
-    if (envUrl && envUrl !== '') {
-      return envUrl;
-    }
-  }
-
-  // No default - return null if not configured
-  return null;
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -137,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateConnection = async (newApiUrl: string, newApiKey: string): Promise<UserInfo> => {
     // Create a temporary client with the new settings
     const tempClient = new NexusAPIClient(newApiUrl || '', newApiKey || undefined);
+    const validatedUrl = tempClient.getBaseURL();
 
     // Validate the connection by calling whoami
     const whoamiResponse = await tempClient.whoami();
@@ -156,13 +144,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Store API URL, API key, and user info
     clearStoredIdentity();
-    localStorage.setItem(API_URL_STORAGE_KEY, newApiUrl);
+    localStorage.setItem(API_URL_STORAGE_KEY, validatedUrl);
     localStorage.setItem(API_KEY_STORAGE_KEY, newApiKey);
 
     // Update state
-    setApiUrl(newApiUrl);
+    setApiUrl(validatedUrl);
     setApiKey(newApiKey);
-    setIdentity({ url: newApiUrl, credential: newApiKey, info: newUserInfo, error: null });
+    setIdentity({ url: validatedUrl, credential: newApiKey, info: newUserInfo, error: null });
 
     return newUserInfo;
   };

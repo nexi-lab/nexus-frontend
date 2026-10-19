@@ -21,6 +21,7 @@ export default function Account() {
         <button type="button" onClick={() => window.location.reload()}>
           Retry
         </button>
+        <Link to="/login">Change account connection</Link>
       </p>
     );
   if (!account) return <Navigate to="/login" replace />;

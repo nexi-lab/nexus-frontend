@@ -16,6 +16,8 @@ Account password login and Google sign-in open `/account`, where users can updat
 
 The tab retains only the account server and JWT in session storage; profile facts are fetched from Rust after a refresh. Native file access uses the separately configured API key and verified `whoami` identity. Account sign-in and sign-out preserve that connection, and rejection of either credential clears only its own session. Account profile roles and zones grant no native permissions.
 
+Both transports require a complete HTTP(S) server URL without embedded credentials, query or fragment. Invalid saved connections require a new connection before sending credentials. Account responses must have the canonical status and JSON shape; native identity requires the server's identity fields. An HTML fallback or incomplete HTTP 200 response cannot establish a session or claim account creation.
+
 ## Verification
 
 ```sh

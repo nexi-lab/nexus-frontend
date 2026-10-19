@@ -1,6 +1,7 @@
 import { isAxiosError } from 'axios';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { type AccountLogin, accountErrorMessage, createAccountsAPI, type UserProfile } from '../api/accounts';
+import { normalizeServerURL } from '../api/serverURL';
 
 interface Credentials {
   serverUrl: string;
@@ -24,7 +25,9 @@ const SESSION_KEY = 'nexus_account_session';
 function restoredCredentials(): Credentials | null {
   try {
     const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null');
-    if (saved && typeof saved.serverUrl === 'string' && typeof saved.token === 'string' && saved.token) return saved;
+    if (saved && typeof saved.serverUrl === 'string' && typeof saved.token === 'string' && saved.token) {
+      return { serverUrl: normalizeServerURL(saved.serverUrl), token: saved.token };
+    }
   } catch {
     // An unreadable browser session requires a fresh sign-in.
   }
@@ -66,7 +69,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [credentials]);
 
   const completeLogin = (serverUrl: string, login: AccountLogin) => {
-    const next = { serverUrl, token: login.token };
+    const next = { serverUrl: normalizeServerURL(serverUrl), token: login.token };
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
     current.current = next;
     setCredentials(next);
