@@ -90,6 +90,30 @@ function pdf() {
   return Buffer.from(result);
 }
 
+test('image previews decode native bytes and release the previous object URL', async ({ page, request }) => {
+  await write(request, 'pixel.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=', 'base64'));
+  await write(
+    request,
+    'shape.svg',
+    Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"><rect width="12" height="8" fill="red"/></svg>'),
+  );
+  await open(page, 'pixel.png');
+  const pixel = page.getByRole('img', { name: 'pixel.png', exact: true });
+  await expect(pixel).toHaveJSProperty('naturalWidth', 1);
+  const source = await pixel.getAttribute('src');
+  expect(source).toMatch(/^blob:/);
+  await page.evaluate((target) => {
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.revokeObjectURL = (url) => {
+      revoke(url);
+      if (url === target) sessionStorage.setItem('fixture-preview-released', url);
+    };
+  }, source);
+  await page.getByText('shape.svg', { exact: true }).first().click();
+  await expect(page.getByRole('img', { name: 'shape.svg', exact: true })).toHaveJSProperty('naturalWidth', 12);
+  expect(await page.evaluate(() => sessionStorage.getItem('fixture-preview-released'))).toBe(source);
+});
+
 test('valid PDF renders pixels and zooms using a bundled same-origin worker', async ({ page, request }) => {
   await write(request, 'local.pdf', pdf());
   const worker = page.waitForEvent('worker');
