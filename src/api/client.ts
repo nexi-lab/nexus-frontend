@@ -309,29 +309,6 @@ class NexusAPIClient {
   // ===== User Authentication Methods =====
 
   /**
-   * Register a new user account.
-   *
-   * @param params - Registration parameters
-   * @returns User information and JWT token
-   */
-  async authRegister(params: {
-    email: string;
-    password: string;
-    username?: string;
-    display_name?: string;
-  }): Promise<{
-    user_id: string;
-    email: string;
-    username: string | null;
-    display_name: string | null;
-    token: string;
-    message: string;
-  }> {
-    const response = await this.client.post('/auth/register', params);
-    return response.data;
-  }
-
-  /**
    * Login with email/username and password.
    *
    * @param params - Login credentials

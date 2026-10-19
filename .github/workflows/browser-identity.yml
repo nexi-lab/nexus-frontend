@@ -19,11 +19,29 @@ jobs:
         with:
           node-version: '22'
           cache: pnpm
+      - name: Check out the validated Rust account contract
+        uses: actions/checkout@v4
+        with:
+          repository: nexi-lab/nexus
+          ref: 0ce4227ac37a862b2a3fe1090e71a5c6f5e8098c
+          path: account-backend
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: account-backend -> target
+      - name: Build the actual Rust account binary
+        working-directory: account-backend
+        run: cargo build --locked -p nexus-accounts --bin nexusd-accounts
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm run build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run test:e2e
+        env:
+          NEXUS_TEST_ACCOUNTS_BINARY: ${{ github.workspace }}/account-backend/target/debug/nexusd-accounts
+          NEXUS_TEST_ACCOUNTS_SCHEMA: ${{ github.workspace }}/account-backend/rust/services/accounts/tests/fixtures/users.sql
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

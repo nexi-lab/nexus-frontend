@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { createFilesFixture } from './files.mjs';
+import { startAccounts } from './accounts.mjs';
+
+const accounts = await startAccounts();
 
 const origin = 'http://127.0.0.1:4173';
 let scenario = 'existing';
@@ -67,6 +70,19 @@ const server = createServer(async (request, response) => {
     json({ calls, files: files.state() });
     return;
   }
+  if (url.pathname === '/__fixture/mail') {
+    json({ messages: accounts?.mail ?? [], rust: !!accounts });
+    return;
+  }
+  if (url.pathname === '/__fixture/account-facts') {
+    json({ users: accounts?.facts(url.searchParams.get('email')) ?? [] });
+    return;
+  }
+  if (url.pathname === '/__fixture/shutdown' && request.method === 'POST') {
+    await accounts?.close();
+    json({ stopped: true });
+    return;
+  }
   calls.push({
     path: url.pathname,
     method: request.method,
@@ -76,6 +92,14 @@ const server = createServer(async (request, response) => {
     ...(url.pathname.startsWith('/v2/search/') ? { params: value } : {}),
     ...(url.pathname.startsWith('/v2/files') || url.pathname === '/v2/directories' ? { query: Object.fromEntries(url.searchParams), bytes: body.length, contentType: request.headers['content-type'], params: value } : {}),
   });
+  if (['/auth/register', '/auth/request-verification', '/auth/verify-email'].includes(url.pathname)) {
+    if (!accounts) return json({ detail: 'Actual Rust account fixture is required' }, 503);
+    const upstream = await fetch(accounts.base + url.pathname, {
+      method: request.method, headers: { 'Content-Type': 'application/json' }, body,
+    });
+    json(await upstream.json(), upstream.status);
+    return;
+  }
   if (files.handle({ url, request, response, body, value, scenario, principal, json })) return;
   if (url.pathname === '/v2/search/glob' || url.pathname === '/v2/search/grep') {
     if (!principal) return json({ error: 'credential rejected' }, 401);

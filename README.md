@@ -20,12 +20,16 @@ Google sign-in starts at the selected server's `/auth/oauth/google/authorize` en
 pnpm run typecheck
 pnpm run build
 pnpm exec playwright install chromium
+export NEXUS_TEST_ACCOUNTS_BINARY=/path/to/nexus/target/debug/nexusd-accounts
+export NEXUS_TEST_ACCOUNTS_SCHEMA=/path/to/nexus/rust/services/accounts/tests/fixtures/users.sql
 pnpm run test:e2e
 ```
 
-Browser tests serve the production build against a local HTTP protocol fixture. They exercise server selection, credential replacement, account confirmation, password changes, browser cookies, rejected callbacks, revocation, cached administrator flags, native file discovery, explicit errors, truncation, late responses, and a 1 MiB login JavaScript budget. Provider navigation is simulated; these tests do not prove a real Google exchange or the Rust account backend.
+Registration and email verification run against the actual Rust account binary, a temporary SQLite database initialized from that source's canonical fixture, and a loopback SMTP server. The browser opens the link delivered by Rust, verifies the durable email fact and checks that registration creates no browser session or native credential. A failed verification request can be resent without registering again. Verification tokens stay in page memory and are removed from the address bar. The selected server must be confirmed before submitting a token.
 
-CI runs the same browser journeys without retries. For a locally installed Chrome, set `NEXUS_TEST_CHROME` to its executable path. The test browser uses an isolated profile and blocks external requests.
+The other journeys use a local HTTP protocol fixture. They exercise server selection, credential replacement, account confirmation, password changes, browser cookies, rejected callbacks, revocation, cached administrator flags, native file discovery, explicit errors, truncation, late responses, a 1 MiB login JavaScript budget and a 2 MiB browsing/text budget. Provider navigation is simulated; these tests do not prove a real Google exchange or native credential handoff.
+
+CI builds the account binary from the pinned validated Nexus revision in its workflow and runs the same browser journeys without retries. For local acceptance, build `nexusd-accounts` from that revision and set both paths above. For a locally installed Chrome, set `NEXUS_TEST_CHROME` to its executable path. The test browser uses an isolated profile and blocks external requests. Teardown stops the Rust process and removes the temporary account database.
 
 ### Native daemon browser acceptance
 
@@ -35,4 +39,4 @@ The browser serves the production frontend on port 4173 and connects directly to
 
 ## Migration status
 
-Identity, status, and file discovery requests use native `/v2` endpoints. Account routes and the console's remaining `/api/nfs/*` consumers still require migration before Python server retirement. This branch is not a complete frontend migration.
+Identity, status, files and file discovery use native `/v2` endpoints. Registration and email verification use the Rust account contract and create no login credentials. Account login, Google callbacks, native credential handoff and the remaining `/api/nfs/*` consumers still require migration before Python server retirement.

@@ -44,7 +44,6 @@ interface AuthContextType {
   isUserAuthenticated: boolean;
   userLogin: (identifier: string, password: string) => Promise<UserAccount>;
   completeUserLogin: (session: AuthenticatedUserSession) => UserAccount;
-  userRegister: (email: string, password: string, username?: string, displayName?: string) => Promise<UserAccount>;
   userLogout: () => void;
   updateUserProfile: (displayName?: string, avatarUrl?: string) => Promise<UserAccount>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
@@ -262,34 +261,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return completeUserLogin(response);
   };
 
-  const userRegister = async (email: string, password: string, username?: string, displayName?: string): Promise<UserAccount> => {
-    if (!apiClient) {
-      throw new Error('API URL is required. Please configure the Nexus server URL first.');
-    }
-    const response = await apiClient.authRegister({
-      email,
-      password,
-      username,
-      display_name: displayName,
-    });
-
-    const newUserAccount: UserAccount = {
-      user_id: response.user_id,
-      email: response.email,
-      username: response.username,
-      display_name: response.display_name,
-      avatar_url: null,
-      primary_auth_method: 'password',
-      is_global_admin: false,
-      email_verified: false,
-      api_key: null,
-      tenant_id: null,
-      created_at: new Date().toISOString(),
-      last_login_at: null,
-    };
-    return completeUserLogin({ token: response.token, user: newUserAccount });
-  };
-
   const userLogout = () => {
     setApiKey(null);
     setJwtToken(null);
@@ -362,7 +333,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isUserAuthenticated: !!userInfo && !!jwtToken && !!userAccount,
     userLogin,
     completeUserLogin,
-    userRegister,
     userLogout,
     updateUserProfile,
     changePassword,

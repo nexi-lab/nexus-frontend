@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import OAuthCallback from './pages/OAuthCallback';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
 import './index.css';
 import { Toaster } from 'sonner';
 
@@ -69,6 +70,7 @@ function AppContent() {
               {/* User Authentication Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/profile" element={<Navigate to="/settings" replace />} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             </Routes>
