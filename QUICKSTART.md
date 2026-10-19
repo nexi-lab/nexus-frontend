@@ -1,221 +1,39 @@
-# NexusFS Frontend - Quick Start Guide
+# Local quick start
 
-## Prerequisites
+Use Node.js 22 and the pnpm version declared in `package.json`.
 
-1. **Node.js 18+** installed
-2. **Nexus RPC server** running on port 2026
-
-## Step 1: Start the Nexus RPC Server
-
-In the main Nexus directory:
-
-```bash
-cd ../nexus
-
-# Activate virtual environment if needed
-source .venv/bin/activate  # On macOS/Linux
-# or
-.venv\Scripts\activate  # On Windows
-
-# Start the RPC server
-python -m nexus.cli server --port 2026
-
-# Or use the CLI
-nexus server --port 2026
+```sh
+corepack enable
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
-You should see:
-```
-Starting Nexus RPC server on 0.0.0.0:2026
-Endpoint: http://0.0.0.0:2026/api/nfs/{method}
-```
+Open the Vite URL printed in the terminal. Choose the server for each connection:
 
-## Step 2: Install Frontend Dependencies
+| Flow | Server and credential | Result |
+| --- | --- | --- |
+| Files and Search | Native Rust HTTP listener, existing API key | `GET /v2/auth/whoami` resolves the file identity; file and Search requests carry that key. |
+| Human account | Rust account HTTP service, password or Google sign-in | `/account` manages profile and password with an account JWT. |
+| Registration | Rust account HTTP service | Create an account, request a verification email and open the delivered link before password login. |
 
-In a new terminal:
+Use a complete HTTP(S) server URL. For an existing local account database, follow the [account service configuration](https://github.com/nexi-lab/nexus/blob/develop/rust/services/accounts/README.md); its default HTTP listener is `http://127.0.0.1:12016`. SMTP and Google are configured on that service. The frontend calls its `/auth/*` HTTP adapter, which shares the gRPC account implementation.
 
-```bash
-cd nexus-frontend
-npm install
-```
+Account login and native connection are independent. Signing in to an account preserves an existing file connection. File access requires its own native credential; the native server determines permissions on every request.
 
-## Step 3: Configure Environment
+For native requests from a different browser origin, include the exact frontend origin in the daemon's `NEXUS_HTTP_ALLOWED_ORIGINS`. The account service runs behind a gateway for external access; its Google browser binding requires the account API and frontend on the same site, HTTPS and credentialed requests. See the account service configuration for the complete contract.
 
-The `.env` file is already created with defaults. You can connect to either:
+In development, `VITE_NEXUS_API_URL` can supply the initial native server address. The connection screen also accepts it directly. Production users select their server in the UI.
 
-### Option A: Local Server (Default)
-```env
-VITE_API_URL=http://localhost:2026
-VITE_API_KEY=
-```
+## Verify locally
 
-### Option B: Deployed GCP Server
-```env
-VITE_API_URL=http://35.230.4.67:2026
-VITE_API_KEY=
+```sh
+pnpm run typecheck
+pnpm run build
+pnpm run preview
 ```
 
-Edit the `.env` file to choose your backend server.
+The [README](README.md#verification) documents the real Rust account/SMTP browser fixtures and native daemon acceptance. Those runners create isolated test data and clean up their processes. Live Google acceptance is separate.
 
-## Step 4: Start the Frontend
+## Migration scope
 
-```bash
-npm run dev
-```
-
-Open your browser to: **http://localhost:5173**
-
-## Step 5: Test the Application
-
-### Test File Browsing
-1. The app should show your Nexus file system
-2. Click on folders to navigate
-3. Use the breadcrumb to go back
-
-### Test File Upload
-1. Click "Upload" button
-2. Drag and drop a text file or click "Select Files"
-3. Click "Upload" to confirm
-4. File should appear in the list
-
-### Test Folder Creation
-1. Click "New Folder" button
-2. Enter a folder name
-3. Click "Create"
-4. Folder should appear in the list
-
-### Test Search
-1. Enter a search query in the search bar
-2. Toggle between "Name" (glob) and "Content" (grep)
-3. Click "Search"
-4. Results should appear
-
-### Test File Operations
-1. Click the edit icon (✏️) to rename a file
-2. Click the download icon (⬇️) to download a file
-3. Click the trash icon (🗑️) to delete a file
-4. Click on a file to preview it
-
-## Troubleshooting
-
-### Cannot Connect to Server
-
-**Error**: Network error or "Connection refused"
-
-**Solution**:
-1. Verify Nexus RPC server is running on port 2026
-2. Check the `.env` file has correct `VITE_API_URL`
-3. Restart the dev server after changing `.env`
-
-### CORS Errors
-
-**Error**: "Access to XMLHttpRequest has been blocked by CORS policy"
-
-**Solution**:
-The Nexus RPC server needs to allow CORS from your frontend origin.
-
-Add CORS headers to the Nexus server or use a proxy.
-
-### Files Not Loading
-
-**Error**: Empty file list or errors in console
-
-**Solution**:
-1. Check Nexus server logs for errors
-2. Verify API key if authentication is enabled
-3. Check browser console for detailed error messages
-
-### Environment Variables Not Loading
-
-**Error**: API calls go to wrong URL
-
-**Solution**:
-1. Ensure `.env` file exists in `nexus-frontend/` directory
-2. Environment variables must start with `VITE_`
-3. Restart the dev server after changing `.env`
-
-## Production Build
-
-### Build for Production
-
-```bash
-npm run build
-```
-
-Output will be in the `dist/` directory.
-
-### Preview Production Build
-
-```bash
-npm run preview
-```
-
-### Deploy Production Build
-
-The `dist/` directory contains static files that can be deployed to:
-- Netlify
-- Vercel
-- AWS S3 + CloudFront
-- GitHub Pages
-- Any static file hosting service
-
-### Environment Variables for Production
-
-Set environment variables in your hosting platform:
-- `VITE_API_URL`: Your production Nexus server URL
-- `VITE_API_KEY`: Your production API key (if needed)
-
-## Development Tips
-
-### Hot Module Replacement (HMR)
-
-The dev server supports HMR. Changes to code will automatically reflect in the browser without full reload.
-
-### TypeScript Errors
-
-If you see TypeScript errors:
-```bash
-npx tsc --noEmit
-```
-
-This will check types without building.
-
-### Clearing Cache
-
-If you encounter strange behavior:
-```bash
-rm -rf node_modules dist
-npm install
-npm run build
-```
-
-### Inspecting Network Requests
-
-Open browser DevTools (F12) → Network tab to see API requests and responses.
-
-## Keyboard Shortcuts (TODO)
-
-These are planned but not yet implemented:
-- `Ctrl/Cmd + U`: Upload files
-- `Ctrl/Cmd + N`: New folder
-- `Ctrl/Cmd + F`: Focus search
-- `Delete`: Delete selected file
-- `F2`: Rename selected file
-
-## Getting Help
-
-- **GitHub Issues**: https://github.com/nexi-lab/nexus/issues
-- **Documentation**: See [README.md](./README.md)
-- **Implementation Details**: See [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)
-
-## Next Steps
-
-Once Phase 1 is tested and working:
-1. Review [GitHub Issue #102](https://github.com/nexi-lab/nexus/issues/102) for Phase 2 requirements
-2. Plan user authentication system
-3. Design permission management UI
-4. Implement access control features
-
----
-
-**Happy file browsing! 🚀**
+Basic native files, Search and the Rust account flows above are implemented. Remaining business pages still call `/api/nfs/*` and require their existing backend until migration is complete. The [acceptance checklist](https://s.shareone.vip/md/nexus-search-local-acceptance) records completed validation and the remaining work. The frontend PR stays draft while that work and complete integration acceptance are pending.
