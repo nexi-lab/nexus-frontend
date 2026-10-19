@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { verificationLink } from './accounts';
+import { createAccount, verificationLink } from './accounts';
 import { backend, prepareBrowser } from './backend';
 
 const password = 'browser-registration-password-2026';
@@ -84,12 +84,57 @@ test('a rejected verification token stays an error and is removed from the addre
   expect(calls.filter((call: { path: string }) => call.path === '/auth/verify-email')).toHaveLength(1);
 });
 
-test('opening verification without a token cannot submit an account request', async ({ page, request }) => {
+test('opening verification without a token does not send an account request automatically', async ({ page, request }) => {
   await page.goto('/verify-email');
   await expect(page.getByRole('alert')).toHaveText('Open the verification link from your email.');
   await expect(page.getByRole('button', { name: 'Verify email', exact: true })).toHaveCount(0);
   const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
   expect(calls.some((call: { path: string }) => call.path.startsWith('/auth/'))).toBe(false);
+});
+
+test('a verification email can be requested after refresh without saved signup state', async ({ page, request }) => {
+  const email = await createAccount(request, false);
+  await page.goto('/verify-email');
+  await page.reload();
+  await page.getByLabel('Nexus Server URL').fill(backend);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByRole('button', { name: 'Send verification email', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Verification request accepted. Check your inbox.');
+  await page.goto(await verificationLink(request, email));
+  await expect(page).toHaveURL('/verify-email');
+  await page.getByLabel('Nexus Server URL').fill(backend);
+  await page.getByRole('button', { name: 'Verify email', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Email verified successfully.');
+  const facts = await (await request.get(`${backend}/__fixture/account-facts`, { params: { email } })).json();
+  expect(facts.users).toEqual([{ email_verified: 1, zone_id: null, api_key: null, is_global_admin: 0 }]);
+  const storage = await page.evaluate(() => ({
+    native: localStorage.getItem('nexus_api_key'),
+    account: sessionStorage.getItem('nexus_account_session'),
+    flow: { ...sessionStorage },
+  }));
+  expect(storage).toEqual({ native: null, account: null, flow: {} });
+});
+
+test('an invalid link can request a real new email while preserving native credentials', async ({ page, request }) => {
+  const email = await createAccount(request, false);
+  await page.addInitScript((server) => {
+    localStorage.setItem('nexus_api_url', server);
+    localStorage.setItem('nexus_api_key', 'sk-fixture-server-alice');
+  }, backend);
+  await page.goto('/verify-email?token=invalid-verification-token');
+  await page.getByRole('button', { name: 'Verify email', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByRole('button', { name: 'Request a new verification email', exact: true }).click();
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByRole('button', { name: 'Send verification email', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Verification request accepted. Check your inbox.');
+  await page.goto(await verificationLink(request, email));
+  await page.getByRole('button', { name: 'Verify email', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Email verified successfully.');
+  expect(await page.evaluate(() => localStorage.getItem('nexus_api_key'))).toBe('sk-fixture-server-alice');
+  expect(await page.evaluate(() => sessionStorage.getItem('nexus_account_session'))).toBeNull();
+  const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
+  expect(calls.filter((call: { path: string }) => call.path.startsWith('/auth/')).every((call: { authorized: boolean }) => !call.authorized)).toBe(true);
 });
 
 test('duplicate registration keeps the original account and displays the Rust error', async ({ page, request }) => {

@@ -31,6 +31,8 @@ pnpm run test:e2e
 
 Registration and email verification run against the actual Rust account binary, a temporary SQLite database initialized from that source's canonical fixture, and a loopback SMTP server. The browser opens the link delivered by Rust, verifies the durable email fact and checks that registration creates no browser session or native credential. A failed verification request can be resent without registering again. Verification tokens stay in page memory and are removed from the address bar. The selected server must be confirmed before submitting a token.
 
+Opening `/verify-email` without a token lets the user explicitly request a new email. Invalid links offer the same recovery. Refreshing or closing registration does not require saved signup state, and these requests never forward an existing native credential.
+
 Password login, profile refresh/editing and password changes also use the actual Rust account binary. Cases cover unverified accounts, rejected passwords, durable profile edits, independent account/native logout and credential rejection, and the absence of native grants.
 
 The other journeys use a local HTTP protocol fixture. They exercise Google server selection and its Rust callback wire contract, browser cookies, rejected callbacks, revocation, cached administrator flags, native file discovery, explicit errors, truncation, late responses, a 1 MiB login JavaScript budget and a 2 MiB browsing/text budget. Provider navigation is simulated; these tests do not prove a real Google exchange or native credential handoff. File-read faults are configured before navigation and affect reads alone; directory-wide failures have a separate case.
