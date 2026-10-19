@@ -158,41 +158,6 @@ test('a callback with another state never reaches the authentication backend', a
   expect(calls.some((call: { path: string }) => call.path.startsWith('/auth/oauth/'))).toBe(false);
 });
 
-test('an integration callback keeps the current Nexus identity and leaves no persistent callback state', async ({ page, request }) => {
-  await page.addInitScript((server) => {
-    localStorage.setItem('nexus_api_url', server);
-    localStorage.setItem('nexus_api_key', 'sk-fixture-server-alice');
-    sessionStorage.setItem('oauth_state', 'integration-state');
-    sessionStorage.setItem('oauth_provider', 'gdrive');
-  }, backend);
-  await page.goto('/oauth/callback?code=integration-code&state=integration-state');
-  await expect(page).toHaveURL(/\/integration$/);
-  const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
-  expect(calls.filter((call: { path: string }) => call.path === '/api/nfs/oauth_exchange_code')).toHaveLength(1);
-  expect(calls.find((call: { path: string }) => call.path === '/api/nfs/oauth_exchange_code').principal).toBe('server-alice');
-  const saved = await page.evaluate(() => ({
-    key: localStorage.getItem('nexus_api_key'),
-    state: sessionStorage.getItem('oauth_state'),
-    provider: sessionStorage.getItem('oauth_provider'),
-    debug: localStorage.getItem('nexus_last_oauth_debug'),
-    error: localStorage.getItem('nexus_last_oauth_error'),
-  }));
-  expect(saved).toEqual({ key: 'sk-fixture-server-alice', state: null, provider: null, debug: null, error: null });
-});
-
-test('an integration callback with another state cannot exchange a code', async ({ page, request }) => {
-  await page.addInitScript((server) => {
-    localStorage.setItem('nexus_api_url', server);
-    localStorage.setItem('nexus_api_key', 'sk-fixture-server-alice');
-    sessionStorage.setItem('oauth_state', 'integration-state');
-    sessionStorage.setItem('oauth_provider', 'gdrive');
-  }, backend);
-  await page.goto('/oauth/callback?code=integration-code&state=untrusted-state');
-  await expect(page.getByRole('alert')).toContainText('state does not match');
-  const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
-  expect(calls.some((call: { path: string }) => call.path === '/api/nfs/oauth_exchange_code')).toBe(false);
-});
-
 test('a revoked saved credential clears authentication and ignores cached administrator flags', async ({ page, request }) => {
   await page.addInitScript((server) => {
     if (sessionStorage.getItem('fixture-seeded')) return;

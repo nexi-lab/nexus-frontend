@@ -64,8 +64,7 @@ export function useCreateDirectory() {
   });
 }
 
-// Upload file
-export function useUploadFile() {
+export function useWriteFile() {
   const filesAPI = useFilesAPI();
   const queryClient = useQueryClient();
 
@@ -80,25 +79,6 @@ export function useUploadFile() {
       queryClient.invalidateQueries({ queryKey: fileKeys.list(parentPath) });
       // Invalidate file content to ensure fresh read
       queryClient.invalidateQueries({ queryKey: fileKeys.file(path) });
-    },
-  });
-}
-
-// Update file (similar to upload but specifically for updates)
-export function useUpdateFile() {
-  const filesAPI = useFilesAPI();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ path, content }: { path: string; content: string | ArrayBuffer }) => {
-      if (!filesAPI) throw new Error('API client not initialized');
-      return filesAPI.write(path, content);
-    },
-    onSuccess: (_, { path }) => {
-      // Invalidate file content to refresh the view
-      queryClient.invalidateQueries({ queryKey: fileKeys.file(path) });
-      const parent = path.substring(0, path.lastIndexOf('/')) || '/';
-      queryClient.invalidateQueries({ queryKey: fileKeys.list(parent) });
     },
   });
 }

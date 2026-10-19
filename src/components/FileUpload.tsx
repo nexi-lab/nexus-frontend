@@ -1,6 +1,6 @@
-import { AlertCircle, CheckCircle2, Loader2, Upload, X, FolderOpen, FileIcon } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FileIcon, FolderOpen, Loader2, Upload, X } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { useUploadFile, useCreateDirectory } from '../hooks/useFiles';
+import { useCreateDirectory, useWriteFile } from '../hooks/useFiles';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 
@@ -29,7 +29,7 @@ export function FileUpload({ open, onOpenChange, currentPath }: FileUploadProps)
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
-  const uploadMutation = useUploadFile();
+  const uploadMutation = useWriteFile();
   const createDirMutation = useCreateDirectory();
 
   const handleDrag = (e: React.DragEvent) => {
@@ -57,7 +57,7 @@ export function FileUpload({ open, onOpenChange, currentPath }: FileUploadProps)
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
-      const filesWithPaths: FileWithPath[] = files.map(file => ({
+      const filesWithPaths: FileWithPath[] = files.map((file) => ({
         file,
         relativePath: file.name, // Single files have no parent path
       }));
@@ -68,7 +68,7 @@ export function FileUpload({ open, onOpenChange, currentPath }: FileUploadProps)
   const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
-      const filesWithPaths: FileWithPath[] = files.map(file => {
+      const filesWithPaths: FileWithPath[] = files.map((file) => {
         // webkitRelativePath contains the folder structure
         const relativePath = (file as any).webkitRelativePath || file.name;
         return {
@@ -255,9 +255,7 @@ export function FileUpload({ open, onOpenChange, currentPath }: FileUploadProps)
                       <span className="text-sm truncate flex-1" title={relativePath}>
                         {relativePath}
                       </span>
-                      <span className="text-xs text-muted-foreground mx-2">
-                        {(file.size / 1024).toFixed(1)} KB
-                      </span>
+                      <span className="text-xs text-muted-foreground mx-2">{(file.size / 1024).toFixed(1)} KB</span>
                       <Button variant="ghost" size="icon" onClick={() => removeFile(index)}>
                         <X className="h-4 w-4" />
                       </Button>
@@ -290,7 +288,9 @@ export function FileUpload({ open, onOpenChange, currentPath }: FileUploadProps)
                   {status.status === 'pending' && <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />}
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" title={status.relativePath}>{status.relativePath}</p>
+                    <p className="text-sm font-medium truncate" title={status.relativePath}>
+                      {status.relativePath}
+                    </p>
                     {status.status === 'error' && status.error && <p className="text-xs text-destructive mt-1">{status.error}</p>}
                     {status.status === 'success' && <p className="text-xs text-green-600 dark:text-green-400 mt-1">Uploaded successfully</p>}
                     {status.status === 'uploading' && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}

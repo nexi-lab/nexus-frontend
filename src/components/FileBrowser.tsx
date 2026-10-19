@@ -6,10 +6,11 @@ import { toast } from 'sonner';
 import type NexusAPIClient from '../api/client';
 import { createFilesAPI } from '../api/files';
 import { useAuth } from '../contexts/AuthContext';
-import { useCreateDirectory, useDeleteFile, useUploadFile } from '../hooks/useFiles';
+import { useCreateDirectory, useDeleteFile, useWriteFile } from '../hooks/useFiles';
 import { useTranslation } from '../i18n/useTranslation';
 import type { FileInfo } from '../types/file';
 import { copyToClipboard } from '../utils';
+import { downloadBytes } from '../utils/download';
 import { isWithinPath, renamedPath } from '../utils/vfsPaths';
 import { Breadcrumb } from './Breadcrumb';
 import { FileContentViewer } from './FileContentViewer';
@@ -39,7 +40,7 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
   const [permissionFile, setPermissionFile] = useState<FileInfo | null>(null);
   const [creating, setCreating] = useState<{ type: 'file' | 'folder'; parentPath: string } | null>(null);
   const deleteFile = useDeleteFile();
-  const uploadFile = useUploadFile();
+  const uploadFile = useWriteFile();
   const createDirectory = useCreateDirectory();
 
   const handleDeleted = (paths: string[]) => {
@@ -71,14 +72,7 @@ function ConnectedFileBrowser({ apiClient }: { apiClient: NexusAPIClient }) {
           break;
         case 'download': {
           const content = await filesAPI.read(file.path);
-          const url = URL.createObjectURL(new Blob([content as unknown as BlobPart], { type: 'application/octet-stream' }));
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = file.name;
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          URL.revokeObjectURL(url);
+          downloadBytes(content, file.name);
           break;
         }
         case 'rename':

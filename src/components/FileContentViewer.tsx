@@ -4,8 +4,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type NexusAPIClient from '../api/client';
 import { createFilesAPI } from '../api/files';
-import { useDeleteFile, useFileContent, useUpdateFile } from '../hooks/useFiles';
+import { useDeleteFile, useFileContent, useWriteFile } from '../hooks/useFiles';
 import type { FileInfo } from '../types/file';
+import { downloadBytes } from '../utils/download';
 import { NexusConnection } from './NexusConnection';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -62,7 +63,7 @@ function Content({ file, onFileDeleted, client }: FileContentViewerProps & { cli
   const [edit, setEdit] = useState<{ path: string; content: string } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [actionError, setActionError] = useState<{ path: string; message: string } | null>(null);
-  const update = useUpdateFile();
+  const update = useWriteFile();
   const remove = useDeleteFile();
   useEffect(() => {
     setEdit(null);
@@ -74,14 +75,7 @@ function Content({ file, onFileDeleted, client }: FileContentViewerProps & { cli
     if (!file) return;
     try {
       const current = await files.read(path);
-      const url = URL.createObjectURL(new Blob([current as unknown as BlobPart], { type: 'application/octet-stream' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = file.name;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      downloadBytes(current, file.name);
     } catch (error) {
       setActionError({ path, message: error instanceof Error ? error.message : 'Unable to download file.' });
     }

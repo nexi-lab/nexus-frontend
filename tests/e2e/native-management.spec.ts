@@ -26,7 +26,7 @@ test('credential UI mints explicit native facts, keeps plaintext in memory and r
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: 'Native credentials', exact: true })).toBeVisible();
   await page.getByLabel('Name', { exact: true }).fill('Browser service');
-  await page.getByLabel('Subject type', { exact: true }).selectOption('service');
+  await page.getByRole('combobox', { name: 'Subject type', exact: true }).selectOption('service');
   await page.getByLabel('Subject ID', { exact: true }).fill('browser-service');
   await page.getByLabel('Zone grants', { exact: false }).fill('sharedzone:r\nother-zone:rw');
   await page.getByLabel('Expiry (optional)', { exact: true }).fill('2099-01-01T00:00');
