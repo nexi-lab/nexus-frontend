@@ -13,11 +13,27 @@ import { Textarea } from './ui/textarea';
 
 const PDFViewer = lazy(() => import('./PDFViewer').then(({ PDFViewer }) => ({ default: PDFViewer })));
 type FileKind = 'text' | 'markdown' | 'json' | 'html' | 'image' | 'video' | 'pdf' | 'binary';
+const imageTypes = new Map([
+  ['png', 'image/png'],
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['gif', 'image/gif'],
+  ['svg', 'image/svg+xml'],
+  ['webp', 'image/webp'],
+  ['bmp', 'image/bmp'],
+]);
+const videoTypes = new Map([
+  ['mp4', 'video/mp4'],
+  ['webm', 'video/webm'],
+  ['ogg', 'video/ogg'],
+  ['mov', 'video/quicktime'],
+]);
+const extensionOf = (file: FileInfo | null) => file?.name.split('.').pop()?.toLowerCase() ?? '';
 
 function fileKind(file: FileInfo | null): FileKind {
-  const extension = file?.name.split('.').pop()?.toLowerCase() ?? '';
-  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(extension)) return 'image';
-  if (['mp4', 'webm', 'ogg', 'mov'].includes(extension)) return 'video';
+  const extension = extensionOf(file);
+  if (imageTypes.has(extension)) return 'image';
+  if (videoTypes.has(extension)) return 'video';
   if (['doc', 'docx', 'xls', 'xlsx', 'xlsm', 'xlsb', 'ppt', 'pptx', 'zip', 'bin', 'exe', 'dll', 'so'].includes(extension)) return 'binary';
   if (extension === 'pdf') return 'pdf';
   if (['md', 'markdown'].includes(extension)) return 'markdown';
@@ -56,9 +72,8 @@ function Content({ file, onFileDeleted, client }: FileContentViewerProps & { cli
   const text = ['text', 'markdown', 'html', 'json'].includes(kind);
   const { data: bytes, isLoading, error } = useFileContent(path, !!file && !file.isDirectory);
   const content = useMemo(() => (bytes && text ? new TextDecoder().decode(bytes) : ''), [bytes, text]);
-  const mime =
-    file?.type ||
-    (kind === 'image' ? `image/${file?.name.split('.').pop()?.toLowerCase() === 'svg' ? 'svg+xml' : file?.name.split('.').pop()?.toLowerCase()}` : 'video/mp4');
+  const mediaType = imageTypes.get(extensionOf(file)) ?? videoTypes.get(extensionOf(file)) ?? 'application/octet-stream';
+  const mime = file?.type?.startsWith(`${kind}/`) ? file.type : mediaType;
   const objectURL = useObjectURL(kind === 'image' || kind === 'video' ? bytes : undefined, mime);
   const [edit, setEdit] = useState<{ path: string; content: string } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
