@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type APIRequestContext, expect, type Page } from '@playwright/test';
-import { verificationLinkFromMessage } from '../fixtures/accounts.mjs';
+import { verificationLinkFromMessage } from '../fixtures/verification-email.mjs';
 import { backend } from './backend';
 
 export const accountPassword = 'browser-account-password-2026';

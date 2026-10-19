@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { expect } from '@playwright/test';
-import { verificationLinkFromMessage } from '../fixtures/accounts.mjs';
+import { verificationLinkFromMessage } from '../fixtures/verification-email.mjs';
 
 export async function verifyAccountClosure({ page, accounts, uiUrl, nativeUrl, nativeKey, visiblePath, needle, secrets }) {
   const email = `native-account-${randomUUID()}@example.test`;
