@@ -3,6 +3,17 @@ import { createHash, randomUUID } from 'node:crypto';
 export function createManagementFixture() {
   const credentials = new Map();
   const tuples = new Map();
+  const agentRecord = {
+    key_hash: 'agent:fixture-agent',
+    key_id: 'fixture-agent-id',
+    name: 'Fixture certificate agent',
+    subject_type: 'agent',
+    subject_id: 'fixture-agent',
+    is_admin: false,
+    revoked: false,
+    zone_perms: [['sharedzone', 'r']],
+  };
+  const records = () => [...credentials.values(), agentRecord];
   const tupleKey = (tuple) =>
     JSON.stringify([tuple.zone, tuple.object_type, tuple.object_id, tuple.relation, tuple.subject_type, tuple.subject_id, tuple.subject_relation ?? null]);
   const insert = (key, subject, admin = false, name = subject, zones = [['sharedzone', 'r']], subjectType = 'user', expiry) => {
@@ -41,7 +52,7 @@ export function createManagementFixture() {
         zone_perms: record.zone_perms,
       };
     },
-    state: () => ({ keys: [...credentials.values()], tuples: [...tuples.values()] }),
+    state: () => ({ keys: records(), tuples: [...tuples.values()] }),
     handle({ url, request, value, identity, json }) {
       if (!url.pathname.startsWith('/v2/auth/keys') && url.pathname !== '/v2/rebac/tuples') return false;
       if (!identity) {
@@ -52,7 +63,7 @@ export function createManagementFixture() {
         json({ error: 'global administrator required' }, 403);
         return true;
       }
-      if (url.pathname === '/v2/auth/keys' && request.method === 'GET') json({ keys: [...credentials.values()] });
+      if (url.pathname === '/v2/auth/keys' && request.method === 'GET') json({ keys: records() });
       else if (url.pathname === '/v2/auth/keys' && request.method === 'POST') {
         if (
           !value.allow_existing &&

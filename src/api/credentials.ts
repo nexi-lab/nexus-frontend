@@ -29,7 +29,7 @@ function isCredential(value: unknown): value is NativeCredential {
     isRecord(value) &&
     ['key_hash', 'key_id', 'name', 'subject_type', 'subject_id'].every((field) => typeof value[field] === 'string') &&
     typeof value.key_hash === 'string' &&
-    /^[a-f0-9]{64}$/.test(value.key_hash) &&
+    !!value.key_hash &&
     !!value.key_id &&
     !!value.subject_id &&
     typeof value.is_admin === 'boolean' &&
@@ -64,7 +64,7 @@ export function createCredentialsAPI(client: Pick<NexusAPIClient, 'request'>) {
       return { key: value.key, record: value.record };
     },
     async revoke(hash: string): Promise<boolean> {
-      if (!/^[a-f0-9]{64}$/.test(hash)) throw new NexusAPIError('Invalid credential hash.');
+      if (!hash) throw new NexusAPIError('Invalid credential identifier.');
       const value = await client.request<unknown>(`/v2/auth/keys/${encodeURIComponent(hash)}`, { method: 'DELETE' });
       if (!isRecord(value) || typeof value.existed !== 'boolean' || value.key_hash !== hash) return invalidResponse();
       return value.existed;

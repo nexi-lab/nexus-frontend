@@ -25,6 +25,9 @@ async function openPermissions(page: Page) {
 test('credential UI mints explicit native facts, keeps plaintext in memory and revokes by hash', async ({ page, request }) => {
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: 'Native credentials', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Fixture certificate agent', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Revoke Fixture certificate agent', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Managed by the agent certificate lifecycle', { exact: true })).toBeVisible();
   await page.getByLabel('Name', { exact: true }).fill('Browser service');
   await page.getByRole('combobox', { name: 'Subject type', exact: true }).selectOption('service');
   await page.getByLabel('Subject ID', { exact: true }).fill('browser-service');

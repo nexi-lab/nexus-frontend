@@ -111,9 +111,13 @@ function Credentials({ client, zone }: { client: NexusAPIClient; zone: string })
                 <p>Expires: {record.expires_at_ms ? new Date(record.expires_at_ms).toLocaleString() : 'Never'}</p>
                 <p className="break-all text-xs text-muted-foreground">{record.key_hash}</p>
               </div>
-              <Button variant="destructive" disabled={busy} onClick={() => revoke(record)} aria-label={`Revoke ${record.name || record.subject_id}`}>
-                Revoke
-              </Button>
+              {record.subject_type === 'user' || record.subject_type === 'service' ? (
+                <Button variant="destructive" disabled={busy} onClick={() => revoke(record)} aria-label={`Revoke ${record.name || record.subject_id}`}>
+                  Revoke
+                </Button>
+              ) : (
+                <span className="text-sm text-muted-foreground">Managed by the agent certificate lifecycle</span>
+              )}
             </li>
           ))}
         </ul>
