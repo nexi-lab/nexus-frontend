@@ -134,3 +134,26 @@ test('file navigation and retired routes require only current native contracts',
       .every((call: { query: { path: string } }) => ['/', '/docs'].includes(call.query.path)),
   ).toBe(true);
 });
+
+for (const format of ['html', 'incomplete-json']) {
+  test(`${format} HTTP 200 cannot acknowledge a file write or discard its draft`, async ({ page, request }) => {
+    await write(request, 'receipt.txt', 'original content');
+    await page.route(`${backend}/v2/files?*`, (route) => {
+      if (route.request().method() !== 'PUT') return route.continue();
+      return format === 'html' ? route.fulfill({ contentType: 'text/html', body: '<html>gateway fallback</html>' }) : route.fulfill({ json: {} });
+    });
+    await open(page, 'receipt.txt');
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByPlaceholder('Enter text content...').fill('keep this unacknowledged draft');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'invalid file response' })).toBeVisible();
+    await expect(page.getByPlaceholder('Enter text content...')).toHaveValue('keep this unacknowledged draft');
+    await page.unroute(`${backend}/v2/files?*`);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByText('keep this unacknowledged draft', { exact: true })).toBeVisible();
+    const { files } = await (await request.get(`${backend}/__fixture/state`)).json();
+    expect(files.find((file: { path: string }) => file.path === '/docs/receipt.txt').base64).toBe(
+      Buffer.from('keep this unacknowledged draft').toString('base64'),
+    );
+  });
+}
