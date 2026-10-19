@@ -26,11 +26,12 @@ export function createFilesFixture() {
         json({ error: 'credential rejected' }, 401);
         return true;
       }
-      if (scenario === 'files-unavailable') {
+      const readRequest = url.pathname === '/v2/files' && request.method === 'GET';
+      if (scenario === 'files-unavailable' || (scenario === 'file-read-unavailable' && readRequest)) {
         json({ error: 'VFS is unavailable' }, 503);
         return true;
       }
-      if (scenario === 'files-forbidden') {
+      if (scenario === 'files-forbidden' || (scenario === 'file-read-forbidden' && readRequest)) {
         json({ error: 'File access is forbidden' }, 403);
         return true;
       }
@@ -40,7 +41,7 @@ export function createFilesFixture() {
         if (scenario === 'cache-isolation') {
           const child = `${path.replace(/\/$/, '')}/private-${principal}`;
           json({ entries: [metadata(child, { directory: true })] });
-        } else if (scenario !== 'file-crud') json({ entries: [] });
+        } else if (!['file-crud', 'file-read-unavailable', 'file-read-forbidden'].includes(scenario)) json({ entries: [] });
         else {
           const prefix = path === '/' ? '/' : `${path}/`;
           json({

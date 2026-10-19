@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import NexusAPIClient from '../../src/api/client';
 import { createFilesAPI } from '../../src/api/files';
 import { backend, prepareBrowser } from './backend';
@@ -10,11 +10,16 @@ test.beforeEach(async ({ page, request, context }) => {
     localStorage.setItem('nexus_api_url', server);
     localStorage.setItem('nexus_api_key', 'sk-fixture-server-alice');
   }, backend);
-  await page.goto('/');
-  await page.getByText('docs', { exact: true }).first().click();
 });
 
+async function openDocs(page: Page) {
+  await page.goto('/');
+  await page.getByText('docs', { exact: true }).first().click();
+  await expect(page.getByText('notes & 测试.txt', { exact: true }).first()).toBeVisible();
+}
+
 test('browse, edit, rename and delete use native files and keep the selected path current', async ({ page, request }) => {
+  await openDocs(page);
   const name = 'notes & 测试.txt';
   await page.getByText(name, { exact: true }).first().click();
   await expect(page.getByText('{"error":"actual file content"}', { exact: true })).toBeVisible();
@@ -46,6 +51,7 @@ test('browse, edit, rename and delete use native files and keep the selected pat
 });
 
 test('create a directory and file then delete the populated directory recursively', async ({ page, request }) => {
+  await openDocs(page);
   await page.getByRole('checkbox', { name: 'Select docs', exact: true }).locator('..').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'New Folder', exact: true }).click();
   await page.getByPlaceholder('folder name').fill('created & 测试');
@@ -67,6 +73,7 @@ test('create a directory and file then delete the populated directory recursivel
 });
 
 test('binary upload and download preserve every byte with raw HTTP bodies', async ({ page, request }) => {
+  await openDocs(page);
   const bytes = Buffer.from(Array.from({ length: 65536 }, (_, index) => index % 256));
   await page.getByRole('checkbox', { name: 'Select docs', exact: true }).locator('..').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Upload Files', exact: true }).click();
@@ -90,11 +97,12 @@ test('binary upload and download preserve every byte with raw HTTP bodies', asyn
 });
 
 for (const [scenario, message] of [
-  ['files-unavailable', 'VFS is unavailable'],
-  ['files-forbidden', 'File access is forbidden'],
+  ['file-read-unavailable', 'VFS is unavailable'],
+  ['file-read-forbidden', 'File access is forbidden'],
 ]) {
   test(`${scenario} remains a visible file read error`, async ({ page, request }) => {
     await request.post(`${backend}/__fixture/reset`, { data: { scenario } });
+    await openDocs(page);
     await page.getByText('notes & 测试.txt', { exact: true }).first().click();
     await expect(page.getByText('Failed to load file', { exact: true })).toBeVisible();
     await expect(page.getByText(message, { exact: true }).last()).toBeVisible();
@@ -118,6 +126,6 @@ test('metadata helpers distinguish missing entries from denied and unavailable r
 
 test('a failed root listing is visible instead of showing an empty directory', async ({ page, request }) => {
   await request.post(`${backend}/__fixture/reset`, { data: { scenario: 'files-unavailable' } });
-  await page.reload();
+  await page.goto('/');
   await expect(page.getByRole('alert').filter({ hasText: 'VFS is unavailable' }).first()).toBeVisible();
 });
