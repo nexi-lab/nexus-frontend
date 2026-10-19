@@ -20,12 +20,6 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
-    // Validation
-    if (password.length < 12) {
-      setError('Password must be at least 12 characters long');
-      return;
-    }
-
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -171,11 +165,11 @@ export default function Register() {
                 autoComplete="new-password"
                 required
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-800"
-                placeholder="At least 12 characters"
+                placeholder="Choose a password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Password must be at least 12 characters long</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Use a strong, unique password.</p>
             </div>
 
             <div>

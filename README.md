@@ -18,6 +18,10 @@ The tab retains only the account server and JWT in session storage; profile fact
 
 Both transports require a complete HTTP(S) server URL without embedded credentials, query or fragment. Invalid saved connections require a new connection before sending credentials. Account responses must have the canonical status and JSON shape; native identity requires the server's identity fields. An HTML fallback or incomplete HTTP 200 response cannot establish a session or claim account creation.
 
+Account deletion requires typing the displayed account identity to confirm. Bodyless `DELETE /auth/me` deletes the authenticated Rust account and its sign-in bindings. Success clears only that account session; an earlier account's delayed response cannot sign out a new session. Native credentials and files remain with the separately connected authority. Failure stays visible and can be retried.
+
+Rust owns password validation for registration and password changes. The browser checks password confirmation and displays the service's validation error.
+
 ## Verification
 
 ```sh
@@ -43,10 +47,12 @@ A separate CI job reuses that Nexus revision's `build_search_fixture.sh` and `te
 
 ### Native daemon browser acceptance
 
-Build this frontend, then run `scripts/test_search_local.py` from the Nexus repository with `--frontend-checkout <this-checkout>`, `--browser-origin http://127.0.0.1:4173`, and the native daemon/plugin paths. Use `--keyword-only` for this journey. The harness starts an isolated native daemon with TLS and ReBAC, issues temporary credentials, supplies `--search-fixture` to the browser runner, and cleans up the fixture. It retains sanitized results and screenshots.
+Build this frontend, then run `scripts/test_search_local.py` from the Nexus repository with `--frontend-checkout <this-checkout>`, `--browser-origin http://127.0.0.1:4173`, and the native daemon/plugin paths. Supply the account binary and canonical schema through the two `NEXUS_TEST_ACCOUNTS_*` variables above. Use `--keyword-only` for this journey. The harness starts an isolated native daemon with TLS and ReBAC, issues temporary credentials, supplies `--search-fixture` to the browser runner, and cleans up the fixture. It retains sanitized results and screenshots.
 
 The browser serves the production frontend on port 4173 and connects directly to the Rust HTTP listener. It verifies bearer identity, explicit browser CORS, non-admin UI restrictions, a readable 401 after warmed credential revocation, and another user's continued access. Real file discovery verifies unreadable-root errors, hidden-file filtering, current content, and relation revocation after warming a search. This journey needs no Google credentials. The native daemon's `NEXUS_HTTP_ALLOWED_ORIGINS` must include the exact frontend origin when the two use different origins.
 
+The same journey starts the actual Rust account service and SMTP fixture behind Vite's preview proxy. It registers, verifies, signs in and deletes a human account through the UI, then reads real native file bytes and searches through the browser using the preserved native credential. Account and native processes, databases, preview server and browser are closed during teardown. This proxy is an isolated test gateway.
+
 ## Migration status
 
-Identity, status, files and file discovery use native `/v2` endpoints. Registration, email verification, password login, profile edits, password changes and Google callbacks use the Rust account contract. Account deletion, live Google acceptance and the remaining `/api/nfs/*` consumers still require work before Python server retirement. The frontend remains a draft until those contracts and real integration acceptance are complete.
+Identity, status, files and file discovery use native `/v2` endpoints. Registration, email verification, password login, profile edits, password changes, account deletion and Google callbacks use the Rust account contract. Live Google acceptance and the remaining `/api/nfs/*` consumers still require work before Python server retirement. The frontend remains a draft until those contracts and real integration acceptance are complete.

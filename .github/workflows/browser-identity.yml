@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  NEXUS_BACKEND_REVISION: 0ce4227ac37a862b2a3fe1090e71a5c6f5e8098c
+  NEXUS_BACKEND_REVISION: f4689ab912836c1ae2350c417f76177ad6d0b9c8
 
 jobs:
   browser-identity:
@@ -99,9 +99,15 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
           pnpm exec playwright install --with-deps chromium
+      - name: Build the actual account service for the combined browser journey
+        working-directory: account-backend
+        run: cargo build --locked -p nexus-accounts --bin nexusd-accounts
       - name: Verify the current frontend against the native daemon
         timeout-minutes: 10
         working-directory: account-backend
+        env:
+          NEXUS_TEST_ACCOUNTS_BINARY: ${{ github.workspace }}/account-backend/target/debug/nexusd-accounts
+          NEXUS_TEST_ACCOUNTS_SCHEMA: ${{ github.workspace }}/account-backend/rust/services/accounts/tests/fixtures/users.sql
         run: |
           uv run --no-sync python scripts/test_search_local.py \
             --kernel-binary "$NEXUS_KERNEL_BINARY" \

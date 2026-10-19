@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { createAccount, verificationLink } from './accounts';
+import { createAccount, passwordLogin, verificationLink } from './accounts';
 import { backend, prepareBrowser } from './backend';
 
 const password = 'browser-registration-password-2026';
@@ -9,6 +9,40 @@ test.beforeEach(async ({ request, context }) => {
   await prepareBrowser(request, context);
   const state = await (await request.get(`${backend}/__fixture/mail`)).json();
   expect(state.rust, 'Run account acceptance with the actual nexusd-accounts binary and its canonical schema').toBe(true);
+});
+
+test('registration and password changes use the Rust Unicode password contract', async ({ page, request }) => {
+  const email = `password-contract-${randomUUID()}@example.test`;
+  const initial = '密'.repeat(8);
+  await page.goto('/register');
+  await page.getByLabel('Nexus Server URL').fill(backend);
+  await page.getByLabel('Email', { exact: false }).fill(email);
+  await page.locator('#password').fill('密'.repeat(7));
+  await page.locator('#confirmPassword').fill('密'.repeat(7));
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Password must be at least 8 characters');
+  await page.locator('#password').fill(initial);
+  await page.locator('#confirmPassword').fill(initial);
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Verification request accepted. Check your inbox.');
+  await page.goto(await verificationLink(request, email));
+  await page.getByLabel('Nexus Server URL').fill(backend);
+  await page.getByRole('button', { name: 'Verify email', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Email verified successfully.');
+  await passwordLogin(page, email, initial);
+  await expect(page).toHaveURL('/account');
+  await page.getByLabel('Current Password', { exact: true }).fill(initial);
+  await page.getByLabel('New Password', { exact: true }).fill('new-pass');
+  await page.getByLabel('Confirm New Password', { exact: true }).fill('new-pass');
+  await page.getByRole('button', { name: 'Change Password', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Password changed successfully!');
+  await page.getByRole('button', { name: 'Sign out of account', exact: true }).click();
+  await passwordLogin(page, email, initial);
+  await expect(page.getByRole('alert')).toHaveText('Invalid email/username or password');
+  await passwordLogin(page, email, 'new-pass');
+  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  const { calls } = await (await request.get(`${backend}/__fixture/state`)).json();
+  expect(calls.filter((call: { path: string }) => call.path === '/auth/register')).toHaveLength(2);
 });
 
 test('registration verifies a real Rust account through SMTP without creating browser credentials', async ({ page, request }) => {

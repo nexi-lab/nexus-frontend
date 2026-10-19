@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type APIRequestContext, expect, type Page } from '@playwright/test';
+import { verificationLinkFromMessage } from '../fixtures/accounts.mjs';
 import { backend } from './backend';
 
 export const accountPassword = 'browser-account-password-2026';
@@ -13,13 +14,7 @@ export async function verificationLink(request: APIRequestContext, email: string
     })
     .toBe(true);
   const { messages } = await (await request.get(`${backend}/__fixture/mail`)).json();
-  const message = messages
-    .find((message: string) => message.includes(email))
-    .replaceAll('=\r\n', '')
-    .replaceAll('=3D', '=');
-  const link = message.match(/http:\/\/127\.0\.0\.1:4173\/verify-email\?token=[\w.%-]+/)?.[0];
-  expect(link).toBeTruthy();
-  return link;
+  return verificationLinkFromMessage(messages.find((message: string) => message.includes(email)));
 }
 
 export async function createAccount(request: APIRequestContext, verified = true) {

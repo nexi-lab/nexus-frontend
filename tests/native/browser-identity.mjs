@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chromium } from '@playwright/test';
 import { preview as startPreview } from 'vite';
+import { startAccounts } from '../fixtures/accounts.mjs';
+import { verifyAccountClosure } from './account-closure.mjs';
 
 const { values } = parseArgs({
   options: {
@@ -32,6 +34,7 @@ let createdFiles = false;
 let browser;
 let page;
 let preview;
+let accounts;
 let failure;
 
 async function adminRequest(path, options = {}) {
@@ -66,7 +69,17 @@ try {
     secrets.push(credential.key);
     issued.push(credential);
   }
-  preview = await startPreview({ root, preview: { host: '127.0.0.1', port: Number(values['ui-port']), strictPort: true } });
+  accounts = await startAccounts({ verificationURL: `${uiUrl}/verify-email` });
+  assert(accounts, 'Native account acceptance requires the actual Rust account binary and canonical schema');
+  preview = await startPreview({
+    root,
+    preview: {
+      host: '127.0.0.1',
+      port: Number(values['ui-port']),
+      strictPort: true,
+      proxy: { '/auth': { target: accounts.base, changeOrigin: true } },
+    },
+  });
   browser = await chromium.launch({ headless: true, ...(process.env.NEXUS_TEST_CHROME ? { executablePath: process.env.NEXUS_TEST_CHROME } : {}) });
   page = await browser.newPage();
   await page.route('**/*', async (route) => {
@@ -152,12 +165,28 @@ try {
   const grep = await runSearch('grep');
   assert.equal(grep.status, 200, JSON.stringify(grep.body));
   const matches = grep.body.matches;
-  assert.deepEqual(matches.map((match) => match.path), [fixture.visible]);
+  assert.deepEqual(
+    matches.map((match) => match.path),
+    [fixture.visible],
+  );
   assert.equal(matches[0].line_number, 2);
   assert.equal(matches[0].line.includes(fixture.needle), true);
   await search.getByText('1 match', { exact: true }).waitFor();
   await page.screenshot({ path: `${output}/native-file-search.png` });
   checks.push('native grep renders real current file content and match counts');
+
+  checks.push(
+    ...(await verifyAccountClosure({
+      page,
+      accounts,
+      uiUrl,
+      nativeUrl,
+      nativeKey: fixture.readerKey,
+      visiblePath: fixture.visible,
+      needle: fixture.needle,
+      secrets,
+    })),
+  );
 
   await adminRequest('/v2/rebac/tuples', { method: 'DELETE', body: JSON.stringify(fixture.grant) });
   await search.getByRole('button', { name: 'Search', exact: true }).click();
@@ -173,11 +202,16 @@ try {
   const initialPath = `${fileRoot}/${initialName}`;
   const finalPath = `${fileRoot}/${finalName}`;
   await adminRequest(`/v2/files?path=${encodeURIComponent(initialPath)}`, {
-    method: 'PUT', body: '{"error":"actual file content"}', headers: { 'content-type': 'application/octet-stream' },
+    method: 'PUT',
+    body: '{"error":"actual file content"}',
+    headers: { 'content-type': 'application/octet-stream' },
   });
   const rootListing = await (await adminRequest('/v2/directories?path=%2F')).json();
-  assert.equal(rootListing.entries.some((entry) => entry.path === fileRoot && entry.is_directory), true,
-    `created directory is missing from native root metadata: ${JSON.stringify(rootListing.entries)}`);
+  assert.equal(
+    rootListing.entries.some((entry) => entry.path === fileRoot && entry.is_directory),
+    true,
+    `created directory is missing from native root metadata: ${JSON.stringify(rootListing.entries)}`,
+  );
   const fileCalls = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
@@ -197,7 +231,10 @@ try {
   await page.getByPlaceholder('Enter text content...').fill('edited ✓ & 中文');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByText('edited ✓ & 中文', { exact: true }).waitFor();
-  await page.getByRole('checkbox', { name: `Select ${initialName}`, exact: true }).locator('..').click({ button: 'right' });
+  await page
+    .getByRole('checkbox', { name: `Select ${initialName}`, exact: true })
+    .locator('..')
+    .click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Rename' }).click();
   await page.getByPlaceholder('Enter new name').fill(finalName);
   await page.getByRole('button', { name: 'Rename', exact: true }).click();
@@ -210,7 +247,10 @@ try {
   assert.equal(await (await adminRequest(`/v2/files?path=${encodeURIComponent(finalPath)}`)).text(), 'saved after rename ✓');
   const absent = await fetch(`${nativeUrl}/v2/files?path=${encodeURIComponent(initialPath)}`, { headers: { authorization: `Bearer ${admin}` } });
   assert.equal(absent.status, 404);
-  assert.equal(fileCalls.some((path) => /^\/api\/nfs\/(list|read|write|rename|delete|exists|is_directory|mkdir|rmdir)$/.test(path)), false);
+  assert.equal(
+    fileCalls.some((path) => /^\/api\/nfs\/(list|read|write|rename|delete|exists|is_directory|mkdir|rmdir)$/.test(path)),
+    false,
+  );
   checks.push('native file browsing, JSON-looking bytes, UTF-8 edits and saving after rename');
   await page.screenshot({ path: `${output}/native-file-editor.png` });
 
@@ -249,6 +289,7 @@ try {
 } finally {
   const cleanup = await Promise.allSettled([
     browser?.close(),
+    accounts?.close(),
     (async () => {
       if (preview) {
         preview.httpServer.closeAllConnections();

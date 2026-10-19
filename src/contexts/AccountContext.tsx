@@ -17,6 +17,7 @@ interface AccountContextValue {
   logout: () => void;
   updateProfile: (displayName: string) => Promise<void>;
   changePassword: (current: string, replacement: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AccountContext = createContext<AccountContextValue | null>(null);
@@ -77,17 +78,24 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setFailure(null);
   };
 
-  const updateProfile = async (displayName: string) => {
+  const withAccount = async <T,>(action: (client: ReturnType<typeof createAccountsAPI>) => Promise<T>) => {
     const expected = current.current;
     if (!expected) throw new Error('Please sign in to your account.');
-    const user = await createAccountsAPI(expected.serverUrl, expected.token).updateProfile(displayName);
+    return { expected, result: await action(createAccountsAPI(expected.serverUrl, expected.token)) };
+  };
+
+  const updateProfile = async (displayName: string) => {
+    const { expected, result: user } = await withAccount((client) => client.updateProfile(displayName));
     if (current.current === expected) setProfile({ credentials: expected, user });
   };
 
   const changePassword = async (oldPassword: string, newPassword: string) => {
-    const expected = current.current;
-    if (!expected) throw new Error('Please sign in to your account.');
-    await createAccountsAPI(expected.serverUrl, expected.token).changePassword(oldPassword, newPassword);
+    await withAccount((client) => client.changePassword(oldPassword, newPassword));
+  };
+
+  const deleteAccount = async () => {
+    const { expected } = await withAccount((client) => client.deleteAccount());
+    if (current.current === expected) logout();
   };
 
   return (
@@ -101,6 +109,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         logout,
         updateProfile,
         changePassword,
+        deleteAccount,
       }}
     >
       {children}

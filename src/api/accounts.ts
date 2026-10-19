@@ -92,6 +92,9 @@ export function createAccountsAPI(baseURL: string, token?: string) {
       const result = jsonResponse(await client.post('/auth/change-password', { current_password, new_password }, authenticated()));
       if (!record(result) || result.success !== true) throw invalidResponse();
     },
+    async deleteAccount(): Promise<void> {
+      accountMessage(jsonResponse(await client.delete('/auth/me', authenticated())));
+    },
     async startGoogle(): Promise<{ auth_url: string; state: string }> {
       const result = jsonResponse(await client.get('/auth/oauth/google/authorize', { withCredentials: true }));
       if (!record(result) || typeof result.auth_url !== 'string' || typeof result.state !== 'string' || !result.state) throw invalidResponse();

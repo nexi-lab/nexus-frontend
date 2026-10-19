@@ -6,7 +6,14 @@ import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { DatabaseSync } from 'node:sqlite';
 
-export async function startAccounts() {
+export function verificationLinkFromMessage(message) {
+  const decoded = message.replaceAll('=\r\n', '').replaceAll('=3D', '=');
+  const link = decoded.match(/http:\/\/127\.0\.0\.1:\d+\/verify-email\?token=[\w.%-]+/)?.[0];
+  if (!link) throw new Error('Account fixture email contains no verification link');
+  return link;
+}
+
+export async function startAccounts({ verificationURL = 'http://127.0.0.1:4173/verify-email' } = {}) {
   const binary = process.env.NEXUS_TEST_ACCOUNTS_BINARY;
   const schema = process.env.NEXUS_TEST_ACCOUNTS_SCHEMA;
   if (!binary && !schema) return null;
@@ -68,7 +75,7 @@ export async function startAccounts() {
       NEXUS_JWT_SECRET: 'fixture-account-signing-key-32-bytes-minimum',
       NEXUS_ACCOUNTS_SMTP_URL: `smtp://127.0.0.1:${smtp.address().port}`,
       NEXUS_ACCOUNTS_EMAIL_FROM: 'nexus@example.test',
-      NEXUS_ACCOUNTS_VERIFICATION_URL: 'http://127.0.0.1:4173/verify-email',
+      NEXUS_ACCOUNTS_VERIFICATION_URL: verificationURL,
     },
   });
   let diagnostics = '';

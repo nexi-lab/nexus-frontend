@@ -4,7 +4,7 @@ import { accountErrorMessage } from '../api/accounts';
 import { useAccount } from '../contexts/AccountContext';
 
 export default function Account() {
-  const { account, serverUrl, resolving, error, logout, updateProfile, changePassword } = useAccount();
+  const { account, serverUrl, resolving, error, logout, updateProfile, changePassword, deleteAccount } = useAccount();
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
@@ -12,6 +12,7 @@ export default function Account() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [actionError, setActionError] = useState('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
 
   if (resolving) return <output>Loading your account...</output>;
   if (error)
@@ -35,11 +36,13 @@ export default function Account() {
       await action();
       setMessage(success);
     } catch (error) {
-      setActionError(accountErrorMessage(error, 'Unable to update your account.'));
+      setActionError(accountErrorMessage(error, 'Unable to complete this account action.'));
     } finally {
       setBusy(false);
     }
   };
+
+  const deleteIdentity = account.email ?? account.user_id;
 
   return (
     <main className="mx-auto max-w-lg space-y-6 p-8">
@@ -98,7 +101,6 @@ export default function Account() {
             id="account-new-password"
             type="password"
             autoComplete="new-password"
-            minLength={12}
             required
             className="w-full rounded border p-2"
             value={password}
@@ -109,7 +111,6 @@ export default function Account() {
             id="account-confirm-password"
             type="password"
             autoComplete="new-password"
-            minLength={12}
             required
             className="w-full rounded border p-2"
             value={confirmation}
@@ -120,6 +121,37 @@ export default function Account() {
           </button>
         </form>
       )}
+      <form
+        className="space-y-2 rounded border border-red-500 p-4"
+        onSubmit={(event) =>
+          submit(
+            event,
+            async () => {
+              if (deleteConfirmation !== deleteIdentity) throw new Error('Enter the account identity to confirm deletion.');
+              await deleteAccount();
+            },
+            'Account deleted.',
+          )
+        }
+      >
+        <h2 className="text-lg font-semibold">Delete account</h2>
+        <p>
+          This permanently deletes your account and sign-in bindings. Your native file connection and its files remain available through the existing native
+          credential.
+        </p>
+        <label htmlFor="account-delete-confirmation">Type {deleteIdentity} to confirm</label>
+        <input
+          id="account-delete-confirmation"
+          className="w-full rounded border p-2"
+          autoComplete="off"
+          required
+          value={deleteConfirmation}
+          onChange={(event) => setDeleteConfirmation(event.target.value)}
+        />
+        <button type="submit" disabled={busy || deleteConfirmation !== deleteIdentity}>
+          Delete account permanently
+        </button>
+      </form>
       {actionError && <p role="alert">{actionError}</p>}
       {message && <output>{message}</output>}
       <nav className="flex gap-4">
